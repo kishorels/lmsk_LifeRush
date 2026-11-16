@@ -27,3 +27,6 @@ Native Android packaging/device testing; production character assets; separate e
 
 ## Graphics validation limits
 The test browser has WebGL disabled. The fallback can be visually checked here; real-device 3D appearance and performance still require testing. Scene-graph smoke checks use a stub GPU renderer and do not prove WebGL rendering.
+
+## Reference-inspired camera update
+The third-person camera is now closer and lower. The game occupies the portrait viewport; desktop uses a centered portrait frame. The character has alternating hip/knee/arm motion, a tucked jump, lower slide pose and lane-change lean. Buildings are taller with more windows. This is original procedural artwork, not the reference game's assets, and train-roof traversal is not implemented.
