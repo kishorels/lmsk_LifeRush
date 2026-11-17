@@ -100,101 +100,167 @@ mesh.to_mesh(body.data)
 mesh.free()
 body.data.update()
 
-# Follow the curvature of the existing scalp from the forehead to the nape.
-scalp = BVHTree.FromPolygons([p for tri,_ in head_triangles for p in tri],
-                             [tuple(range(i,i+3)) for i in range(0,3*len(head_triangles),3)],
-                             all_triangles=True)
-def direction(angle):
-    return Vector((0, -math.cos(angle), math.sin(angle)))
+# Fit a dark crown to the original scalp. Angles are measured from straight up.
+scalp = BVHTree.FromPolygons(
+    [point for triangle, _ in head_triangles for point in triangle],
+    [tuple(range(i, i + 3)) for i in range(0, 3 * len(head_triangles), 3)],
+    all_triangles=True,
+)
+origin = Vector((0, -.02, 1.608))
 
-def scalp_point(angle, x):
-    normal = direction(angle)
-    center = Vector((x, -.02, 1.608))
-    point, *_ = scalp.ray_cast(center + normal*.5, -normal, .53)
+def surface(normal):
+    point, *_ = scalp.ray_cast(origin + normal * .5, -normal, .51)
     if point is None:
-        raise ValueError(f'Missing scalp at angle {angle:.2f}, x={x:.3f}')
-    return point, normal
+        raise ValueError(f'Missing scalp along {tuple(normal)}')
+    return point
 
-def profile(t, values):
-    for (start, low), (end, high) in zip(values, values[1:]):
-        if t <= end:
-            return low + (high-low)*(t-start)/(end-start)
-    return values[-1][1]
+def polar(theta, azimuth):
+    return Vector((math.sin(theta)*math.sin(azimuth),
+                   -math.sin(theta)*math.cos(azimuth), math.cos(theta)))
 
-def width(t):
-    return profile(t, [(0,.043),(.12,.093),(.40,.091),(.62,.069),(.81,.043),(1,.003)])
+def fade(low, high, value):
+    t = min(1, max(0, (value - low) / (high - low)))
+    return t * t * (3 - 2*t)
 
-def lift(t):
-    return profile(t, [(0,.025),(.16,.074),(.38,.064),(.6,.044),(.82,.024),(1,.003)])
+def hairline(azimuth):
+    rear = fade(.1, .86, -math.cos(azimuth))
+    return 1.17 + .27 * abs(math.sin(azimuth)) + .68 * rear + .045 * math.sin(3 * azimuth + .3)
 
-def crest_point(t, cross):
-    angle = .56 + 3.05*t
-    base, normal = scalp_point(angle, cross*width(t))
-    arch = max(0, 1-cross*cross)**1.07
-    return base + normal*(.003 + lift(t)*arch), normal, angle
+def crown(normal):
+    theta = math.acos(max(-1, min(1, normal.z)))
+    azimuth = math.atan2(normal.x, -normal.y)
+    edge = hairline(azimuth)
+    top = fade(.04, .73, normal.z)
+    front = fade(-.48, .65, -normal.y)
+    taper = fade(0, .30, edge-theta)
+    depth = .008 + taper*(.015 + top*(.025 + .052*front))
+    return surface(normal) + normal*depth
 
 verts, faces, slots = [], [], []
 def face(indices, slot):
     faces.append(indices)
     slots.append(slot)
 
-rows, columns = 31, 9
-for row in range(rows):
-    for col in range(columns):
-        point, _, _ = crest_point(row/(rows-1), 2*col/(columns-1)-1)
-        verts.append(point)
-for row in range(rows-1):
-    for col in range(columns-1):
-        i = row*columns + col
-        face((i, i+1, i+1+columns, i+columns), 0)
+segments, rings = 76, 23
+verts.append(crown(Vector((0,0,1))))
+for ring in range(1, rings+1):
+    for j in range(segments):
+        azimuth = math.tau*j/segments
+        normal = polar(hairline(azimuth)*ring/rings, azimuth)
+        verts.append(crown(normal))
+for j in range(segments):
+    face((0, 1+j, 1+(j+1)%segments), 0)
+for ring in range(1, rings):
+    for j in range(segments):
+        i = 1+(ring-1)*segments+j
+        k = 1+(ring-1)*segments+(j+1)%segments
+        face((i, i+segments, k+segments, k), 0)
 
-rng = random.Random(1711)
-for row in range(25):
-    for col in range(7):
-        t = min(.955, max(.011, .016 + row*.038 + rng.uniform(-.014,.014)))
-        cross = (col-3)*.29 + rng.uniform(-.10,.10)
-        point, normal, angle = crest_point(t, cross)
-        point -= normal*.010
-        tangent = direction(angle + math.pi/2)
-        side = Vector((1,0,0))
-        length = (.054 + .043*(1-t))*rng.uniform(.72,1.25)
-        spread = (.007 + .01*(1-t))*rng.uniform(.7,1.23)
-        drift = (.009*cross + rng.uniform(-.01,.01))
-        rise = (.027 + .026*(1-t))*rng.uniform(.62,1.27)*(1-.35*abs(cross))
-        start = len(verts)
-        slot = rng.choices(range(1,7), weights=[2,4,5,4,2,1])[0]
-        for section, (along, bulge) in enumerate([(0,.57),(.32,1),(.68,.66),(.89,.28)]):
-            center = point + tangent*(length*along) + normal*(rise*math.sin(along*2.1)) + side*(drift*along)
-            for k in range(6):
-                a = k*math.tau/6
-                verts.append(center + side*(spread*bulge*math.cos(a)) + normal*(spread*.56*bulge*math.sin(a)))
-            if section:
-                for k in range(6):
-                    i = start+(section-1)*6
-                    j = (k+1)%6
-                    face((i+k,i+k+6,i+j+6,i+j), slot)
-        tip = len(verts)
-        verts.append(point + tangent*length + normal*(rise*.78) + side*drift)
-        for k in range(6):
-            face((start+18+k,tip,start+18+(k+1)%6), slot)
+# Shallow grooves across each curved lock catch light like combed strands.
+rng = random.Random(43)
+def add_lock(path, width, depth, slot):
+    start = len(verts)
+    sections, sides = len(path), 20
+    for i, (point, normal) in enumerate(path):
+        tangent = path[min(i+1, sections-1)][0] - path[max(i-1,0)][0]
+        tangent.normalize()
+        across = tangent.cross(normal).normalized()
+        outward = across.cross(tangent).normalized()
+        t = i/(sections-1)
+        taper = (.16 + .84*fade(0,.25,t)) * (1-.98*fade(.48,1,t))
+        for j in range(sides):
+            a = math.tau*j/sides
+            flute = 1 + .19*math.cos(7*a + .38*math.sin(t*3))
+            verts.append(point + across*(width*taper*math.cos(a))
+                         + outward*(depth*taper*math.sin(a)*flute))
+        if i:
+            previous = start+(i-1)*sides
+            for j in range(sides):
+                k = (j+1)%sides
+                face((previous+j, previous+sides+j, previous+sides+k, previous+k),slot)
+    face(tuple(start+j for j in range(sides)), slot)
+    end = start+(sections-1)*sides
+    face(tuple(end+j for j in reversed(range(sides))), slot)
 
-hair_data = bpy.data.meshes.new('Mohawk')
+# Long crown locks rise off the forehead and sweep back and outward.
+for layer in range(3):
+    for lane in range(19):
+        column = (lane-9)/9
+        x_start = column*.85 + rng.uniform(-.035,.035)
+        a_start = [.37,.80,1.20][layer] + .23*abs(column) + rng.uniform(-.09,.08)
+        a_end = min(2.98, a_start + [1.48,1.42,1.29][layer] + rng.uniform(-.13,.18))
+        flow = .20*math.sin(column*2.5+.62) + .14
+        phase = rng.uniform(-.55,.55)
+        path = []
+        for i in range(19):
+            t = i/18
+            a = a_start+(a_end-a_start)*t
+            x = x_start*(1-.22*t) + flow*math.sin(t*math.pi*.90) + .088*math.sin(t*math.tau+phase)
+            x = max(-.91,min(.91,x))
+            radius = math.sqrt(1-x*x)
+            normal = Vector((x, -math.cos(a)*radius, math.sin(a)*radius))
+            theta = math.acos(normal.z)
+            azimuth = math.atan2(normal.x,-normal.y)
+            if theta > hairline(azimuth):
+                normal = polar(hairline(azimuth)-.006,azimuth)
+            volume = .003 + (.015 + .012*(1-abs(column)))*(1-layer*.19)*math.sin(math.pi*t)
+            wave = .007*math.sin(t*math.tau + phase)
+            path.append((crown(normal) + normal*(volume+wave), normal))
+        add_lock(path, rng.uniform(.016,.027), rng.uniform(.007,.012), rng.randrange(1,7))
+
+def cubic(a,b,c,d,t):
+    m = 1-t
+    return a*m**3 + b*(3*m*m*t) + c*(3*m*t*t) + d*t**3
+
+# Overlapping rear layers narrow around the neck, then kick outward at the ends.
+for row in range(3):
+    for i in range(17):
+        column = (i-8)/8
+        phi = math.pi + column*(.82+row*.08) + rng.uniform(-.08,.08)
+        theta = .73 + row*.39 + rng.uniform(-.13,.13)
+        n = polar(theta,phi)
+        start = crown(n) + n*(.010+row*.003)
+        x = -column
+        z = [1.50,1.41,1.325][row] + .026*abs(column) + rng.uniform(-.035,.032)
+        finish = Vector((x*(.117+row*.016)+rng.uniform(-.022,.022), .223+row*.013+.015*abs(column), z))
+        guide1 = start + Vector((x*.046,.072,-.059))
+        guide2 = Vector((finish.x*.64,finish.y-.044,finish.z+.064))
+        path = []
+        for j in range(17):
+            t = j/16
+            point = cubic(start,guide1,guide2,finish,t)
+            point.x += .029*math.sin(t*math.tau+column*2.3+row)*math.sin(math.pi*t)
+            normal = n.lerp(Vector((x*.6,1,0)).normalized(),t).normalized()
+            path.append((point,normal))
+        add_lock(path, rng.uniform(.018,.029), rng.uniform(.007,.012), rng.randrange(1,7))
+
+# A few loose front strands curl down over the temples.
+for i, (phi, dx, z) in enumerate([(-.39,-.018,1.59),(-.52,-.044,1.615),(-.30,.000,1.62),(.48,.028,1.653)]):
+    normal = polar(.93,phi)
+    start = crown(normal) + normal*.029
+    finish = Vector((start.x+dx, -.255+abs(start.x)*.18, z))
+    guide1 = start + Vector((-.027,-.066,.012))
+    guide2 = finish + Vector((-.017,-.022,.055))
+    path = [(cubic(start,guide1,guide2,finish,j/17), normal) for j in range(18)]
+    add_lock(path, .012-i*.001, .006, 4+i%3)
+
+hair_data = bpy.data.meshes.new('Wavy mullet')
 hair_data.from_pydata([to_mesh @ vertex for vertex in verts], [], faces)
 hair_data.update()
-hair = bpy.data.objects.new('Mohawk', hair_data)
+hair = bpy.data.objects.new('Wavy mullet', hair_data)
 bpy.context.collection.objects.link(hair)
 hair.parent = rig
 hair.matrix_world = to_model
 for i, color in enumerate([
-    (.16,.002,.012),(.33,.003,.025),(.48,.005,.034),(.63,.009,.042),
-    (.76,.015,.049),(.9,.026,.055),(.99,.045,.065),
+    (.006,.005,.006),(.008,.007,.008),(.011,.010,.011),(.015,.014,.016),
+    (.020,.018,.021),(.025,.023,.026),(.034,.032,.036),
 ]):
-    mat = bpy.data.materials.new(f'Mohawk red {i+1}')
+    mat = bpy.data.materials.new(f'Black hair {i+1}')
     mat.diffuse_color = (*color, 1)
     mat.use_nodes = True
     shader = mat.node_tree.nodes.get('Principled BSDF')
     shader.inputs['Base Color'].default_value = (*color, 1)
-    shader.inputs['Roughness'].default_value = .65
+    shader.inputs['Roughness'].default_value = .47+i*.010
     hair_data.materials.append(mat)
 for polygon, slot in zip(hair_data.polygons, slots):
     polygon.material_index = slot
