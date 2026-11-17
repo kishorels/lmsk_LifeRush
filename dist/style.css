@@ -22,3 +22,7 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   white-space: nowrap;
   pointer-events: none;
 }
+
+.game.capture :is(.game-top,.hud,.counters,.controls,.toast,#sound) {
+  visibility: hidden;
+}

@@ -1,6 +1,6 @@
 import { AnimationMixer, Group } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
-import { chasePose } from './engine.js';
+import { chasePose, isCapture } from './engine.js';
 
 export function loadChaserModel(scene) {
   const chaser = new Group();
@@ -23,15 +23,25 @@ export function loadChaserModel(scene) {
     });
     model.rotation.y = Math.PI;
     chaser.add(model);
+    render.model = model;
     mixer = new AnimationMixer(model);
     run = mixer.clipAction(clip).play();
     idle = mixer.clipAction(rest).play();
   }, undefined, error => console.warn('Could not load the Mutant chaser.', error));
 
-  return state => {
+  function render(state) {
+    const capture = isCapture(state);
     const pose = chasePose(state);
-    chaser.visible = Boolean(pose && run);
+    chaser.visible = Boolean((capture || pose) && run);
     if (!chaser.visible) return;
+    if (capture) {
+      run.setEffectiveWeight(0);
+      idle.setEffectiveWeight(1);
+      idle.time = .45 + state.capture * .46;
+      mixer.update(0);
+      return;
+    }
+    chaser.position.y = .09;
     chaser.position.x = pose.x;
     chaser.position.z = pose.z;
     chaser.rotation.y = (pose.x - state.x * 2.2) * .15;
@@ -40,5 +50,7 @@ export function loadChaserModel(scene) {
     idle.time = pose.stride % idle.getClip().duration;
     idle.setEffectiveWeight(pose.stop);
     mixer.update(0);
-  };
+  }
+  render.root = chaser;
+  return render;
 }

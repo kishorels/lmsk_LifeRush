@@ -1,9 +1,9 @@
 import { AnimationMixer, AnimationUtils, LoopOnce } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
-import { JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION } from './engine.js';
+import { JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 
 export function loadRunnerModel(parent) {
-  let model, mixer, actions, current;
+  let model, mixer, actions, current, capturing = false;
   new GLTFLoader().load(new URL('./assets/runverse-runner-v6.glb', import.meta.url).href, gltf => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall'];
@@ -33,12 +33,34 @@ export function loadRunnerModel(parent) {
       action.clampWhenFinished = true;
     }
     parent.add(model);
+    render.model = model;
   }, undefined, error => console.warn('Could not load the runner character.', error));
 
-  return (state, character, dt) => {
+  function render(state, character, dt) {
     if (!model) return false;
     model.visible = character === 'male';
     if (!model.visible) return false;
+
+    if (isCapture(state)) {
+      const lift = capturePose(state).lift;
+      if (!capturing) {
+        mixer.stopAllAction();
+        actions.Fall.reset().setEffectiveTimeScale(0).play();
+        actions.Idle.reset().setEffectiveTimeScale(0).play();
+        capturing = true;
+      }
+      actions.Fall.time = actions.Fall.getClip().duration * .9999;
+      actions.Fall.setEffectiveWeight(1-lift);
+      actions.Idle.time = .3 + state.capture * .28;
+      actions.Idle.setEffectiveWeight(lift);
+      mixer.update(0);
+      return true;
+    }
+    if (capturing) {
+      mixer.stopAllAction();
+      capturing = false;
+      current = null;
+    }
 
     const frozen = state.mode === 'paused' || state.mode === 'countdown';
     if (frozen && current) return true;
@@ -53,7 +75,7 @@ export function loadRunnerModel(parent) {
     const next = actions[name];
     if (next !== current) {
       current?.fadeOut(.09);
-      next.reset().setEffectiveWeight(1).fadeIn(current ? .09 : 0).play();
+      next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(current ? .09 : 0).play();
       current = next;
     }
     if (name === 'Jump') {
@@ -70,5 +92,6 @@ export function loadRunnerModel(parent) {
     if (name === 'Run') next.setEffectiveTimeScale(state.speed / 17);
     mixer.update(frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0)));
     return true;
-  };
+  }
+  return render;
 }

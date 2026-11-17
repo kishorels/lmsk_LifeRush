@@ -1,7 +1,8 @@
 import * as T from './vendor/three.module.js';
+import {createCaptureScene} from './capture-scene.js';
 import {loadChaserModel} from './chaser-model.js';
 import {loadRunnerModel} from './runner-model.js';
-import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION} from './engine.js';
+import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture} from './engine.js';
 const COLORS=[0xffce36,0x73ffb3,0x8edcff];
 export function createRenderer(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
@@ -27,7 +28,14 @@ export function createRenderer(canvas){
  const runner=new T.Group();scene.add(runner);const body=new T.Group();runner.add(body);
  const updateRunnerModel=loadRunnerModel(runner);
  const updateChaserModel=loadChaserModel(scene);
+ const capture=createCaptureScene();
  const torso=ball(body,0xffcb38,0,1.25,0,.33,.46,.23,true);box(body,0x17a4a3,0,1.22,.22,.4,.47,.15,true);box(body,0x86ead6,0,1.23,.31,.24,.24,.05);box(body,0xffe67a,0,1.27,.35,.16,.06,.025);for(const side of [-1,1])box(body,0x16857f,side*.21,1.34,.17,.055,.55,.07);const head=ball(body,0xd9986f,0,1.91,0,.255,.28,.24,true);ball(body,0x273455,0,2.07,-.01,.27,.16,.25,true);const cap=ball(body,0xf65d78,0,2.16,0,.29,.11,.27,true);box(body,0xf65d78,0,2.11,-.22,.4,.045,.25);const pony=ball(body,0x273455,0,1.95,.28,.12,.26,.14,true);
+ // Front details for the lightweight character mesh used by the female option.
+ for(const x of [-.089,.089]){
+   ball(body,0xfff4e1,x,1.94,-.210,.041,.038,.018);
+   ball(body,0x29283b,x,1.94,-.226,.017,.023,.008);
+ }
+ ball(body,0x813c40,0,1.835,-.226,.042,.014,.012);
  const legs=[],arms=[];for(const side of [-1,1]){const leg=new T.Group();leg.position.set(side*.17,.88,0);body.add(leg);mesh(cyl,0x283962,leg,0,-.21,0,.12,.45,.12,true);const knee=new T.Group();knee.position.y=-.42;leg.add(knee);mesh(cyl,0x344771,knee,0,-.18,0,.10,.38,.1,true);box(knee,0xffffff,0,-.4,-.08,.25,.17,.42,true);box(knee,0xf66d7d,0,-.35,-.1,.26,.05,.26);legs.push({leg,knee});const arm=new T.Group();arm.position.set(side*.36,1.53,0);body.add(arm);mesh(cyl,0xffcb38,arm,0,-.12,0,.115,.26,.115,true);mesh(cyl,0xd9986f,arm,0,-.35,0,.085,.3,.085,true);ball(arm,0xe7ae84,0,-.52,0,.09);arms.push(arm);}
  // Pooled obstacles / pickup models: no geometry allocation during a run.
  const pool=[];for(let i=0;i<12;i++){const root=new T.Group();scene.add(root);root.visible=false;pool.push(root);}
@@ -35,10 +43,12 @@ export function createRenderer(canvas){
  function obstacle(g,o){clear(g);if(o.type==='block'){box(g,0x8261bb,0,1.15,0,1.45,2.3,1.2,true);box(g,0xb7a1ee,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xd9c9ff,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x8466ad,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}else{const ring=new T.Mesh(ringGeometry,mat(COLORS[o.skill]));ring.position.y=1.2;ring.castShadow=true;g.add(ring);if(o.skill===0){box(g,0xffed9b,0,1.2,0,.32,.34,.12);box(g,0x715c28,0,1.2,.07,.035,.28,.02);}if(o.skill===1){box(g,0xc9ffe0,0,1.2,0,.12,.4,.12);box(g,0xc9ffe0,0,1.2,0,.4,.12,.12);}if(o.skill===2){const shield=mesh(cone,0xd4f3ff,g,0,1.2,0,.24,.38,.08);shield.rotation.z=Math.PI;}}}
  const particles=[];for(let i=0;i<30;i++){const m=ball(scene,0xffdf62,0,0,0,.065);m.visible=false;particles.push({m,life:0,v:new T.Vector3()});}let total=0,lastTime=0,lastMode='ready',burst=0;
  function resize(){const r=canvas.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.fov=r.width/r.height<.8?64:58;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
- return function render(s,character,frameDt){const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;for(let i=0;i<segments.length;i++)segments[i].position.z=8-i*10+(s.distance%10);arch.position.z=-45+(s.distance%100);for(let i=0;i<sea.length;i++)sea[i].position.x+=(Math.sin(s.time*.7+i)*.002);
+ return function render(s,character,frameDt){capture.restore();runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;for(let i=0;i<segments.length;i++)segments[i].position.z=8-i*10+(s.distance%10);arch.position.z=-45+(s.distance%100);for(let i=0;i<sea.length;i++)sea[i].position.x+=(Math.sin(s.time*.7+i)*.002);
  updateChaserModel(s);
  runner.position.set(s.x*2.2,height(s),0);body.visible=!updateRunnerModel(s,character,frameDt);if(body.visible){const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=(s.lane-s.x)*-.16;torso.material=mat(character==='female'?0xd77bf2:0xffcb38);pony.visible=character==='female';cap.visible=character!=='female';legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{a.rotation.x=s.slide?-1.6:s.jump?-1.6:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):(i?-.1:.1);});}
  let n=0;for(const o of s.items){const z=o.z-s.distance;if(o.done||z< -3||z>125)continue;const g=pool[n++];if(!g)break;const key=o.type+':'+o.skill;if(g.userData.key!==key){obstacle(g,o);g.userData.key=key;}g.visible=true;g.position.set(o.lane*2.2,0,-z);g.rotation.y=o.type==='skill'?s.time*2:0;if(o.type==='skill')g.position.y=Math.sin(s.time*3+o.z)*.13;}for(;n<pool.length;n++)pool[n].visible=false;
  const count=s.skills.reduce((a,b)=>a+b,0);if(count>total){burst=.22;for(const p of particles){p.life=.5+Math.random()*.3;p.m.visible=true;p.m.position.set(s.x*2.2,1.2,0);p.v.set((Math.random()-.5)*4,Math.random()*4,(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
- burst=Math.max(0,burst-dt);camera.position.x+=(s.x*.65-camera.position.x)*(1-Math.exp(-8*(dt||.016)));camera.position.y=3.8+(s.mode==='running'?Math.sin(s.time*15)*.022:0);camera.position.z=6.8;camera.lookAt(s.x*.24,1.35,-12);renderer.render(scene,camera);lastMode=s.mode;};
+ burst=Math.max(0,burst-dt);camera.position.x+=(s.x*.65-camera.position.x)*(1-Math.exp(-8*(dt||.016)));camera.position.y=3.8+(s.mode==='running'?Math.sin(s.time*15)*.022:0);camera.position.z=6.8;camera.lookAt(s.x*.24,1.35,-12);
+ if(isCapture(s))capture.frame(camera,s,runner,body.visible?null:updateRunnerModel.model,body,updateChaserModel.root,updateChaserModel.model);
+ renderer.render(scene,camera);lastMode=s.mode;};
 }

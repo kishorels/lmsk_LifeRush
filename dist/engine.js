@@ -1,5 +1,5 @@
 export const JUMP_DURATION = .95, SLIDE_DURATION = .85, ROLL_DURATION = .62;
-export const HIT_DURATION = .65, FALL_DURATION = .9;
+export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 2.65;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -8,7 +8,7 @@ export function fresh() {
   return {
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 17,
     jump: 0, slide: 0, roll: 0, drop: null, lastGroundDown: -Infinity,
-    damage: 0, hit: 0, fall: 0, items: [], next: 40,
+    damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 40,
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
   };
@@ -46,6 +46,23 @@ export function action(s, input) {
 export function height(s) {
   if (s.drop) return s.drop.start * (s.drop.remaining / s.drop.duration);
   return s.jump ? Math.sin(Math.PI * (1 - s.jump / JUMP_DURATION)) * 2.3 : 0;
+}
+
+export function isCapture(s) {
+  return s.mode === 'captured' || s.mode === 'crashed';
+}
+
+export function ease(from, to, t) {
+  const x = clamp((t - from) / (to - from), 0, 1);
+  return x*x*(3-2*x);
+}
+
+export function capturePose(s) {
+  const t = s.capture;
+  const lift = ease(.38, 1.30, t);
+  const laughIn = ease(1.22, 1.43, t) * (1 - ease(2.22, 2.58, t));
+  const laugh = laughIn * (.55 + .45 * Math.sin((t-1.3) * (2*Math.PI/.22)));
+  return { lift, laugh, reach: ease(0, .40, t), show: ease(1.02, 1.58, t) };
 }
 
 export function chaseRemaining(s) {
@@ -102,7 +119,12 @@ export function step(s, dt, random = Math.random) {
   if (s.mode === 'falling') {
     advanceDrop(s, dt);
     s.fall = Math.max(0, s.fall - dt);
-    if (!s.fall) s.mode = 'crashed';
+    if (!s.fall) s.mode = 'captured';
+    return;
+  }
+  if (s.mode === 'captured') {
+    s.capture = Math.min(CAPTURE_DURATION, s.capture + dt);
+    if (s.capture >= CAPTURE_DURATION) s.mode = 'crashed';
     return;
   }
   if (s.mode !== 'running') return;

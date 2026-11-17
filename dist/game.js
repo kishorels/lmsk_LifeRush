@@ -1,15 +1,41 @@
-import {fresh,action,step,height,career,chaseRemaining} from './engine.js';
+import {fresh,action,step,height,career,chaseRemaining,isCapture} from './engine.js';
 import {createRenderer} from './renderer3d.js';
 import {createLiteRenderer} from './renderer-lite.js';
 const $=id=>document.getElementById(id),canvas=$('world');
 let draw;try{draw=createRenderer(canvas);}catch(error){console.warn('Using lightweight graphics:',error.message);draw=createLiteRenderer(canvas);document.querySelector('.edition').textContent='COAST EDITION · LITE';}
-const chaseNotice = $('chase-notice');
+const chaseNotice = $('chase-notice'), game = canvas.closest('.game');
 let s=fresh(),best=0,character='male',sound=false,audio,prev=0,w=600,h=700,lastCount=0;
 try{best=Number(localStorage.getItem('runverse-best'))||0;character=localStorage.getItem('runverse-character')==='female'?'female':'male';}catch{}
 const save=()=>{try{localStorage.setItem('runverse-best',best);localStorage.setItem('runverse-character',character);}catch{}};
 function select(c){character=c;document.querySelectorAll('[data-character]').forEach(b=>{b.classList.toggle('selected',b.dataset.character===c);b.setAttribute('aria-pressed',b.dataset.character===c);});save();}select(character);
 document.querySelectorAll('[data-character]').forEach(b=>b.onclick=()=>select(b.dataset.character));
 function beep(f=500){if(!sound)return;try{audio??=new AudioContext();audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.connect(g);g.connect(audio.destination);o.frequency.value=f;g.gain.setValueAtTime(.055,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.12);o.start();o.stop(audio.currentTime+.12);}catch{}}
+function playLaugh() {
+  if (!sound) return;
+  try {
+    audio ??= new AudioContext();
+    audio.resume();
+    const base = audio.currentTime;
+    for (let i = 0; i < 4; i++) {
+      const start = base + i * .22;
+      const voice = audio.createOscillator();
+      const vowel = audio.createBiquadFilter();
+      const envelope = audio.createGain();
+      voice.type = 'sawtooth';
+      voice.frequency.setValueAtTime(133-i*8, start);
+      voice.frequency.exponentialRampToValueAtTime(77-i*4, start+.145);
+      vowel.type = 'bandpass';
+      vowel.frequency.value = 405;
+      vowel.Q.value = 3.3;
+      envelope.gain.setValueAtTime(.001,start);
+      envelope.gain.exponentialRampToValueAtTime(.25,start+.03);
+      envelope.gain.exponentialRampToValueAtTime(.001,start+.16);
+      voice.connect(vowel).connect(envelope).connect(audio.destination);
+      voice.start(start);
+      voice.stop(start+.17);
+    }
+  } catch {}
+}
 $('sound').onclick=()=>{sound=!sound;$('sound').textContent=sound?'♪ ON':'♪ OFF';$('sound').setAttribute('aria-label',sound?'Mute sound':'Enable sound');beep();};
 function start(){s=fresh();s.mode='running';lastCount=0;$('overlay').hidden=true;$('toast').textContent='Down in air: quick drop · Twice down on ground: roll';beep(660);}
 function pause(){if(!['running','countdown'].includes(s.mode))return;s.mode='paused';$('countdown').hidden=true;show('Take a breath.','Your story will be right here.','RESUME RUN','PAUSED');}
@@ -24,5 +50,6 @@ let touch;canvas.addEventListener('pointerdown',e=>{touch={x:e.clientX,y:e.clien
 function updateChaseNotice() {
   const active = s.mode === 'running' && chaseRemaining(s) > 0;
   chaseNotice.hidden = !active;
+  game.classList.toggle('capture', isCapture(s));
 }
-function frame(t){const dt=prev?(t-prev)/1000:0;prev=t;const old=s.mode,damage=s.damage;step(s,dt);updateChaseNotice();if(old==='falling'&&s.mode==='crashed')crash();if(damage===0&&s.damage===1){beep(185);$('toast').textContent='One hit left. Keep running!';}const count=s.skills.reduce((a,b)=>a+b,0);if(count>lastCount){beep(880);lastCount=count;if(!s.hit)$('toast').textContent='Skill collected. Your future is taking shape.';}const health=$('health'),left=2-s.damage;if(health.dataset.left!==String(left)){health.dataset.left=left;health.textContent=['♡ ♡','♥ ♡','♥ ♥'][left];health.setAttribute('aria-label',left===1?'1 hit left':left+' hits left');}$('distance').innerHTML=Math.floor(s.distance)+'<span> m</span>';$('best').textContent=best+' m';['k','c','s'].forEach((id,i)=>$(id).textContent=s.skills[i]);$('countdown').hidden=s.mode!=='countdown';if(s.mode==='countdown')$('countdown').textContent=Math.ceil(s.countdown);draw(s,character,dt);requestAnimationFrame(frame);}requestAnimationFrame(frame);
+function frame(t){const dt=prev?(t-prev)/1000:0;prev=t;const old=s.mode,damage=s.damage,captureBefore=s.capture;step(s,dt);updateChaseNotice();if(old!=='crashed'&&s.mode==='crashed')crash();if(old==='captured'&&captureBefore<1.30&&s.capture>=1.30)playLaugh();if(damage===0&&s.damage===1){beep(185);$('toast').textContent='One hit left. Keep running!';}const count=s.skills.reduce((a,b)=>a+b,0);if(count>lastCount){beep(880);lastCount=count;if(!s.hit)$('toast').textContent='Skill collected. Your future is taking shape.';}const health=$('health'),left=2-s.damage;if(health.dataset.left!==String(left)){health.dataset.left=left;health.textContent=['♡ ♡','♥ ♡','♥ ♥'][left];health.setAttribute('aria-label',left===1?'1 hit left':left+' hits left');}$('distance').innerHTML=Math.floor(s.distance)+'<span> m</span>';$('best').textContent=best+' m';['k','c','s'].forEach((id,i)=>$(id).textContent=s.skills[i]);$('countdown').hidden=s.mode!=='countdown';if(s.mode==='countdown')$('countdown').textContent=Math.ceil(s.countdown);draw(s,character,dt);requestAnimationFrame(frame);}requestAnimationFrame(frame);
