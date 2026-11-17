@@ -28,12 +28,13 @@ export function createRenderer(canvas){
  const runner=new T.Group();scene.add(runner);const body=new T.Group();runner.add(body);
  const updateRunnerModel=loadRunnerModel(runner);
  const updateChaserModel=loadChaserModel(scene);
- const capture=createCaptureScene();
+ const capture=createCaptureScene(scene);
  const torso=ball(body,0xffcb38,0,1.25,0,.33,.46,.23,true);box(body,0x17a4a3,0,1.22,.22,.4,.47,.15,true);box(body,0x86ead6,0,1.23,.31,.24,.24,.05);box(body,0xffe67a,0,1.27,.35,.16,.06,.025);for(const side of [-1,1])box(body,0x16857f,side*.21,1.34,.17,.055,.55,.07);const head=ball(body,0xd9986f,0,1.91,0,.255,.28,.24,true);ball(body,0x273455,0,2.07,-.01,.27,.16,.25,true);const cap=ball(body,0xf65d78,0,2.16,0,.29,.11,.27,true);box(body,0xf65d78,0,2.11,-.22,.4,.045,.25);const pony=ball(body,0x273455,0,1.95,.28,.12,.26,.14,true);
  // Front details for the lightweight character mesh used by the female option.
  for(const x of [-.089,.089]){
-   ball(body,0xfff4e1,x,1.94,-.210,.041,.038,.018);
-   ball(body,0x29283b,x,1.94,-.226,.017,.023,.008);
+   ball(body,0xfff4e1,x,1.94,-.229,.045,.036,.020);
+   ball(body,0x29283b,x,1.941,-.247,.018,.024,.008);
+   ball(body,0x342737,x,1.993,-.225,.043,.009,.012);
  }
  ball(body,0x813c40,0,1.835,-.226,.042,.014,.012);
  const legs=[],arms=[];for(const side of [-1,1]){const leg=new T.Group();leg.position.set(side*.17,.88,0);body.add(leg);mesh(cyl,0x283962,leg,0,-.21,0,.12,.45,.12,true);const knee=new T.Group();knee.position.y=-.42;leg.add(knee);mesh(cyl,0x344771,knee,0,-.18,0,.10,.38,.1,true);box(knee,0xffffff,0,-.4,-.08,.25,.17,.42,true);box(knee,0xf66d7d,0,-.35,-.1,.26,.05,.26);legs.push({leg,knee});const arm=new T.Group();arm.position.set(side*.36,1.53,0);body.add(arm);mesh(cyl,0xffcb38,arm,0,-.12,0,.115,.26,.115,true);mesh(cyl,0xd9986f,arm,0,-.35,0,.085,.3,.085,true);ball(arm,0xe7ae84,0,-.52,0,.09);arms.push(arm);}

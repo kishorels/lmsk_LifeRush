@@ -19,6 +19,17 @@ export function loadRunnerModel(parent) {
       if (object.isMesh) {
         object.castShadow = true;
         object.frustumCulled = false;
+        // These face textures use alpha cutouts. Depth-test the solid pixels
+        // so eyes, eyelids and brows sort correctly against the glasses.
+        const material = object.material;
+        if (['Boy01_Eyes_MAT2', 'Boy01_Brows_MAT2', 'Boy01_Mouth_MAT2'].includes(material?.name)) {
+          material.transparent = false;
+          material.alphaTest = .38;
+          material.depthWrite = true;
+          material.specularIntensity = .32;
+          material.roughness = .70;
+          object.castShadow = false;
+        }
       }
     });
     mixer = new AnimationMixer(model);
