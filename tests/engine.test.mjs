@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import{fresh,action,step,hits,pattern,career,height}from'../dist/engine.js';
+import test from 'node:test';import assert from 'node:assert/strict';import{fresh,action,step,hits,pattern,career,height,chaseRemaining,chasePose}from'../dist/engine.js';
 test('lane boundaries and pause input',()=>{const s=fresh();s.mode='running';for(let i=0;i<10;i++)action(s,'right');assert.equal(s.lane,1);for(let i=0;i<10;i++)action(s,'left');assert.equal(s.lane,-1);s.mode='paused';action(s,'right');assert.equal(s.lane,-1);});
 test('jump, slide and collision outcomes',()=>{const s=fresh();s.mode='running';assert.ok(hits(s,{lane:0,type:'jump'}));action(s,'jump');s.jump=.475;assert.equal(hits(s,{lane:0,type:'jump'}),false);assert.ok(hits(s,{lane:0,type:'block'}));s.jump=0;action(s,'slide');assert.equal(hits(s,{lane:0,type:'slide'}),false);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.slide,0);assert.ok(hits(s,{lane:0,type:'slide'}));});
 test('safe generated rows and reset',()=>{for(let i=0;i<1000;i++){const row=pattern(50);assert.equal(row.filter(x=>x.type!=='skill').length,1);assert.notEqual(row[0].lane,row[1].lane);}const s=fresh();s.skills[0]=100;s.distance=300;s.items.push({});const reset=fresh();assert.deepEqual(reset.skills,[0,0,0]);assert.equal(reset.distance,0);assert.equal(reset.items.length,0);});
@@ -27,4 +27,55 @@ test('airborne down input drops from the current height and ground double down r
   assert.equal(s.slide, 0);
   assert.ok(s.roll);
   assert.equal(hits(s, { lane: 0, type: 'slide' }), false);
+});
+
+test('the guard follows for three seconds, then returns for five seconds on the first hit', () => {
+  const s = fresh();
+  const advance = frames => { for (let i = 0; i < frames; i++) step(s,.05); };
+  const hit = () => {
+    s.items.push({z:s.distance+1,lane:0,type:'block'});
+    step(s,.05);
+  };
+  assert.equal(chasePose(s), null);
+  s.mode = 'running';
+  s.next = 10000;
+  assert.equal(chaseRemaining(s), 3);
+  advance(59);
+  assert.ok(chasePose(s));
+  advance(2);
+  assert.equal(chasePose(s), null);
+  hit();
+  assert.equal(s.damage, 1);
+  assert.ok(Math.abs(chaseRemaining(s) - 5) < 1e-10);
+  const beforePause = chasePose(s);
+  s.mode = 'paused';
+  advance(20);
+  assert.deepEqual(chasePose(s), beforePause);
+  s.mode = 'running';
+  advance(99);
+  assert.ok(chasePose(s));
+  advance(2);
+  assert.equal(chasePose(s), null);
+  assert.equal(s.damage, 1);
+  hit();
+  assert.equal(s.mode, 'falling');
+  assert.equal(chasePose(s), null);
+  assert.equal(chaseRemaining(fresh()), 0);
+});
+
+test('a second hit during pursuit lets the guard catch up during the fall', () => {
+  const s = fresh();
+  s.mode = 'running';
+  s.next = 10000;
+  s.items = [{z:1,lane:0,type:'block'}];
+  step(s,.05);
+  for (let i = 0; i < 15; i++) step(s,.05);
+  s.items = [{z:s.distance+1,lane:0,type:'block'}];
+  step(s,.05);
+  assert.equal(s.mode,'falling');
+  const behind = chasePose(s).z;
+  for (let i = 0; i < 20; i++) step(s,.05);
+  assert.equal(s.mode,'crashed');
+  assert.ok(chasePose(s).z < behind);
+  assert.equal(chasePose(s).stop,1);
 });

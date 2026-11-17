@@ -6,3 +6,19 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 .game-top{flex-direction:row}#sound{position:absolute;bottom:max(18px,env(safe-area-inset-bottom));right:9px;z-index:2;min-width:36px;width:36px;height:34px;font-size:8px;background:#152441b3}.game-top #pause{z-index:2}
 
 #health { color: #ff8ca8; white-space: nowrap; }
+
+.chase-notice {
+  position: absolute;
+  top: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: .4rem .7rem;
+  border-radius: 999px;
+  background: #362414ed;
+  color: #ffdc83;
+  font-size: .67rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  white-space: nowrap;
+  pointer-events: none;
+}

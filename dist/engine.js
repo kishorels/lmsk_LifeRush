@@ -1,6 +1,7 @@
 export const JUMP_DURATION = .95, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9;
 const DOUBLE_SWIPE = .32;
+const OPENING_CHASE = 3, HIT_CHASE = 5;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export function fresh() {
@@ -8,6 +9,7 @@ export function fresh() {
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 17,
     jump: 0, slide: 0, roll: 0, drop: null, lastGroundDown: -Infinity,
     damage: 0, hit: 0, fall: 0, items: [], next: 40,
+    firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
   };
 }
@@ -44,6 +46,30 @@ export function action(s, input) {
 export function height(s) {
   if (s.drop) return s.drop.start * (s.drop.remaining / s.drop.duration);
   return s.jump ? Math.sin(Math.PI * (1 - s.jump / JUMP_DURATION)) * 2.3 : 0;
+}
+
+export function chaseRemaining(s) {
+  if (s.mode === 'ready') return 0;
+  const end = s.firstHitAt === null ? OPENING_CHASE : s.firstHitAt + HIT_CHASE;
+  return Math.max(0, end - s.time);
+}
+
+export function chasePose(s) {
+  const remaining = chaseRemaining(s);
+  if (!remaining) return null;
+  const caught = s.mode === 'falling' || s.mode === 'crashed';
+  const elapsed = s.firstHitAt === null ? s.time : s.time - s.firstHitAt;
+  const retreat = caught ? 0 : 1 - clamp(remaining / .55, 0, 1);
+  const arrival = s.chaseReentered && !caught ? 1 - clamp(elapsed / .25, 0, 1) : 0;
+  const catchup = caught ? 1 - s.fall / FALL_DURATION : 0;
+  const center = .65 * s.x;
+  const x = clamp(s.chaserX * 2.2 + s.chaseSide * (1.22 - .48*catchup),
+                  center - 1.45, center + 1.45);
+  return {
+    x, z: 1.68 + 1.35*retreat + .95*arrival - .90*catchup,
+    stride: s.time + Math.min(catchup * FALL_DURATION, .6),
+    stop: clamp((catchup - .5) * 2, 0, 1),
+  };
 }
 
 export function pattern(z, random = Math.random) {
@@ -85,6 +111,7 @@ export function step(s, dt, random = Math.random) {
   s.speed = Math.min(29, 17 + s.distance / 350);
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * Math.min(1, dt * 18);
+  s.chaserX += (s.x - s.chaserX) * Math.min(1, dt * 5);
   s.jump = Math.max(0, s.jump - dt);
   s.slide = Math.max(0, s.slide - dt);
   s.roll = Math.max(0, s.roll - dt);
@@ -111,6 +138,12 @@ export function step(s, dt, random = Math.random) {
         s.mode = 'falling';
         s.fall = FALL_DURATION;
         break;
+      }
+      s.firstHitAt = s.time;
+      s.chaseReentered = s.time >= OPENING_CHASE;
+      if (s.chaseReentered) {
+        s.chaserX = s.x;
+        s.chaseSide = s.x > .2 ? -1 : 1;
       }
       s.hit = HIT_DURATION;
     }
