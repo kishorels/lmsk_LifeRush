@@ -130,6 +130,12 @@ export function step(s, dt, random = Math.random) {
   if (s.mode !== 'running') return;
 
   s.time += dt;
+  // End the chase before resolving any collisions on this frame.
+  if (s.firstHitAt !== null && chaseRemaining(s) === 0) {
+    s.firstHitAt = null;
+    s.chaseReentered = false;
+    s.damage = 0;
+  }
   s.speed = Math.min(29, 17 + s.distance / 350);
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * Math.min(1, dt * 18);

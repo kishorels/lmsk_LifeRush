@@ -52,4 +52,39 @@ function updateChaseNotice() {
   chaseNotice.hidden = !active;
   game.classList.toggle('capture', isCapture(s));
 }
-function frame(t){const dt=prev?(t-prev)/1000:0;prev=t;const old=s.mode,damage=s.damage,captureBefore=s.capture;step(s,dt);updateChaseNotice();if(old!=='crashed'&&s.mode==='crashed')crash();if(old==='captured'&&captureBefore<1.30&&s.capture>=1.30)playLaugh();if(damage===0&&s.damage===1){beep(185);$('toast').textContent='One hit left. Keep running!';}const count=s.skills.reduce((a,b)=>a+b,0);if(count>lastCount){beep(880);lastCount=count;if(!s.hit)$('toast').textContent='Skill collected. Your future is taking shape.';}const health=$('health'),left=2-s.damage;if(health.dataset.left!==String(left)){health.dataset.left=left;health.textContent=['♡ ♡','♥ ♡','♥ ♥'][left];health.setAttribute('aria-label',left===1?'1 hit left':left+' hits left');}$('distance').innerHTML=Math.floor(s.distance)+'<span> m</span>';$('best').textContent=best+' m';['k','c','s'].forEach((id,i)=>$(id).textContent=s.skills[i]);$('countdown').hidden=s.mode!=='countdown';if(s.mode==='countdown')$('countdown').textContent=Math.ceil(s.countdown);draw(s,character,dt);requestAnimationFrame(frame);}requestAnimationFrame(frame);
+function frame(t) {
+  const dt = prev ? (t-prev)/1000 : 0;
+  prev = t;
+  const old = s.mode, firstHitBefore = s.firstHitAt, captureBefore = s.capture;
+  step(s, dt);
+  updateChaseNotice();
+  if (old !== 'crashed' && s.mode === 'crashed') crash();
+  if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) playLaugh();
+
+  const count = s.skills.reduce((a,b) => a+b, 0);
+  if (count > lastCount) {
+    beep(880);
+    lastCount = count;
+    if (!s.hit) $('toast').textContent = 'Skill collected. Your future is taking shape.';
+  }
+  if (s.firstHitAt !== null && s.firstHitAt !== firstHitBefore) {
+    beep(185);
+    $('toast').textContent = 'One hit left. Keep running!';
+  } else if (firstHitBefore !== null && s.firstHitAt === null) {
+    $('toast').textContent = 'You escaped. Both hearts restored.';
+  }
+  const health = $('health'), left = 2-s.damage;
+  if (health.dataset.left !== String(left)) {
+    health.dataset.left = left;
+    health.textContent = ['♡ ♡','♥ ♡','♥ ♥'][left];
+    health.setAttribute('aria-label', left === 1 ? '1 hit left' : left+' hits left');
+  }
+  $('distance').innerHTML = Math.floor(s.distance)+'<span> m</span>';
+  $('best').textContent = best+' m';
+  ['k','c','s'].forEach((id,i) => $(id).textContent = s.skills[i]);
+  $('countdown').hidden = s.mode !== 'countdown';
+  if (s.mode === 'countdown') $('countdown').textContent = Math.ceil(s.countdown);
+  draw(s, character, dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);

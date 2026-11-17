@@ -29,7 +29,7 @@ test('airborne down input drops from the current height and ground double down r
   assert.equal(hits(s, { lane: 0, type: 'slide' }), false);
 });
 
-test('the chaser follows for three seconds, then returns for five seconds on the first hit', () => {
+test('escaping the chaser restores both hearts and starts a fresh chase on the next hit', () => {
   const s = fresh();
   const advance = frames => { for (let i = 0; i < frames; i++) step(s,.05); };
   const hit = () => {
@@ -52,14 +52,23 @@ test('the chaser follows for three seconds, then returns for five seconds on the
   advance(20);
   assert.deepEqual(chasePose(s), beforePause);
   s.mode = 'running';
-  advance(99);
-  assert.ok(chasePose(s));
-  advance(2);
-  assert.equal(chasePose(s), null);
-  assert.equal(s.damage, 1);
+  for (let cycle = 0; cycle < 2; cycle++) {
+    advance(99);
+    assert.ok(chasePose(s));
+    assert.equal(s.damage, 1);
+    advance(2);
+    assert.equal(chasePose(s), null);
+    assert.equal(s.damage, 0);
+    assert.equal(s.firstHitAt, null);
+    hit();
+    assert.equal(s.mode, 'running');
+    assert.equal(s.damage, 1);
+    assert.ok(Math.abs(chaseRemaining(s)-5) < 1e-10);
+  }
+  advance(15);
   hit();
   assert.equal(s.mode, 'falling');
-  assert.equal(chasePose(s), null);
+  assert.equal(s.damage, 2);
   assert.equal(chaseRemaining(fresh()), 0);
 });
 
@@ -85,4 +94,20 @@ test('a second hit during pursuit lets the chaser catch up during the fall', () 
   assert.equal(s.capture,CAPTURE_DURATION);
   assert.ok(chasePose(s).z < behind);
   assert.equal(chasePose(s).stop,1);
+});
+
+test('a collision exactly when the chase expires opens a new chase', () => {
+  const s = fresh();
+  s.mode = 'running';
+  s.next = 10000;
+  s.firstHitAt = 1;
+  s.time = 5.96875;
+  s.damage = 1;
+  s.items = [{ z: 1, lane: 0, type: 'block' }];
+  step(s, .03125);
+  assert.equal(s.time, 6);
+  assert.equal(s.mode, 'running');
+  assert.equal(s.damage, 1);
+  assert.equal(s.firstHitAt, 6);
+  assert.equal(chaseRemaining(s), 5);
 });
