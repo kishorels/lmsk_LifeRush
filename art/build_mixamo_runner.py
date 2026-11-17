@@ -19,13 +19,12 @@ def import_fbx(name):
 rig, model = import_fbx("Hip Hop Dancing(1).fbx")
 rig.animation_data_clear()
 meshes = [o for o in model if o.type == 'MESH']
-# The cap and its top button are disconnected islands of Boy01's body mesh.
+# Boy01 has separate mesh islands for the hair, cap and cap button.
 body = next(obj for obj in meshes if obj.name == 'Boy01_Body_Geo')
 mesh = bmesh.new()
 mesh.from_mesh(body.data)
 mesh.verts.ensure_lookup_table()
-cap = set()
-for seed, expected in ((2236, 180), (2416, 21)):
+def connected_island(seed, expected):
     island = {mesh.verts[seed]}
     stack = list(island)
     while stack:
@@ -35,9 +34,32 @@ for seed, expected in ((2236, 180), (2416, 21)):
             if neighbor not in island:
                 island.add(neighbor)
                 stack.append(neighbor)
-    if len(island) != expected or cap.intersection(island):
-        raise ValueError('Unexpected cap topology for Boy01')
-    cap.update(island)
+    if len(island) != expected:
+        raise ValueError('Unexpected head topology for Boy01')
+    return island
+
+cap = connected_island(2236, 180) | connected_island(2416, 21)
+hair = connected_island(1133, 435)
+if cap & hair:
+    raise ValueError('Hair and cap must be separate')
+
+def smoothstep(low, high, value):
+    t = min(1, max(0, (value - low) / (high - low)))
+    return t * t * (3 - 2 * t)
+
+to_model = body.matrix_world.copy()
+to_mesh = to_model.inverted()
+for vertex in hair:
+    point = to_model @ vertex.co
+    crown = smoothstep(1.64, 1.82, point.z)
+    front = smoothstep(-.12, .18, -point.y)
+    center = math.exp(-((point.x - .025) / .16) ** 2)
+    lift = crown * front * center
+    point.z += .135 * lift + .022 * crown
+    point.x += .045 * lift
+    point.y += .027 * lift
+    vertex.co = to_mesh @ point
+
 bmesh.ops.delete(mesh, geom=list(cap), context='VERTS')
 mesh.to_mesh(body.data)
 mesh.free()

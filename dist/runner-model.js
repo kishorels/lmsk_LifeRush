@@ -4,7 +4,7 @@ import { JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATI
 
 export function loadRunnerModel(parent) {
   let model, mixer, actions, current;
-  new GLTFLoader().load(new URL('./assets/runverse-runner-v3.glb', import.meta.url).href, gltf => {
+  new GLTFLoader().load(new URL('./assets/runverse-runner-v4.glb', import.meta.url).href, gltf => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall'];
     if (names.some(name => !clips.has(name))) return;
