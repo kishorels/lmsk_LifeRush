@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 import hashlib
 import math
 import sys
@@ -18,6 +19,30 @@ def import_fbx(name):
 rig, model = import_fbx("Hip Hop Dancing(1).fbx")
 rig.animation_data_clear()
 meshes = [o for o in model if o.type == 'MESH']
+# The cap and its top button are disconnected islands of Boy01's body mesh.
+body = next(obj for obj in meshes if obj.name == 'Boy01_Body_Geo')
+mesh = bmesh.new()
+mesh.from_mesh(body.data)
+mesh.verts.ensure_lookup_table()
+cap = set()
+for seed, expected in ((2236, 180), (2416, 21)):
+    island = {mesh.verts[seed]}
+    stack = list(island)
+    while stack:
+        current = stack.pop()
+        for edge in current.link_edges:
+            neighbor = edge.other_vert(current)
+            if neighbor not in island:
+                island.add(neighbor)
+                stack.append(neighbor)
+    if len(island) != expected or cap.intersection(island):
+        raise ValueError('Unexpected cap topology for Boy01')
+    cap.update(island)
+bmesh.ops.delete(mesh, geom=list(cap), context='VERTS')
+mesh.to_mesh(body.data)
+mesh.free()
+body.data.update()
+
 clips = {}
 for label, filename in [
     ('Idle','Idle.fbx'), ('Run','Running(1).fbx'),
