@@ -111,3 +111,59 @@ test('a collision exactly when the chase expires opens a new chase', () => {
   assert.equal(s.firstHitAt, 6);
   assert.equal(chaseRemaining(s), 5);
 });
+
+test('the right ramp leads onto the van roof and back to the road', () => {
+  const s = fresh();
+  s.mode = 'running';
+  s.next = 10000;
+  action(s, 'right');
+  let roofHeight = 0;
+  let airborneAfterExit = false;
+  for (let i = 0; i < 85; i++) {
+    step(s, .05);
+    if (s.distance > 42 && s.distance < 54) {
+      roofHeight = Math.max(roofHeight, height(s));
+    }
+    if (s.distance >= 54 && s.fallSpeed) airborneAfterExit = true;
+  }
+  assert.equal(roofHeight, 1.72);
+  assert.equal(s.coins, 4);
+  assert.equal(s.damage, 0);
+  assert.ok(airborneAfterExit);
+  assert.equal(height(s), 0);
+  assert.equal(s.fallSpeed, 0);
+});
+
+test('the middle lane stays clear and a late lane change cannot climb the van side', () => {
+  const s = fresh();
+  s.mode = 'running';
+  s.next = 10000;
+  while (s.distance < 44) step(s,.05);
+  assert.equal(height(s), 0);
+  assert.equal(s.damage, 0);
+  action(s,'right');
+  for(let i=0;i<8;i++) step(s,.05);
+  assert.equal(s.damage, 1);
+  assert.ok(s.vanHit);
+  assert.equal(s.lane, 0);
+  assert.equal(height(s), 0);
+});
+
+test('quick drop during a roof jump snaps to the roof and leaving the lane drops to ground', () => {
+  const s = fresh();
+  s.mode = 'running';
+  s.next = 10000;
+  action(s,'right');
+  while (s.distance<42) step(s,.025);
+  action(s,'jump');
+  for(let i=0;i<5;i++) step(s,.025);
+  assert.ok(height(s)>2);
+  action(s,'slide');
+  for(let i=0;i<8;i++) step(s,.025);
+  assert.equal(height(s), 1.72);
+  assert.equal(s.drop, null);
+  action(s,'left');
+  for(let i=0;i<30;i++) step(s,.025);
+  assert.equal(height(s), 0);
+  assert.equal(s.damage, 0);
+});

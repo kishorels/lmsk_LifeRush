@@ -2,13 +2,17 @@ export const JUMP_DURATION = .95, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 2.65;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
+export const SCHOOL_GATE = 11;
+export const SCHOOL_VAN = Object.freeze({ lane: 1, ramp: 32, rear: 42, front: 54, roof: 1.72, width: 1.94 });
+export const ROOF_COINS = Object.freeze([44, 47, 50, 53]);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export function fresh() {
   return {
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 17,
     jump: 0, slide: 0, roll: 0, drop: null, lastGroundDown: -Infinity,
-    damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 40,
+    floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false,
+    damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 70,
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
   };
@@ -19,16 +23,16 @@ export function action(s, input) {
   if (input === 'left') s.lane = clamp(s.lane - 1, -1, 1);
   if (input === 'right') s.lane = clamp(s.lane + 1, -1, 1);
   if (s.hit) return;
-  if (input === 'jump' && !s.jump && !s.slide && !s.roll && !s.drop) {
+  if (input === 'jump' && !s.jump && !s.slide && !s.roll && !s.drop && !s.fallSpeed) {
     s.jump = JUMP_DURATION;
     s.lastGroundDown = -Infinity;
   }
   if (input !== 'slide') return;
-  if (s.jump) {
+  if (s.jump || s.fallSpeed) {
     const start = height(s);
-    const duration = Math.min(s.jump, .10 + start * .05);
-    s.drop = { start, duration, remaining: duration, jumpRemaining: s.jump };
-    s.jump = 0;
+    const duration = Math.min(s.jump || .25, .10 + start * .05);
+    s.drop = { start, duration, remaining: duration, jumpRemaining: s.jump || .24 };
+    s.jump = s.fallSpeed = 0;
     s.lastGroundDown = -Infinity;
     return;
   }
@@ -45,7 +49,56 @@ export function action(s, input) {
 
 export function height(s) {
   if (s.drop) return s.drop.start * (s.drop.remaining / s.drop.duration);
-  return s.jump ? Math.sin(Math.PI * (1 - s.jump / JUMP_DURATION)) * 2.3 : 0;
+  return s.floor + (s.jump ? Math.sin(Math.PI * (1 - s.jump / JUMP_DURATION)) * 2.3 : 0);
+}
+
+export function vanSurface(distance, lanePosition) {
+  const van = SCHOOL_VAN;
+  if (Math.abs(lanePosition - van.lane) * 2.2 > van.width/2 ||
+      distance < van.ramp || distance >= van.front) return 0;
+  return van.roof * clamp((distance-van.ramp)/(van.rear-van.ramp), 0, 1);
+}
+
+function updateElevation(s, dt) {
+  const previous = height(s);
+  const jumped = s.jump > 0;
+  const dropped = s.drop !== null;
+  s.jump = Math.max(0, s.jump-dt);
+  if (dropped) s.drop.remaining = Math.max(0, s.drop.remaining-dt);
+  const surface = vanSurface(s.distance, s.x);
+  const wasFalling = s.fallSpeed > 0;
+  if (wasFalling) {
+    s.fallSpeed += 18*dt;
+    s.floor -= s.fallSpeed*dt;
+  }
+
+  const descending = dropped || wasFalling || (jumped && s.jump <= JUMP_DURATION/2);
+  const next = height(s);
+  if (descending && next <= surface && previous >= surface-.045) {
+    s.floor = surface;
+    s.jump = s.fallSpeed = 0;
+    s.drop = null;
+  } else if (dropped && s.drop.remaining === 0) {
+    s.floor = 0;
+    s.drop = null;
+  } else if (!jumped && !dropped && !wasFalling && Math.abs(surface-s.floor) <= .26) {
+    s.floor = surface;
+  } else if (!s.jump && !s.drop && s.floor > surface && !s.fallSpeed) {
+    s.fallSpeed = .6;
+  }
+  if (s.floor < 0 && !s.jump && !s.drop) {
+    s.floor = 0;
+    s.fallSpeed = 0;
+  }
+
+  ROOF_COINS.forEach((distance,index) => {
+    if ((s.roofCoins & (1<<index)) || Math.abs(s.distance-distance) > .60 ||
+        Math.abs(s.x-SCHOOL_VAN.lane) > .34) return;
+    const elevation = height(s);
+    if (elevation < SCHOOL_VAN.roof-.12 || elevation > SCHOOL_VAN.roof+.84) return;
+    s.roofCoins |= 1<<index;
+    s.coins++;
+  });
 }
 
 export function isCapture(s) {
@@ -109,6 +162,27 @@ function advanceDrop(s, dt) {
   if (s.drop.remaining <= 0) s.drop = null;
 }
 
+function takeHit(s, type) {
+  s.cause = type;
+  s.damage++;
+  const airborne = height(s);
+  s.jump = s.slide = s.roll = s.floor = s.fallSpeed = 0;
+  s.drop = airborne > 0 ? { start: airborne, duration: .16, remaining: .16 } : null;
+  s.lastGroundDown = -Infinity;
+  if (s.damage === 2) {
+    s.mode = 'falling';
+    s.fall = FALL_DURATION;
+    return;
+  }
+  s.firstHitAt = s.time;
+  s.chaseReentered = s.time >= OPENING_CHASE;
+  if (s.chaseReentered) {
+    s.chaserX = s.x;
+    s.chaseSide = s.x > .2 ? -1 : 1;
+  }
+  s.hit = HIT_DURATION;
+}
+
 export function step(s, dt, random = Math.random) {
   dt = clamp(dt, 0, .05);
   if (s.mode === 'countdown') {
@@ -140,11 +214,19 @@ export function step(s, dt, random = Math.random) {
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * Math.min(1, dt * 18);
   s.chaserX += (s.x - s.chaserX) * Math.min(1, dt * 5);
-  s.jump = Math.max(0, s.jump - dt);
   s.slide = Math.max(0, s.slide - dt);
   s.roll = Math.max(0, s.roll - dt);
   s.hit = Math.max(0, s.hit - dt);
-  advanceDrop(s, dt);
+  updateElevation(s, dt);
+  const van = SCHOOL_VAN;
+  if (s.distance >= van.rear && s.distance < van.front &&
+      Math.abs(s.x-van.lane)*2.2 <= van.width/2 && height(s) < van.roof-.18) {
+    s.x = Math.min(s.x, .50);
+    s.lane = 0;
+    if (!s.vanHit && !s.hit) takeHit(s, 'van');
+    s.vanHit = true;
+    if (s.mode !== 'running') return;
+  }
   if (s.distance + 120 > s.next) {
     s.items.push(...pattern(s.next, random));
     s.next += 38;
@@ -156,24 +238,8 @@ export function step(s, dt, random = Math.random) {
     if (obstacle.type === 'skill') {
       if (Math.abs(s.x - obstacle.lane) < .55) s.skills[obstacle.skill]++;
     } else if (!s.hit && hits(s, obstacle)) {
-      s.cause = obstacle.type;
-      s.damage++;
-      const airborne = height(s);
-      s.jump = s.slide = s.roll = 0;
-      s.drop = airborne > 0 ? { start: airborne, duration: .16, remaining: .16 } : null;
-      s.lastGroundDown = -Infinity;
-      if (s.damage === 2) {
-        s.mode = 'falling';
-        s.fall = FALL_DURATION;
-        break;
-      }
-      s.firstHitAt = s.time;
-      s.chaseReentered = s.time >= OPENING_CHASE;
-      if (s.chaseReentered) {
-        s.chaserX = s.x;
-        s.chaseSide = s.x > .2 ? -1 : 1;
-      }
-      s.hit = HIT_DURATION;
+      takeHit(s, obstacle.type);
+      if (s.mode !== 'running') break;
     }
   }
   s.items = s.items.filter(o => o.z > s.distance - 8);

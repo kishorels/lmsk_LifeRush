@@ -80,7 +80,7 @@ export function loadRunnerModel(parent) {
     if (state.mode === 'falling' || state.mode === 'crashed') name = 'Fall';
     else if (state.mode !== 'running') name = 'Idle';
     else if (state.hit) name = state.cause === 'slide' ? 'HeadHit' : 'Stumble';
-    else if (state.jump || state.drop) name = 'Jump';
+    else if (state.jump || state.drop || state.fallSpeed) name = 'Jump';
     else if (state.roll) name = 'Roll';
     else if (state.slide) name = 'Slide';
     const next = actions[name];
@@ -92,7 +92,7 @@ export function loadRunnerModel(parent) {
     if (name === 'Jump') {
       const remaining = state.drop
         ? state.drop.jumpRemaining * state.drop.remaining / state.drop.duration
-        : state.jump;
+        : state.jump || .24;
       next.setEffectiveTimeScale(0);
       next.time = next.getClip().duration * (1 - remaining / JUMP_DURATION);
     }

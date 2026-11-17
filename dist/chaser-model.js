@@ -1,6 +1,6 @@
 import { AnimationMixer, Group } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
-import { chasePose, isCapture } from './engine.js';
+import { chasePose, isCapture, SCHOOL_VAN } from './engine.js';
 
 export function loadChaserModel(scene) {
   const chaser = new Group();
@@ -42,7 +42,11 @@ export function loadChaserModel(scene) {
       return;
     }
     chaser.position.y = .09;
-    chaser.position.x = pose.x;
+    const behind = state.distance-pose.z;
+    const van = SCHOOL_VAN;
+    const avoidVan = Math.min(1, Math.max(0, (behind-van.ramp+2)/2),
+      Math.max(0,(van.front+2-behind)/2));
+    chaser.position.x = pose.x - Math.max(0,pose.x-.52)*avoidVan;
     chaser.position.z = pose.z;
     chaser.rotation.y = (pose.x - state.x * 2.2) * .15;
     run.time = (pose.stride * 1.08) % run.getClip().duration;

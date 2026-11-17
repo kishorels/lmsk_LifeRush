@@ -1,4 +1,4 @@
-import {fresh,action,step,height,career,chaseRemaining,isCapture} from './engine.js';
+import {fresh,action,step,height,career,chaseRemaining,isCapture,SCHOOL_GATE,SCHOOL_VAN} from './engine.js';
 import {createRenderer} from './renderer3d.js';
 import {createLiteRenderer} from './renderer-lite.js';
 const $=id=>document.getElementById(id),canvas=$('world');
@@ -37,11 +37,11 @@ function playLaugh() {
   } catch {}
 }
 $('sound').onclick=()=>{sound=!sound;$('sound').textContent=sound?'♪ ON':'♪ OFF';$('sound').setAttribute('aria-label',sound?'Mute sound':'Enable sound');beep();};
-function start(){s=fresh();s.mode='running';lastCount=0;$('overlay').hidden=true;$('toast').textContent='Down in air: quick drop · Twice down on ground: roll';beep(660);}
+function start(){s=fresh();s.mode='running';lastCount=0;$('overlay').hidden=true;$('toast').textContent='Enter the school gate · Ramp ahead in the right lane';beep(660);}
 function pause(){if(!['running','countdown'].includes(s.mode))return;s.mode='paused';$('countdown').hidden=true;show('Take a breath.','Your story will be right here.','RESUME RUN','PAUSED');}
 function resume(){s.mode='countdown';s.countdown=3;$('overlay').hidden=true;}
 function show(title,message,button,tag){$('title').textContent=title;$('message').textContent=message;$('start').innerHTML=button+' <span>↗</span>';$('tag').textContent=tag;$('selection').hidden=true;$('selection').style.display='none';$('restart').hidden=s.mode!=='paused';$('tip').textContent='Each new run starts from zero.';$('overlay').hidden=false;}
-function crash(){best=Math.max(best,Math.floor(s.distance));save();beep(140);const hint={block:'Change lanes to dodge the tall crates.',jump:'Jump over the low orange barriers.',slide:'Slide under the teal overhead beams.'}[s.cause];show('A fresh start awaits.',Math.floor(s.distance)+' m · '+s.skills.reduce((a,b)=>a+b,0)+' skills. '+hint,'RUN AGAIN','RUN COMPLETE');$('tip').textContent='Career tendency: '+career(s.skills)+' · Early mechanic';}
+function crash(){best=Math.max(best,Math.floor(s.distance));save();beep(140);const hint={van:'Take the ramp from the right lane, or pass the van on the ground.',block:'Change lanes to dodge the tall crates.',jump:'Jump over the low orange barriers.',slide:'Slide under the teal overhead beams.'}[s.cause];show('A fresh start awaits.',Math.floor(s.distance)+' m · '+s.skills.reduce((a,b)=>a+b,0)+' skills. '+hint,'RUN AGAIN','RUN COMPLETE');$('tip').textContent='Career tendency: '+career(s.skills)+' · Early mechanic';}
 $('start').onclick=()=>s.mode==='paused'?resume():start();$('restart').onclick=start;$('pause').onclick=()=>s.mode==='paused'?resume():pause();
 function input(a){action(s,a);if(s.mode==='running'&&(a==='jump'||a==='slide'))beep(a==='jump'?440:280);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();input(b.dataset.action);}));
@@ -56,11 +56,19 @@ function frame(t) {
   const dt = prev ? (t-prev)/1000 : 0;
   prev = t;
   const old = s.mode, firstHitBefore = s.firstHitAt, captureBefore = s.capture;
+  const distanceBefore = s.distance, coinsBefore = s.coins;
   step(s, dt);
   updateChaseNotice();
   if (old !== 'crashed' && s.mode === 'crashed') crash();
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) playLaugh();
 
+  if (coinsBefore !== s.coins) beep(1040);
+  if (s.mode === 'running' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
+    $('toast').textContent = 'Campus pickup zone · Keep right to climb the ramp';
+  }
+  if (s.mode === 'running' && distanceBefore < SCHOOL_VAN.rear && s.distance >= SCHOOL_VAN.rear && s.floor > 1) {
+    $('toast').textContent = 'Roof route · Follow the coins and run off the far end';
+  }
   const count = s.skills.reduce((a,b) => a+b, 0);
   if (count > lastCount) {
     beep(880);
@@ -80,6 +88,7 @@ function frame(t) {
     health.setAttribute('aria-label', left === 1 ? '1 hit left' : left+' hits left');
   }
   $('distance').innerHTML = Math.floor(s.distance)+'<span> m</span>';
+  $('coins').textContent = s.coins;
   $('best').textContent = best+' m';
   ['k','c','s'].forEach((id,i) => $(id).textContent = s.skills[i]);
   $('countdown').hidden = s.mode !== 'countdown';
