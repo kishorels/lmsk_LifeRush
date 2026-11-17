@@ -9,9 +9,12 @@ export function repeatedVans(distance) {
 }
 export function trafficPattern(base,index) {
   const roofLane=[-1,1,0][index%3],lane=[0,-1,1][index%3];
-  return [
-    {z:base+130,lane,type:'bus',velocity:12,activate:base-25,length:10,done:false},
-    {z:base+190,lane,type:'bus',velocity:18,activate:base-25,length:10,done:false},
+  const extra=[];
+  for(let i=0;i<5;i++)extra.push({z:base+12+i*27,lane,type:['jump','slide','block'][(i+index)%3],done:false});
+  extra.push({z:base+88,lane:roofLane,type:'jump',done:false});
+  return [...extra,
+    {z:base+130,lane,type:'bus',velocity:18,activate:base-25,length:10,done:false},
+    {z:base+190,lane,type:'bus',velocity:24,activate:base-25,length:10,done:false},
     {z:base+111,lane:roofLane,type:index%2?'slide':'jump',done:false},
     {z:base+135,lane,type:index%2?'jump':'block',done:false},
     {z:base+82,lane:-roofLane-lane,type:'skill',skill:index%3,done:false},

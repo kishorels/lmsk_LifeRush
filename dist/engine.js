@@ -12,7 +12,7 @@ export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export function fresh() {
   return {
-    mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 17,
+    mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 22,
     jump: 0, slide: 0, roll: 0, drop: null, lastGroundDown: -Infinity,
     floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
     damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 100,
@@ -86,7 +86,7 @@ function updateElevation(s, dt) {
   } else if (dropped && s.drop.remaining === 0) {
     s.floor = 0;
     s.drop = null;
-  } else if (!jumped && !dropped && !wasFalling && Math.abs(surface-s.floor) <= .36) {
+  } else if (!jumped && !dropped && !wasFalling && Math.abs(surface-s.floor) <= .44) {
     s.floor = surface;
   } else if (!s.jump && !s.drop && s.floor > surface && !s.fallSpeed) {
     s.fallSpeed = .6;
@@ -176,6 +176,18 @@ function advanceDrop(s, dt) {
   if (s.drop.remaining <= 0) s.drop = null;
 }
 
+export function recoverFromBus(s) {
+  const horizon=s.speed*1.15;
+  const vans=routeVans(s.distance);
+  const candidates=[-1,0,1].filter(lane=>!vans.some(v=>v.lane===lane && v.front>s.distance && v.ramp<s.distance+horizon));
+  const blocked=(lane)=>s.items.filter(o=>o.type!=='skill' && o.lane===lane && o.z+(o.length||0)>s.distance-1 && o.z<s.distance+horizon+(o.velocity||0)*1.15);
+  candidates.sort((a,b)=>blocked(a).length-blocked(b).length || Math.abs(a-s.x)-Math.abs(b-s.x));
+  const lane=candidates[0]??0;
+  // In a fully crowded recovery window, clear just the landing corridor.
+  const hazards=new Set(blocked(lane));for(const o of hazards)o.done=true;s.items=s.items.filter(o=>!hazards.has(o));
+  s.lane=s.x=lane;s.jump=s.slide=s.roll=s.floor=s.fallSpeed=0;s.drop=null;s.hit=.95;
+}
+
 function takeHit(s, type) {
   s.cause = type;
   s.damage++;
@@ -224,7 +236,7 @@ export function step(s, dt, random = Math.random) {
     s.chaseReentered = false;
     s.damage = 0;
   }
-  s.speed = Math.min(32, 17 + s.distance / 110);
+  s.speed = Math.min(40, 22 + s.distance / 70);
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * Math.min(1, dt * 18);
   s.chaserX += (s.x - s.chaserX) * Math.min(1, dt * 5);
@@ -250,7 +262,7 @@ export function step(s, dt, random = Math.random) {
     if(obstacle.type==='bus') {
       const relative=obstacle.z-s.distance;
       if(!obstacle.done && relative<=1.1 && relative>=-obstacle.length && hits(s,obstacle)) {
-        obstacle.done=true;if(!s.hit)takeHit(s,'bus');if(s.mode!=='running')break;
+        obstacle.done=true;if(!s.hit){takeHit(s,'bus');if(s.mode==='running')recoverFromBus(s);}if(s.mode!=='running')break;
       }
       continue;
     }
