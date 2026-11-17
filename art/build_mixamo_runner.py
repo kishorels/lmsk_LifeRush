@@ -2,9 +2,12 @@ import bpy
 import bmesh
 import hashlib
 import math
+import random
 import sys
 from pathlib import Path
+import numpy as np
 from mathutils import Matrix, Vector
+from mathutils.bvhtree import BVHTree
 
 source, output = map(Path, sys.argv[sys.argv.index("--") + 1:])
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -19,11 +22,11 @@ def import_fbx(name):
 rig, model = import_fbx("Hip Hop Dancing(1).fbx")
 rig.animation_data_clear()
 meshes = [o for o in model if o.type == 'MESH']
-# Boy01 has separate mesh islands for the hair, cap and cap button.
 body = next(obj for obj in meshes if obj.name == 'Boy01_Body_Geo')
 mesh = bmesh.new()
 mesh.from_mesh(body.data)
 mesh.verts.ensure_lookup_table()
+
 def connected_island(seed, expected):
     island = {mesh.verts[seed]}
     stack = list(island)
@@ -38,32 +41,169 @@ def connected_island(seed, expected):
         raise ValueError('Unexpected head topology for Boy01')
     return island
 
+head = connected_island(3448, 532)
+old_hair = connected_island(1133, 435)
 cap = connected_island(2236, 180) | connected_island(2416, 21)
-hair = connected_island(1133, 435)
-if cap & hair:
-    raise ValueError('Hair and cap must be separate')
-
-def smoothstep(low, high, value):
-    t = min(1, max(0, (value - low) / (high - low)))
-    return t * t * (3 - 2 * t)
-
+head_indices = {v.index for v in head}
 to_model = body.matrix_world.copy()
 to_mesh = to_model.inverted()
-for vertex in hair:
-    point = to_model @ vertex.co
-    crown = smoothstep(1.64, 1.82, point.z)
-    front = smoothstep(-.12, .18, -point.y)
-    center = math.exp(-((point.x - .025) / .16) ** 2)
-    lift = crown * front * center
-    point.z += .135 * lift + .022 * crown
-    point.x += .045 * lift
-    point.y += .027 * lift
-    vertex.co = to_mesh @ point
+head_triangles = []
+body.data.calc_loop_triangles()
+uv_layer = body.data.uv_layers.active.data
+for triangle in body.data.loop_triangles:
+    if all(index in head_indices for index in triangle.vertices):
+        points = [to_model @ body.data.vertices[i].co for i in triangle.vertices]
+        uv = [tuple(uv_layer[i].uv) for i in triangle.loops]
+        head_triangles.append((points, uv))
 
-bmesh.ops.delete(mesh, geom=list(cap), context='VERTS')
+# Remove the old haircut's baked shadow from the head UVs and add subtle stubble.
+material = body.data.materials[0]
+shader = next(node for node in material.node_tree.nodes if node.type == 'BSDF_PRINCIPLED')
+diffuse = shader.inputs['Base Color'].links[0].from_node.image
+diffuse.scale(1024, 1024)
+size = diffuse.size[0]
+pixels = np.empty(size * size * 4, dtype=np.float32)
+diffuse.pixels.foreach_get(pixels)
+pixels = pixels.reshape((size, size, 4))
+original = pixels.copy()
+stubble = np.random.default_rng(17).uniform(0, 1, (size, size))
+for points, uv in head_triangles:
+    a, b, c = np.asarray(uv) * size - .5
+    lo = np.maximum(0, np.floor(np.min([a, b, c], axis=0)).astype(int))
+    hi = np.minimum(size - 1, np.ceil(np.max([a, b, c], axis=0)).astype(int))
+    xx, yy = np.meshgrid(np.arange(lo[0], hi[0]+1), np.arange(lo[1], hi[1]+1))
+    ab, ac = b-a, c-a
+    det = ab[0]*ac[1] - ab[1]*ac[0]
+    if abs(det) < .0001:
+        continue
+    u = ((xx-a[0])*ac[1] - (yy-a[1])*ac[0]) / det
+    v = (ab[0]*(yy-a[1]) - ab[1]*(xx-a[0])) / det
+    x, y, z = np.asarray(points[0])[:,None,None] + u*np.asarray(points[1]-points[0])[:,None,None] + v*np.asarray(points[2]-points[0])[:,None,None]
+    rgb = original[yy, xx, :3]
+    luminance = rgb @ np.array([.21,.72,.07])
+    front = np.clip((-y - .015) / .19, 0, 1)
+    hairline = 1.385 + .237*front
+    rise = np.clip((z-hairline)/.046, 0, 1)
+    amount = rise * np.clip((.57-luminance)/.19, 0, 1)
+    noise = stubble[yy, xx]
+    dots = np.where(noise < .14, .095, 0)
+    skin = np.array([.72,.53,.405]) + (.037*noise - dots + .045*(z-1.62))[:,:,None]
+    inside = (u >= -.018) & (v >= -.018) & (u+v <= 1.018) & (amount > 0)
+    blend = amount[:,:,None] * skin + (1-amount[:,:,None]) * rgb
+    pixels[yy[inside], xx[inside], :3] = blend[inside]
+
+diffuse.pixels.foreach_set(pixels.ravel())
+diffuse.update()
+diffuse.pack()
+bmesh.ops.delete(mesh, geom=list(cap | old_hair), context='VERTS')
 mesh.to_mesh(body.data)
 mesh.free()
 body.data.update()
+
+# Follow the curvature of the existing scalp from the forehead to the nape.
+scalp = BVHTree.FromPolygons([p for tri,_ in head_triangles for p in tri],
+                             [tuple(range(i,i+3)) for i in range(0,3*len(head_triangles),3)],
+                             all_triangles=True)
+def direction(angle):
+    return Vector((0, -math.cos(angle), math.sin(angle)))
+
+def scalp_point(angle, x):
+    normal = direction(angle)
+    center = Vector((x, -.02, 1.608))
+    point, *_ = scalp.ray_cast(center + normal*.5, -normal, .53)
+    if point is None:
+        raise ValueError(f'Missing scalp at angle {angle:.2f}, x={x:.3f}')
+    return point, normal
+
+def profile(t, values):
+    for (start, low), (end, high) in zip(values, values[1:]):
+        if t <= end:
+            return low + (high-low)*(t-start)/(end-start)
+    return values[-1][1]
+
+def width(t):
+    return profile(t, [(0,.043),(.12,.093),(.40,.091),(.62,.069),(.81,.043),(1,.003)])
+
+def lift(t):
+    return profile(t, [(0,.025),(.16,.074),(.38,.064),(.6,.044),(.82,.024),(1,.003)])
+
+def crest_point(t, cross):
+    angle = .56 + 3.05*t
+    base, normal = scalp_point(angle, cross*width(t))
+    arch = max(0, 1-cross*cross)**1.07
+    return base + normal*(.003 + lift(t)*arch), normal, angle
+
+verts, faces, slots = [], [], []
+def face(indices, slot):
+    faces.append(indices)
+    slots.append(slot)
+
+rows, columns = 31, 9
+for row in range(rows):
+    for col in range(columns):
+        point, _, _ = crest_point(row/(rows-1), 2*col/(columns-1)-1)
+        verts.append(point)
+for row in range(rows-1):
+    for col in range(columns-1):
+        i = row*columns + col
+        face((i, i+1, i+1+columns, i+columns), 0)
+
+rng = random.Random(1711)
+for row in range(25):
+    for col in range(7):
+        t = min(.955, max(.011, .016 + row*.038 + rng.uniform(-.014,.014)))
+        cross = (col-3)*.29 + rng.uniform(-.10,.10)
+        point, normal, angle = crest_point(t, cross)
+        point -= normal*.010
+        tangent = direction(angle + math.pi/2)
+        side = Vector((1,0,0))
+        length = (.054 + .043*(1-t))*rng.uniform(.72,1.25)
+        spread = (.007 + .01*(1-t))*rng.uniform(.7,1.23)
+        drift = (.009*cross + rng.uniform(-.01,.01))
+        rise = (.027 + .026*(1-t))*rng.uniform(.62,1.27)*(1-.35*abs(cross))
+        start = len(verts)
+        slot = rng.choices(range(1,7), weights=[2,4,5,4,2,1])[0]
+        for section, (along, bulge) in enumerate([(0,.57),(.32,1),(.68,.66),(.89,.28)]):
+            center = point + tangent*(length*along) + normal*(rise*math.sin(along*2.1)) + side*(drift*along)
+            for k in range(6):
+                a = k*math.tau/6
+                verts.append(center + side*(spread*bulge*math.cos(a)) + normal*(spread*.56*bulge*math.sin(a)))
+            if section:
+                for k in range(6):
+                    i = start+(section-1)*6
+                    j = (k+1)%6
+                    face((i+k,i+k+6,i+j+6,i+j), slot)
+        tip = len(verts)
+        verts.append(point + tangent*length + normal*(rise*.78) + side*drift)
+        for k in range(6):
+            face((start+18+k,tip,start+18+(k+1)%6), slot)
+
+hair_data = bpy.data.meshes.new('Mohawk')
+hair_data.from_pydata([to_mesh @ vertex for vertex in verts], [], faces)
+hair_data.update()
+hair = bpy.data.objects.new('Mohawk', hair_data)
+bpy.context.collection.objects.link(hair)
+hair.parent = rig
+hair.matrix_world = to_model
+for i, color in enumerate([
+    (.16,.002,.012),(.33,.003,.025),(.48,.005,.034),(.63,.009,.042),
+    (.76,.015,.049),(.9,.026,.055),(.99,.045,.065),
+]):
+    mat = bpy.data.materials.new(f'Mohawk red {i+1}')
+    mat.diffuse_color = (*color, 1)
+    mat.use_nodes = True
+    shader = mat.node_tree.nodes.get('Principled BSDF')
+    shader.inputs['Base Color'].default_value = (*color, 1)
+    shader.inputs['Roughness'].default_value = .65
+    hair_data.materials.append(mat)
+for polygon, slot in zip(hair_data.polygons, slots):
+    polygon.material_index = slot
+    polygon.use_smooth = True
+head_group = hair.vertex_groups.new(name='mixamorig:Head')
+head_group.add(list(range(len(verts))), 1, 'REPLACE')
+deform = hair.modifiers.new('Armature', 'ARMATURE')
+deform.object = rig
+meshes.append(hair)
 
 clips = {}
 for label, filename in [
