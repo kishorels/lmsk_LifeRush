@@ -35,11 +35,12 @@ export function createCaptureScene(scene) {
     rotate(joint, new Quaternion().setFromAxisAngle(axis, angle));
   }
 
-  function aim(joint, child, at) {
+  function aim(joint, child, at, blend = 1) {
     const origin = point(joint);
     const current = point(child).sub(origin).normalize();
     const target = at.clone().sub(origin).normalize();
-    rotate(joint, new Quaternion().setFromUnitVectors(current, target));
+    const delta = new Quaternion().setFromUnitVectors(current, target);
+    rotate(joint, new Quaternion().slerp(delta, blend));
   }
 
   function reach(upper, lower, end, at, pole) {
@@ -61,12 +62,29 @@ export function createCaptureScene(scene) {
     aim(lower, end, shoulder.clone().addScaledVector(direction, distance));
   }
 
+  function hangLegs(model, lift, time) {
+    const blend = ease(.12, .94, lift);
+    if (!model || !blend) return;
+    for (const [side, sign] of [['Left', -1], ['Right', 1]]) {
+      const thigh = bone(model, side+'UpLeg');
+      const knee = bone(model, side+'Leg');
+      const foot = bone(model, side+'Foot');
+      const toes = bone(model, side+'ToeBase');
+      if (!thigh || !knee || !foot || !toes) continue;
+      const swing = Math.sin(time*4.8 + sign*.8);
+      aim(thigh, knee, point(thigh).add(new Vector3(sign*.038, -1, swing*.085)), blend);
+      aim(knee, foot, point(knee).add(new Vector3(sign*.017, -1, .085+swing*.10)), blend);
+      aim(foot, toes, point(foot).add(new Vector3(sign*.045, -.56, -.83)), blend);
+    }
+  }
+
   function frame(camera, s, player, playerModel, fallback, monster, monsterModel) {
     const {lift, laugh, reach: reaching, show} = capturePose(s);
     const center = s.x * 2.2;
     const crouch = reaching * (1-lift);
-    player.position.set(center + .43, .31*lift, -.04-.16*show);
-    player.rotation.set(0, -.1*(1-lift)+.015*show, .07*lift);
+    player.scale.setScalar(1-.17*lift);
+    player.position.set(center+.43, (.46+.018*Math.sin(s.capture*5))*lift, -.04+.06*show);
+    player.rotation.set(0, -.1*(1-lift)+.015*show, .042*lift);
     if (!playerModel) {
       fallback.rotation.set(1.17*(1-lift), 0, 0);
       fallback.position.set(0,.12*(1-lift),0);
@@ -80,8 +98,7 @@ export function createCaptureScene(scene) {
     turn(heroHead, xAxis, -.035*lift+.12*show);
     turn(heroHead, up, .13*lift-.16*show);
     turn(heroHead, zAxis, -.06*show);
-    turn(bone(playerModel,'LeftUpLeg'), xAxis, .19*lift);
-    turn(bone(playerModel,'RightLeg'), xAxis, -.28*lift);
+    hangLegs(playerModel, lift, s.capture);
     turn(bone(monsterModel,'Spine'), xAxis, -.40*crouch+.34*lift+.09*laugh);
     turn(bone(monsterModel,'Head'), xAxis, .10*lift+.28*laugh);
     turn(bone(monsterModel,'Head'), up, .10*show);
@@ -93,8 +110,8 @@ export function createCaptureScene(scene) {
     if (hand) {
       const shoulder = bone(playerModel,'LeftArm');
       const contact = shoulder
-        ? point(shoulder).add(new Vector3(-.045,.005,.12))
-        : new Vector3(center+.24,.34+1.33*lift,.03-.18*show);
+        ? point(shoulder).add(new Vector3(-.045,-.085,.15))
+        : new Vector3(center+.24,.34+1.27*lift,.11+.05*show);
       const target = point(hand).lerp(contact,reaching);
       reach(upper,forearm,hand,target,new Vector3(.04,-1,.34));
       for (const digit of ['Index1','Pinky1','Thumb1']) {
@@ -104,7 +121,7 @@ export function createCaptureScene(scene) {
 
     const pushIn = ease(.04,1.50,s.capture);
     camera.position.set(center+1.58*(1-pushIn)+.016, 1.46+.39*pushIn, -4.05+1.42*pushIn);
-    camera.lookAt(center+.065,.99+.72*pushIn,-.01);
+    camera.lookAt(center+.065,.99+.64*pushIn,-.01);
     fill.intensity = 1.35 * lift;
     fill.position.set(center+.45,2.75,-2.5);
     fill.target.position.set(center,1.75,0);
