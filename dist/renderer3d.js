@@ -1,3 +1,4 @@
+import {createCampus} from './campus-scene.js';
 import {createTraffic} from './traffic-scene.js';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js';
@@ -9,7 +10,7 @@ const COLORS=[0xffce36,0x73ffb3,0x8edcff];
 export function createRenderer(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.3;
- const scene=new T.Scene();scene.background=new T.Color('#79a5ee');scene.fog=new T.Fog('#c1cbf7',65,145);
+ const scene=new T.Scene();scene.background=new T.Color('#a5c9dc');scene.fog=new T.Fog('#b9d0d5',85,175);
  const camera=new T.PerspectiveCamera(57,1,.1,180);camera.position.set(0,5.4,8.5);camera.lookAt(0,1,-18);
  scene.add(new T.HemisphereLight(0xe9fdff,0x65a889,2.5));const sun=new T.DirectionalLight(0xffead0,3.2);sun.position.set(-15,26,15);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-20,right:20,top:22,bottom:-26,near:1,far:80});sun.shadow.bias=-.001;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
  const mats=new Map();function mat(c){if(!mats.has(c))mats.set(c,new T.MeshStandardMaterial({color:c,roughness:.78}));return mats.get(c);}
@@ -17,16 +18,10 @@ export function createRenderer(canvas){
  function mesh(g,c,parent,x,y,z,sx=1,sy=1,sz=1,shadow=false){const m=new T.Mesh(g,mat(c));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=shadow;m.receiveShadow=true;parent.add(m);return m;}
  const box=(p,c,x,y,z,sx,sy,sz,sh=false)=>mesh(cube,c,p,x,y,z,sx,sy,sz,sh);
  const ball=(p,c,x,y,z,sx,sy=sx,sz=sx,sh=false)=>mesh(sphere,c,p,x,y,z,sx,sy,sz,sh);
- box(scene,0x2abcc9,0,-.34,-65,240,.3,200);box(scene,0xeee1ad,0,-.12,-65,14,.3,200);box(scene,0x515c83,0,.02,-65,7.1,.14,200);box(scene,0xf8f0d0,-4.4,.06,-65,1.65,.22,200);box(scene,0xf8f0d0,4.4,.06,-65,1.65,.22,200);
- const sea=[];for(let i=0;i<20;i++){const m=box(scene,0x89e9e6,i%2?-16:16,.01,-i*7,5+i%4,.01,.08);sea.push(m);}
- const segments=[];
- function palm(p,x,z,scale=1){const g=new T.Group();g.position.set(x,0,z);g.scale.setScalar(scale);p.add(g);const trunk=mesh(cyl,0xd49b6b,g,0,1.6,0,.13,3.2,.13,true);trunk.rotation.z=.09;for(let j=0;j<6;j++){const a=j*Math.PI/3;const leaf=ball(g,j%2?0x1fab79:0x51d678,Math.cos(a)*.65,3.1,Math.sin(a)*.65,1.12,.12,.34,true);leaf.rotation.y=-a;leaf.rotation.z=Math.cos(a)*.23;}ball(g,0x168e6c,0,3.2,0,.3);}
- for(let i=0;i<12;i++){const g=new T.Group();scene.add(g);segments.push(g);for(const x of [-1.1,1.1]){box(g,0xfcf3ce,x,.105,0,.065,.02,3.2);box(g,0xfcf3ce,x,.105,-5,.065,.02,3.2);}for(const side of [-1,1]){box(g,i%2?0xffc84e:0xf9ffff,side*3.65,.19,-2,.22,.24,4.8);box(g,0x3dd59c,side*5.2,.23,-2,.5,.48,9.5);palm(g,side*5.8,-3,.85+(i%3)*.12);if(i%2===0){const lamp=box(g,0x404c77,side*4.6,1.9,1,.08,3.8,.08);box(g,0x404c77,side*4.3,3.8,1,.7,.08,.08);ball(g,0xfff0a9,side*4.05,3.7,1,.18,.12,.18);}
- const color=[0xff956f,0xffcd52,0x9c77de,0x32c9bb,0xe75aa5,0x4e91da][(i+(side===1?2:0))%6],bh=5+(i%4)*1.4,bx=side*(7.4+i%2*.3);box(g,color,bx,bh/2,-4,4,bh,5,true);box(g,0xffffe9,bx,bh+.08,-4,4.3,.2,5.3);box(g,0xf8f4d8,bx,.4,-1.43,4.3,.5,.16);box(g,0x2e6684,bx,1,-1.46,.75,1.6,.06);for(const dx of [-1.25,1.25]){box(g,0xffffe7,bx+dx,2,-1.45,.8,1.05,.08);box(g,0x508fb2,bx+dx,2,-1.38,.6,.85,.03);}for(let floor=3.5;floor<bh-.7;floor+=1.3){for(const dx of [-1.25,0,1.25]){box(g,0xfde9b8,bx+dx,floor,-1.45,.65,.85,.07);box(g,0x4c5791,bx+dx,floor,-1.39,.47,.65,.03);}}if(i%3===1){box(g,0xffe368,bx-side*2.15,bh*.64,-2,.5,2.8,1.1,true);box(g,0xee665e,bx-side*2.42,bh*.64,-2,.04,1.5,.28);box(g,0xee665e,bx-side*2.43,bh*.64,-2,.04,.28,.8);}if(i%3===0){const aw=box(g,0xed6c65,bx,2.5,-.95,3.6,.14,1.2);aw.rotation.x=.15;for(let j=0;j<4;j++)box(g,0xfff1d6,bx-1.35+j*.9,2.53,-.95,.38,.17,1.15);} }
- }
+ box(scene,0x71926b,0,-.34,-65,240,.3,200);box(scene,0xeee1ad,0,-.12,-65,14,.3,200);box(scene,0x646f76,0,.02,-65,7.1,.14,200);box(scene,0xf8f0d0,-4.4,.06,-65,1.65,.22,200);box(scene,0xf8f0d0,4.4,.06,-65,1.65,.22,200);
+ const updateCampus=createCampus(scene);
  // Puffy clouds and distant candy-coloured skyline.
  for(let i=0;i<9;i++){const g=new T.Group();scene.add(g);g.position.set((i-4)*12,16+i%3*3,-85-i%2*25);ball(g,0xffffff,0,0,0,4,1.2,1.6);ball(g,0xffffff,-2,1,0,2,1.8,1.6);ball(g,0xffffff,1,1.3,0,2.5,2,1.5);}
- const arch=new T.Group();scene.add(arch);for(const x of [-3.3,3.3])box(arch,0xfef1d7,x,3.3,0,.28,6.6,.35,true);box(arch,0x6253b2,0,6.3,0,7.1,1,.45,true);for(let i=0;i<9;i++){const m=mesh(cone,i%2?0xffd45d:0xff879f,arch,-2.8+i*.7,5.6,0,.22,.5,.06);m.rotation.z=Math.PI;}
  const runner=new T.Group();scene.add(runner);const body=new T.Group();runner.add(body);
  const updateRunnerModel=loadRunnerModel(runner);
  const updateChaserModel=loadChaserModel(scene);
@@ -50,20 +45,14 @@ export function createRenderer(canvas){
  function resize(){const r=canvas.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.fov=r.width/r.height<.8?64:58;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
  return function render(s,character,frameDt){capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
  updateSchool(s);updateTraffic(s);
- for(let i=0;i<segments.length;i++){
-   const segment=segments[i];
-   segment.position.z=8-i*10+(s.distance%10);
-   segment.visible=s.distance-segment.position.z>58;
- }
- arch.position.z=-45+(s.distance%100);
- arch.visible=s.distance-arch.position.z>73;for(let i=0;i<sea.length;i++)sea[i].position.x+=(Math.sin(s.time*.7+i)*.002);
+ updateCampus(s);
  updateChaserModel(s);
  runner.position.set(s.x*2.2,height(s),0);body.visible=!updateRunnerModel(s,character,frameDt);if(body.visible){const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=(s.lane-s.x)*-.16;torso.material=mat(character==='female'?0xd77bf2:0xffcb38);pony.visible=character==='female';cap.visible=character!=='female';legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{a.rotation.x=s.slide?-1.6:s.jump?-1.6:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):(i?-.1:.1);});}
  let n=0;for(const o of s.items){if(o.type==='bus')continue;const z=o.z-s.distance;if(o.done||z< -3||z>125)continue;const g=pool[n++];if(!g)break;const key=o.type+':'+o.skill;if(g.userData.key!==key){obstacle(g,o);g.userData.key=key;}g.visible=true;g.position.set(o.lane*2.2,0,-z);g.rotation.y=o.type==='skill'?s.time*2:0;if(o.type==='skill')g.position.y=Math.sin(s.time*3+o.z)*.13;}for(;n<pool.length;n++)pool[n].visible=false;
  const count=s.skills.reduce((a,b)=>a+b,0);if(count>total){burst=.22;for(const p of particles){p.life=.5+Math.random()*.3;p.m.visible=true;p.m.position.set(s.x*2.2,1.2,0);p.v.set((Math.random()-.5)*4,Math.random()*4,(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);camera.position.x+=(s.x*.65-camera.position.x)*(1-Math.exp(-8*(dt||.016)));if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
- camera.position.y=3.8+trackCameraY+(s.mode==='running'?Math.sin(s.time*15)*.022:0);camera.position.z=6.8;camera.lookAt(s.x*.24,1.35+trackCameraY,-12);
+ camera.position.y=3.8+trackCameraY;camera.position.z=6.8;camera.lookAt(camera.position.x*.37,1.35+trackCameraY,-12);
  if(isCapture(s)){
    if(body.visible){
      const {lift}=capturePose(s);

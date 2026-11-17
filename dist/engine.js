@@ -238,8 +238,8 @@ export function step(s, dt, random = Math.random) {
   }
   s.speed = Math.min(40, 22 + s.distance / 70);
   s.distance += s.speed * dt;
-  s.x += (s.lane - s.x) * Math.min(1, dt * 18);
-  s.chaserX += (s.x - s.chaserX) * Math.min(1, dt * 5);
+  s.x += (s.lane - s.x) * (1-Math.exp(-18*dt));
+  s.chaserX += (s.x - s.chaserX) * (1-Math.exp(-5*dt));
   s.slide = Math.max(0, s.slide - dt);
   s.roll = Math.max(0, s.roll - dt);
   s.hit = Math.max(0, s.hit - dt);

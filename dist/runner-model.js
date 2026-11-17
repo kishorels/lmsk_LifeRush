@@ -3,7 +3,7 @@ import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 
 export function loadRunnerModel(parent) {
-  let model, mixer, actions, current, capturing = false;
+  let model, mixer, actions, current, capturing = false, lean=0, pace=1;
   new GLTFLoader().load(new URL('./assets/runverse-schoolboy.glb', import.meta.url).href, gltf => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall'];
@@ -85,8 +85,9 @@ export function loadRunnerModel(parent) {
     else if (state.slide) name = 'Slide';
     const next = actions[name];
     if (next !== current) {
-      current?.fadeOut(.09);
-      next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(current ? .09 : 0).play();
+      current?.fadeOut(.14);
+      const duration={Slide:SLIDE_DURATION,Roll:ROLL_DURATION,Stumble:HIT_DURATION,HeadHit:HIT_DURATION}[name];
+      next.reset().setEffectiveTimeScale(duration?next.getClip().duration/duration:1).setEffectiveWeight(1).fadeIn(current ? .14 : 0).play();
       current = next;
     }
     if (name === 'Jump') {
@@ -100,7 +101,11 @@ export function loadRunnerModel(parent) {
       next.setEffectiveTimeScale(0);
       next.time = next.getClip().duration * Math.min(.9999, 1 - state.fall / FALL_DURATION);
     }
-    if (name === 'Run') next.setEffectiveTimeScale(state.speed / 17);
+    const blend=1-Math.exp(-10*Math.min(.05,dt||0));
+    lean+=((state.mode==='running'?(state.lane-state.x)*.20:0)-lean)*blend;
+    model.rotation.z=lean;model.rotation.y=Math.PI-lean*.65;
+    pace+=(Math.min(1.65,1+(state.speed-22)/40)-pace)*blend;
+    if (name === 'Run') next.setEffectiveTimeScale(pace);
     mixer.update(frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0)));
     return true;
   }
