@@ -1,6 +1,6 @@
 import {repeatedVans,trafficPattern} from './traffic-rules.js';
 export {trafficPattern};
-export const JUMP_DURATION = .95, SLIDE_DURATION = .85, ROLL_DURATION = .62;
+export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 2.65;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
@@ -13,7 +13,7 @@ export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function fresh() {
   return {
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 22,
-    jump: 0, slide: 0, roll: 0, drop: null, lastGroundDown: -Infinity,
+    jump: 0, slide: 0, roll: 0, drop: null, jumpBuffer: 0, motionId: 0, lastGroundDown: -Infinity,
     floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
     damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 100,
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
@@ -26,28 +26,34 @@ export function action(s, input) {
   if (input === 'left') s.lane = clamp(s.lane - 1, -1, 1);
   if (input === 'right') s.lane = clamp(s.lane + 1, -1, 1);
   if (s.hit) return;
-  if (input === 'jump' && !s.jump && !s.slide && !s.roll && !s.drop && !s.fallSpeed) {
-    s.jump = JUMP_DURATION;
-    s.lastGroundDown = -Infinity;
-  }
-  if (input !== 'slide') return;
-  if (s.jump || s.fallSpeed) {
-    const start = height(s);
-    const duration = Math.min(s.jump || .25, .10 + start * .05);
-    s.drop = { start, duration, remaining: duration, jumpRemaining: s.jump || .24 };
-    s.jump = s.fallSpeed = 0;
-    s.lastGroundDown = -Infinity;
+  if (input === 'jump') {
+    if(s.jump || s.drop || s.fallSpeed) {
+      // Queue near-landing inputs without granting an unlimited midair jump.
+      s.jumpBuffer=.18;
+      return;
+    }
+    s.slide=s.roll=0;
+    s.jump=JUMP_DURATION;s.jumpBuffer=0;s.motionId++;
+    s.lastGroundDown=-Infinity;
     return;
   }
-  if (s.drop || s.roll) return;
-  if (s.slide && s.time - s.lastGroundDown <= DOUBLE_SWIPE) {
-    s.slide = 0;
-    s.roll = ROLL_DURATION;
-    s.lastGroundDown = -Infinity;
-  } else if (!s.slide) {
-    s.slide = SLIDE_DURATION;
-    s.lastGroundDown = s.time;
+  if (input !== 'slide') return;
+  s.jumpBuffer=0;
+  if (s.jump || s.fallSpeed || s.drop) {
+    const start=height(s),remaining=s.drop?.jumpRemaining ?? s.jump;
+    const duration=Math.min(s.drop?.remaining || s.jump || .20,.08+start*.04);
+    s.drop={start,duration,remaining:duration,jumpRemaining:remaining||.24};
+    s.jump=s.fallSpeed=s.slide=s.roll=0;
+    s.lastGroundDown=-Infinity;
+    return;
   }
+  if(s.slide && s.time-s.lastGroundDown<=DOUBLE_SWIPE) {
+    s.slide=0;s.roll=ROLL_DURATION;s.lastGroundDown=-Infinity;
+  } else {
+    s.roll=0;s.slide=SLIDE_DURATION;s.lastGroundDown=s.time;
+  }
+  s.motionId++;
+
 }
 
 export function height(s) {
@@ -189,6 +195,7 @@ export function recoverFromBus(s) {
 }
 
 function takeHit(s, type) {
+  s.jumpBuffer=0;
   s.cause = type;
   s.damage++;
   const airborne = height(s);
@@ -243,7 +250,9 @@ export function step(s, dt, random = Math.random) {
   s.slide = Math.max(0, s.slide - dt);
   s.roll = Math.max(0, s.roll - dt);
   s.hit = Math.max(0, s.hit - dt);
+  s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
   updateElevation(s, dt);
+  if(s.jumpBuffer>0 && !s.jump && !s.drop && !s.fallSpeed && !s.hit)action(s,'jump');
   for(const van of routeVans(s.distance)) {
     if(s.distance>=van.rear && s.distance<van.front && Math.abs(s.x-van.lane)*2.2<=van.width/2 && height(s)<van.roof-.18) {
       s.lane=van.lane===0?-1:0;s.x=van.lane+(s.lane-van.lane)*.55;

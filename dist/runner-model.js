@@ -3,7 +3,7 @@ import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 
 export function loadRunnerModel(parent) {
-  let model, mixer, actions, current, capturing = false, lean=0, pace=1;
+  let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1;
   new GLTFLoader().load(new URL('./assets/runverse-schoolboy.glb', import.meta.url).href, gltf => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall'];
@@ -84,11 +84,12 @@ export function loadRunnerModel(parent) {
     else if (state.roll) name = 'Roll';
     else if (state.slide) name = 'Slide';
     const next = actions[name];
-    if (next !== current) {
-      current?.fadeOut(.14);
+    if (next !== current || (['Jump','Slide','Roll'].includes(name) && motionId!==state.motionId)) {
+      const transition=['Jump','Slide','Roll'].includes(name) ? .065 : .14;
+      current?.fadeOut(transition);
       const duration={Slide:SLIDE_DURATION,Roll:ROLL_DURATION,Stumble:HIT_DURATION,HeadHit:HIT_DURATION}[name];
-      next.reset().setEffectiveTimeScale(duration?next.getClip().duration/duration:1).setEffectiveWeight(1).fadeIn(current ? .14 : 0).play();
-      current = next;
+      next.reset().setEffectiveTimeScale(duration?next.getClip().duration/duration:1).setEffectiveWeight(1).fadeIn(current ? transition : 0).play();
+      current = next;motionId=state.motionId;
     }
     if (name === 'Jump') {
       const remaining = state.drop
