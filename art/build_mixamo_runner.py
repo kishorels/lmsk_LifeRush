@@ -3,7 +3,7 @@ import hashlib
 import math
 import sys
 from pathlib import Path
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 source, output = map(Path, sys.argv[sys.argv.index("--") + 1:])
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -22,6 +22,8 @@ clips = {}
 for label, filename in [
     ('Idle','Idle.fbx'), ('Run','Running(1).fbx'),
     ('Jump','jump.fbx'), ('Slide','Running Slide.fbx'),
+    ('Roll','Sprinting Forward Roll.fbx'), ('Stumble','Jogging Stumble.fbx'),
+    ('HeadHit','Hit To Head.fbx'), ('Fall','Fall Flat.fbx'),
 ]:
     skeleton, objects = import_fbx(filename)
     assert set(skeleton.data.bones.keys()) == set(rig.data.bones.keys())
@@ -38,7 +40,7 @@ for label, filename in [
     for frame in range(first,last+1):
         scene.frame_set(frame)
         offset = Vector((0,0,0))
-        if label in ('Slide','Jump'):
+        if label in ('Slide','Jump','Roll','Stumble','HeadHit','Fall'):
             offset.x = root.head.x - start.x
             offset.z = root.head.z - start.z
         if label == 'Jump':
@@ -97,10 +99,23 @@ coords = [o.matrix_world @ v.co for mesh in meshes for o in [mesh.evaluated_get(
 ground = min(v.z for v in coords)
 height = max(v.z for v in coords) - ground
 print('IDLE_BOUNDS', ground, height, flush=True)
+for label in ('Roll', 'Fall'):
+    clip, end = clips[label]
+    rig.animation_data.action = clip
+    hips = rig.pose.bones['mixamorig:Hips']
+    world_to_hips = (rig.matrix_world @ hips.bone.matrix_local).to_3x3().inverted()
+    for frame in range(1, end + 1):
+        scene.frame_set(frame)
+        graph = bpy.context.evaluated_depsgraph_get()
+        minimum = min((obj.matrix_world @ vertex.co).z for mesh in meshes
+                      for obj in [mesh.evaluated_get(graph)] for vertex in obj.data.vertices)
+        if minimum < ground - .025:
+            hips.location += world_to_hips @ Vector((0, 0, ground - .025 - minimum))
+            hips.keyframe_insert('location', frame=frame, group=hips.name)
+
 rig.animation_data.action = None
 rig.location.z -= ground
 for pose in rig.pose.bones:
-    from mathutils import Matrix
     pose.matrix_basis = Matrix.Identity(4)
 for label, (clip, end) in clips.items():
     track = rig.animation_data.nla_tracks.new()
