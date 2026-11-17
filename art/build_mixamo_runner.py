@@ -95,6 +95,7 @@ for points, uv in head_triangles:
 diffuse.pixels.foreach_set(pixels.ravel())
 diffuse.update()
 diffuse.pack()
+exec(Path(__file__).with_name('school_uniform.py').read_text())
 bmesh.ops.delete(mesh, geom=list(cap | old_hair), context='VERTS')
 mesh.to_mesh(body.data)
 mesh.free()

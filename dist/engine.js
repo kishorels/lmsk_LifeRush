@@ -1,9 +1,12 @@
+import {repeatedVans,trafficPattern} from './traffic-rules.js';
+export {trafficPattern};
 export const JUMP_DURATION = .95, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 2.65;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
 export const SCHOOL_GATE = 11;
 export const SCHOOL_VAN = Object.freeze({ lane: 1, ramp: 32, rear: 42, front: 54, roof: 1.72, width: 1.94 });
+export function routeVans(distance) { return [{...SCHOOL_VAN,id:'entry'},...repeatedVans(distance)]; }
 export const ROOF_COINS = Object.freeze([44, 47, 50, 53]);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -11,8 +14,8 @@ export function fresh() {
   return {
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 17,
     jump: 0, slide: 0, roll: 0, drop: null, lastGroundDown: -Infinity,
-    floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false,
-    damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 70,
+    floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
+    damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 100,
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
   };
@@ -53,10 +56,12 @@ export function height(s) {
 }
 
 export function vanSurface(distance, lanePosition) {
-  const van = SCHOOL_VAN;
-  if (Math.abs(lanePosition - van.lane) * 2.2 > van.width/2 ||
-      distance < van.ramp || distance >= van.front) return 0;
-  return van.roof * clamp((distance-van.ramp)/(van.rear-van.ramp), 0, 1);
+  let surface=0;
+  for(const van of routeVans(distance)) {
+    if(Math.abs(lanePosition-van.lane)*2.2>van.width/2 || distance<van.ramp || distance>=van.front) continue;
+    surface=Math.max(surface,van.roof*(van.rear===van.ramp?1:clamp((distance-van.ramp)/(van.rear-van.ramp),0,1)));
+  }
+  return surface;
 }
 
 function updateElevation(s, dt) {
@@ -81,7 +86,7 @@ function updateElevation(s, dt) {
   } else if (dropped && s.drop.remaining === 0) {
     s.floor = 0;
     s.drop = null;
-  } else if (!jumped && !dropped && !wasFalling && Math.abs(surface-s.floor) <= .26) {
+  } else if (!jumped && !dropped && !wasFalling && Math.abs(surface-s.floor) <= .36) {
     s.floor = surface;
   } else if (!s.jump && !s.drop && s.floor > surface && !s.fallSpeed) {
     s.fallSpeed = .6;
@@ -91,6 +96,15 @@ function updateElevation(s, dt) {
     s.fallSpeed = 0;
   }
 
+  for(const van of routeVans(s.distance)) {
+    if(van.id==='entry')continue;
+    for(let n=0;n<4;n++) {
+      const z=van.rear+2+n*4,id=van.id+':'+n;
+      if(Math.abs(s.distance-z)<.9 && Math.abs(s.x-van.lane)<.34 && height(s)>=van.roof-.12 && height(s)<van.roof+1.2 && !s.collected.includes(id)) {
+        s.collected.push(id);s.coins++;
+      }
+    }
+  }
   ROOF_COINS.forEach((distance,index) => {
     if ((s.roofCoins & (1<<index)) || Math.abs(s.distance-distance) > .60 ||
         Math.abs(s.x-SCHOOL_VAN.lane) > .34) return;
@@ -153,7 +167,7 @@ export function hits(s, obstacle) {
   if (Math.abs(s.x - obstacle.lane) > .48) return false;
   if (obstacle.type === 'jump') return height(s) < 1.05;
   if (obstacle.type === 'slide') return !(s.slide || s.roll);
-  return obstacle.type === 'block';
+  return obstacle.type === 'block' || obstacle.type === 'bus';
 }
 
 function advanceDrop(s, dt) {
@@ -167,7 +181,7 @@ function takeHit(s, type) {
   s.damage++;
   const airborne = height(s);
   s.jump = s.slide = s.roll = s.floor = s.fallSpeed = 0;
-  s.drop = airborne > 0 ? { start: airborne, duration: .16, remaining: .16 } : null;
+  s.drop = airborne > 0 ? { start: airborne, duration: .16, remaining: .16, jumpRemaining: .24 } : null;
   s.lastGroundDown = -Infinity;
   if (s.damage === 2) {
     s.mode = 'falling';
@@ -210,7 +224,7 @@ export function step(s, dt, random = Math.random) {
     s.chaseReentered = false;
     s.damage = 0;
   }
-  s.speed = Math.min(29, 17 + s.distance / 350);
+  s.speed = Math.min(32, 17 + s.distance / 110);
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * Math.min(1, dt * 18);
   s.chaserX += (s.x - s.chaserX) * Math.min(1, dt * 5);
@@ -218,21 +232,28 @@ export function step(s, dt, random = Math.random) {
   s.roll = Math.max(0, s.roll - dt);
   s.hit = Math.max(0, s.hit - dt);
   updateElevation(s, dt);
-  const van = SCHOOL_VAN;
-  if (s.distance >= van.rear && s.distance < van.front &&
-      Math.abs(s.x-van.lane)*2.2 <= van.width/2 && height(s) < van.roof-.18) {
-    s.x = Math.min(s.x, .50);
-    s.lane = 0;
-    if (!s.vanHit && !s.hit) takeHit(s, 'van');
-    s.vanHit = true;
-    if (s.mode !== 'running') return;
+  for(const van of routeVans(s.distance)) {
+    if(s.distance>=van.rear && s.distance<van.front && Math.abs(s.x-van.lane)*2.2<=van.width/2 && height(s)<van.roof-.18) {
+      s.lane=van.lane===0?-1:0;s.x=van.lane+(s.lane-van.lane)*.55;
+      if(!s.vanHits.includes(van.id) && !s.hit)takeHit(s,'van');
+      if(!s.vanHits.includes(van.id))s.vanHits.push(van.id);
+      if(van.id==='entry')s.vanHit=true;
+      if(s.mode!=='running')return;
+    }
   }
-  if (s.distance + 120 > s.next) {
-    s.items.push(...pattern(s.next, random));
-    s.next += 38;
+  if(s.distance+120>s.next) {
+    s.items.push(...trafficPattern(s.next,s.trafficIndex++));s.next+=160;
   }
+  for(const item of s.items)if(item.velocity && s.distance>=item.activate)item.z-=item.velocity*dt;
 
   for (const obstacle of s.items) {
+    if(obstacle.type==='bus') {
+      const relative=obstacle.z-s.distance;
+      if(!obstacle.done && relative<=1.1 && relative>=-obstacle.length && hits(s,obstacle)) {
+        obstacle.done=true;if(!s.hit)takeHit(s,'bus');if(s.mode!=='running')break;
+      }
+      continue;
+    }
     if (obstacle.done || obstacle.z > s.distance + 1.1) continue;
     obstacle.done = true;
     if (obstacle.type === 'skill') {
@@ -242,7 +263,7 @@ export function step(s, dt, random = Math.random) {
       if (s.mode !== 'running') break;
     }
   }
-  s.items = s.items.filter(o => o.z > s.distance - 8);
+  s.items = s.items.filter(o => o.z > s.distance - (o.length || 8)-4);
 }
 
 export function career(skills) {

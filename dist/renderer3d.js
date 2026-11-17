@@ -1,3 +1,4 @@
+import {createTraffic} from './traffic-scene.js';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js';
 import {createCaptureScene} from './capture-scene.js';
@@ -31,6 +32,7 @@ export function createRenderer(canvas){
  const updateChaserModel=loadChaserModel(scene);
  const capture=createCaptureScene(scene);
  const updateSchool=createSchoolEntrance(scene);
+ const updateTraffic=createTraffic(scene);
  const torso=ball(body,0xffcb38,0,1.25,0,.33,.46,.23,true);box(body,0x17a4a3,0,1.22,.22,.4,.47,.15,true);box(body,0x86ead6,0,1.23,.31,.24,.24,.05);box(body,0xffe67a,0,1.27,.35,.16,.06,.025);for(const side of [-1,1])box(body,0x16857f,side*.21,1.34,.17,.055,.55,.07);const head=ball(body,0xd9986f,0,1.91,0,.255,.28,.24,true);ball(body,0x273455,0,2.07,-.01,.27,.16,.25,true);const cap=ball(body,0xf65d78,0,2.16,0,.29,.11,.27,true);box(body,0xf65d78,0,2.11,-.22,.4,.045,.25);const pony=ball(body,0x273455,0,1.95,.28,.12,.26,.14,true);
  // Front details for the lightweight character mesh used by the female option.
  for(const x of [-.089,.089]){
@@ -47,7 +49,7 @@ export function createRenderer(canvas){
  const particles=[];for(let i=0;i<30;i++){const m=ball(scene,0xffdf62,0,0,0,.065);m.visible=false;particles.push({m,life:0,v:new T.Vector3()});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0;
  function resize(){const r=canvas.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.fov=r.width/r.height<.8?64:58;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
  return function render(s,character,frameDt){capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
- updateSchool(s);
+ updateSchool(s);updateTraffic(s);
  for(let i=0;i<segments.length;i++){
    const segment=segments[i];
    segment.position.z=8-i*10+(s.distance%10);
@@ -57,7 +59,7 @@ export function createRenderer(canvas){
  arch.visible=s.distance-arch.position.z>73;for(let i=0;i<sea.length;i++)sea[i].position.x+=(Math.sin(s.time*.7+i)*.002);
  updateChaserModel(s);
  runner.position.set(s.x*2.2,height(s),0);body.visible=!updateRunnerModel(s,character,frameDt);if(body.visible){const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=(s.lane-s.x)*-.16;torso.material=mat(character==='female'?0xd77bf2:0xffcb38);pony.visible=character==='female';cap.visible=character!=='female';legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{a.rotation.x=s.slide?-1.6:s.jump?-1.6:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):(i?-.1:.1);});}
- let n=0;for(const o of s.items){const z=o.z-s.distance;if(o.done||z< -3||z>125)continue;const g=pool[n++];if(!g)break;const key=o.type+':'+o.skill;if(g.userData.key!==key){obstacle(g,o);g.userData.key=key;}g.visible=true;g.position.set(o.lane*2.2,0,-z);g.rotation.y=o.type==='skill'?s.time*2:0;if(o.type==='skill')g.position.y=Math.sin(s.time*3+o.z)*.13;}for(;n<pool.length;n++)pool[n].visible=false;
+ let n=0;for(const o of s.items){if(o.type==='bus')continue;const z=o.z-s.distance;if(o.done||z< -3||z>125)continue;const g=pool[n++];if(!g)break;const key=o.type+':'+o.skill;if(g.userData.key!==key){obstacle(g,o);g.userData.key=key;}g.visible=true;g.position.set(o.lane*2.2,0,-z);g.rotation.y=o.type==='skill'?s.time*2:0;if(o.type==='skill')g.position.y=Math.sin(s.time*3+o.z)*.13;}for(;n<pool.length;n++)pool[n].visible=false;
  const count=s.skills.reduce((a,b)=>a+b,0);if(count>total){burst=.22;for(const p of particles){p.life=.5+Math.random()*.3;p.m.visible=true;p.m.position.set(s.x*2.2,1.2,0);p.v.set((Math.random()-.5)*4,Math.random()*4,(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);camera.position.x+=(s.x*.65-camera.position.x)*(1-Math.exp(-8*(dt||.016)));if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));

@@ -41,7 +41,7 @@ function start(){s=fresh();s.mode='running';lastCount=0;$('overlay').hidden=true
 function pause(){if(!['running','countdown'].includes(s.mode))return;s.mode='paused';$('countdown').hidden=true;show('Take a breath.','Your story will be right here.','RESUME RUN','PAUSED');}
 function resume(){s.mode='countdown';s.countdown=3;$('overlay').hidden=true;}
 function show(title,message,button,tag){$('title').textContent=title;$('message').textContent=message;$('start').innerHTML=button+' <span>↗</span>';$('tag').textContent=tag;$('selection').hidden=true;$('selection').style.display='none';$('restart').hidden=s.mode!=='paused';$('tip').textContent='Each new run starts from zero.';$('overlay').hidden=false;}
-function crash(){best=Math.max(best,Math.floor(s.distance));save();beep(140);const hint={van:'Take the ramp from the right lane, or pass the van on the ground.',block:'Change lanes to dodge the tall crates.',jump:'Jump over the low orange barriers.',slide:'Slide under the teal overhead beams.'}[s.cause];show('A fresh start awaits.',Math.floor(s.distance)+' m · '+s.skills.reduce((a,b)=>a+b,0)+' skills. '+hint,'RUN AGAIN','RUN COMPLETE');$('tip').textContent='Career tendency: '+career(s.skills)+' · Early mechanic';}
+function crash(){best=Math.max(best,Math.floor(s.distance));save();beep(140);const hint={bus:'Dodge the oncoming bus. Change lanes before its headlights reach you.',van:'Take a striped ramp, or use the clear ground lane.',block:'Change lanes to dodge the tall crates.',jump:'Jump over the low orange barriers.',slide:'Slide under the teal overhead beams.'}[s.cause];show('A fresh start awaits.',Math.floor(s.distance)+' m · '+s.skills.reduce((a,b)=>a+b,0)+' skills. '+hint,'RUN AGAIN','RUN COMPLETE');$('tip').textContent='Career tendency: '+career(s.skills)+' · Early mechanic';}
 $('start').onclick=()=>s.mode==='paused'?resume():start();$('restart').onclick=start;$('pause').onclick=()=>s.mode==='paused'?resume():pause();
 function input(a){action(s,a);if(s.mode==='running'&&(a==='jump'||a==='slide'))beep(a==='jump'?440:280);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();input(b.dataset.action);}));
@@ -62,6 +62,7 @@ function frame(t) {
   if (old !== 'crashed' && s.mode === 'crashed') crash();
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) playLaugh();
 
+  if(distanceBefore<75 && s.distance>=75) $('toast').textContent='Oncoming school buses · Watch the headlights and switch lanes';
   if (coinsBefore !== s.coins) beep(1040);
   if (s.mode === 'running' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
     $('toast').textContent = 'Campus pickup zone · Keep right to climb the ramp';
