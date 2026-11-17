@@ -30,3 +30,6 @@ The test browser has WebGL disabled. The fallback can be visually checked here; 
 
 ## Reference-inspired camera update
 The third-person camera is now closer and lower. The game occupies the portrait viewport; desktop uses a centered portrait frame. The character has alternating hip/knee/arm motion, a tucked jump, lower slide pose and lane-change lean. Buildings are taller with more windows. This is original procedural artwork, not the reference game's assets, and train-roof traversal is not implemented.
+
+## Male rig study 01
+`character.html` shows the actual original rigged male draft and five animation clips. `dist/assets/runverse-male.glb` is downloadable. The Blender source and repeatable generation script are in `art/`. This draft does NOT match the approved concept's face, hair or fabric fidelity; it is deliberately not installed as the finished gameplay hero. The preview honestly distinguishes still-render fallback from live 3D on WebGL-capable devices. Character likeness and mesh quality remain unfinished.
