@@ -29,7 +29,7 @@ test('airborne down input drops from the current height and ground double down r
   assert.equal(hits(s, { lane: 0, type: 'slide' }), false);
 });
 
-test('the guard follows for three seconds, then returns for five seconds on the first hit', () => {
+test('the chaser follows for three seconds, then returns for five seconds on the first hit', () => {
   const s = fresh();
   const advance = frames => { for (let i = 0; i < frames; i++) step(s,.05); };
   const hit = () => {
@@ -63,7 +63,7 @@ test('the guard follows for three seconds, then returns for five seconds on the 
   assert.equal(chaseRemaining(fresh()), 0);
 });
 
-test('a second hit during pursuit lets the guard catch up during the fall', () => {
+test('a second hit during pursuit lets the chaser catch up during the fall', () => {
   const s = fresh();
   s.mode = 'running';
   s.next = 10000;

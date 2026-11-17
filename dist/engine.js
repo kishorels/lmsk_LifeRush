@@ -63,8 +63,8 @@ export function chasePose(s) {
   const arrival = s.chaseReentered && !caught ? 1 - clamp(elapsed / .25, 0, 1) : 0;
   const catchup = caught ? 1 - s.fall / FALL_DURATION : 0;
   const center = .65 * s.x;
-  const x = clamp(s.chaserX * 2.2 + s.chaseSide * (1.22 - .48*catchup),
-                  center - 1.45, center + 1.45);
+  const x = clamp(s.chaserX * 2.2 + s.chaseSide * (.96 - .34*catchup),
+                  center - 1.24, center + 1.24);
   return {
     x, z: 1.68 + 1.35*retreat + .95*arrival - .90*catchup,
     stride: s.time + Math.min(catchup * FALL_DURATION, .6),
