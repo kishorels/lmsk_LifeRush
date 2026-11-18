@@ -152,13 +152,12 @@ function crash(){
 if($('start')) $('start').onclick=()=>$('start').dataset.loadError==='true'?location.reload():start();
 if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   if(s.mode==='paused'){resume();return;}
-  // After crash → go back to character select screen (LET'S RUN page)
+  // After crash → go back to splash screen (ENTER GAME page)
   s=fresh();
   s.mode='ready';
   $('overlay').hidden=true;
   if($('report-grade')) $('report-grade').hidden=true;
-  setScreenMode('select');
-  triggerSwag();
+  setScreenMode('splash');
 };
 if($('restart')) $('restart').onclick=start;
 if($('btn-change-char')) $('btn-change-char').onclick=()=>{
