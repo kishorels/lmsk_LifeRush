@@ -220,7 +220,16 @@ function frame(t) {
   if (old !== 'crashed' && s.mode === 'crashed') crash();
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) effects.play('laugh');
 
-  if (coinsBefore !== s.coins) effects.play('coin');
+  if (s.coins > coinsBefore) {
+    effects.play('roofCoin');
+    const counter=$('coins').parentElement;
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      counter.getAnimations().forEach(animation=>animation.cancel());
+      counter.animate([{transform:'scale(1)',boxShadow:'0 0 0 1px #ffe09a'},
+        {transform:'scale(1.16)',offset:.28},{transform:'scale(1)',boxShadow:'0 0 0 8px transparent'}],
+        {duration:260,easing:'ease-out'});
+    }
+  }
 
   // Powerup sound & toasts
   if (s.collectedPowerup === 'magnet') {

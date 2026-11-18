@@ -524,3 +524,16 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   color: #ffca28;
   text-shadow: 0 0 14px #ffb30099;
 }
+
+.coin-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3em;
+  height: 1.3em;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#fff0a8,#dba54a 48%,#ffe08c 65%,#bb8336);
+  box-shadow: inset 0 0 0 1px #ffebaa, inset 0 0 0 2px #a96e30;
+  color: #805120;
+  font: bold italic .82em Georgia,serif;
+  vertical-align: .06em;
+}

@@ -35,6 +35,7 @@ export function createSound() {
  function play(name,cause){
   if(name==='jump')tone(240,730,.19,.10,'triangle');
   else if(name==='slide')tone(410,65,.20,.10,'sawtooth');
+  else if(name==='roofCoin'){tone(2180,2140,.14,.095);tone(3530,3450,.095,.045);tone(1120,1110,.19,.065,'sine',.022);}
   else if(name==='coin'){tone(880,1320,.10,.12);tone(1320,1760,.13,.10,'sine',.075);}
   else if(name==='hit'){const impact={bus:[97,780],van:[125,590],sideVehicle:[155,890],block:[100,200],jump:[180,270],slide:[200,1050]}[cause]||[140,400];
    tone(impact[0],32,.18,.19,'triangle');tone(impact[1],impact[1]*.4,.12,.10,'square');

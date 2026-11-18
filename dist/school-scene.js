@@ -1,3 +1,4 @@
+import {makeCoin,spinCoin} from './coin.js';
 import {campusMaterial, roadsideTree} from './street-materials.js';
 import {buildBus} from './bus-model.js';
 import { BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SRGBColorSpace } from './vendor/three.module.js';
@@ -120,20 +121,13 @@ export function createSchoolEntrance(scene) {
     const stripe=part(vehicle,j%2?0xf8db79:0xe6f5db,x,road+van.roof*t+.019,-(van.ramp+run*t),van.width-.19,.034,.088);
     stripe.rotation.x=slope;
   }
-  const coinGeo = new CylinderGeometry(.19,.19,.072,20);
-  const coins=ROOF_COINS.map(distance=>{
-    const coin=part(vehicle,0xffc428,x,roof+.58,-distance,1,1,1,coinGeo);
-    coin.rotation.x=Math.PI/2;
-    coin.castShadow=false;
-    return coin;
-  });
+  const coins=ROOF_COINS.map(distance=>makeCoin(vehicle,x,roof+.58,-distance));
   return state=>{
     campus.position.z=state.distance;
     campus.visible=state.distance<82;
     coins.forEach((coin,i)=>{
       coin.visible=!(state.roofCoins & (1<<i));
-      coin.rotation.z=state.time*3+i*.38;
-      coin.position.y=roof+.58+.06*Math.sin(state.time*4+i*.8);
+      spinCoin(coin,state.time,i,roof+.58);
     });
   };
 }
