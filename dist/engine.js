@@ -18,6 +18,7 @@ export function fresh() {
     damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 100,
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
+    magnet: 0, shield: false, books: 0, styleAction: 0, collectedPowerup: null,
   };
 }
 
@@ -214,6 +215,12 @@ export function recoverFromBus(s) {
 }
 
 function takeHit(s, type) {
+  if (s.shield) {
+    s.shield = false;
+    s.shieldAbsorbed = true;
+    s.hit = .45;
+    return;
+  }
   s.jumpBuffer=0;
   s.cause = type;
   s.damage++;
@@ -270,8 +277,23 @@ export function step(s, dt, random = Math.random) {
   s.roll = Math.max(0, s.roll - dt);
   s.hit = Math.max(0, s.hit - dt);
   s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
+  if(s.styleAction>0) s.styleAction=Math.max(0, s.styleAction-dt);
+  if(s.magnet>0){
+    s.magnet=Math.max(0,s.magnet-dt);
+    for(const item of s.items){
+      if(['skill','book','magnet','shield'].includes(item.type)&&!item.done){
+        const dz=item.z-s.distance;
+        if(dz>-1&&dz<18)item.lane+=(s.x-item.lane)*Math.min(1,14*dt);
+      }
+    }
+  }
   if(s.distance+120>s.next) {
-    s.items.push(...trafficPattern(s.next,s.trafficIndex++));s.next+=160;
+    const newItems=trafficPattern(s.next,s.trafficIndex++);
+    const safeLane=newItems.find(o=>o.type==='skill')?.lane??0;
+    if(s.trafficIndex%2===0) newItems.push({z:s.next+28,lane:safeLane,type:'book',done:false});
+    if(s.trafficIndex%4===1) newItems.push({z:s.next+52,lane:safeLane,type:'magnet',done:false});
+    else if(s.trafficIndex%4===3) newItems.push({z:s.next+52,lane:safeLane,type:'shield',done:false});
+    s.items.push(...newItems);s.next+=160;
   }
   for(const item of s.items){
     if(item.roofRide&&!item.started&&s.distance>=item.activate){item.started=true;item.velocity=-s.speed*.35;}
@@ -308,6 +330,12 @@ export function step(s, dt, random = Math.random) {
     obstacle.done = true;
     if (obstacle.type === 'skill') {
       if (Math.abs(s.x - obstacle.lane) < .55) s.skills[obstacle.skill]++;
+    } else if (obstacle.type === 'book') {
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.books = (s.books || 0) + 1; s.collectedPowerup = 'book'; }
+    } else if (obstacle.type === 'magnet') {
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.magnet = 12; s.collectedPowerup = 'magnet'; }
+    } else if (obstacle.type === 'shield') {
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.shield = true; s.collectedPowerup = 'shield'; }
     } else if (!s.hit && hits(s, obstacle)) {
       takeHit(s, obstacle.type);
       if (s.mode !== 'running') break;

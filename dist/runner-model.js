@@ -3,7 +3,7 @@ import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 
 export function loadRunnerModel(parent, selected = 'male') {
-  let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1;
+  let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, bones = {}, currentRotationY = 0;
   function load() {
     const asset = selected === 'female' ? './assets/schoolgirl.glb' : './assets/runverse-schoolboy.glb';
     new GLTFLoader().load(new URL(asset, import.meta.url).href, gltf => {
@@ -46,6 +46,15 @@ export function loadRunnerModel(parent, selected = 'male') {
       action.clampWhenFinished = true;
     }
     parent.add(model);
+    model.traverse(object => {
+      if (object.isBone) {
+        if (object.name.includes('RightArm')) bones.rArm = object;
+        if (object.name.includes('RightForeArm')) bones.rForeArm = object;
+        if (object.name.includes('RightHand') && !object.name.includes('Thumb') && !object.name.includes('Index')) bones.rHand = object;
+        if (object.name.includes('Head') && !object.name.includes('Top')) bones.head = object;
+        if (object.name.includes('LeftArm')) bones.lArm = object;
+      }
+    });
     render.model = model;
   }, undefined, error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 
@@ -110,10 +119,40 @@ export function loadRunnerModel(parent, selected = 'male') {
     }
     const blend=1-Math.exp(-10*Math.min(.05,dt||0));
     lean+=((state.mode==='running'?(state.lane-state.x)*.20:0)-lean)*blend;
-    model.rotation.z=lean;model.rotation.y=Math.PI-lean*.65;
+    model.rotation.z=lean;
+    const isFront = state.mode === 'ready' || state.mode === 'select';
+    const targetRotY = isFront ? 0 : Math.PI;
+    const turnBlend = 1 - Math.exp(-6.5 * Math.min(.05, dt || .016));
+    currentRotationY += (targetRotY - currentRotationY) * turnBlend;
+    model.rotation.y = currentRotationY - lean * .65;
     pace+=(Math.min(1.65,1+(state.speed-22)/40)-pace)*blend;
     if (name === 'Run') next.setEffectiveTimeScale(pace);
     mixer.update(frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0)));
+    if (state.styleAction > 0 && bones.rArm && bones.rForeArm && bones.rHand && bones.head) {
+      const TOTAL_STYLE = 1.8;
+      const t = Math.min(1, Math.max(0, 1 - state.styleAction / TOTAL_STYLE));
+      let lift = 0, flick = 0, headTilt = 0;
+      if (t < 0.3) {
+        lift = t / 0.3;
+      } else if (t < 0.75) {
+        lift = 1.0;
+        const phase = (t - 0.3) / 0.45;
+        flick = Math.sin(phase * Math.PI * 2);
+        headTilt = Math.sin(phase * Math.PI);
+      } else {
+        lift = (1.0 - t) / 0.25;
+      }
+      bones.rArm.rotation.x -= lift * 0.95;
+      bones.rArm.rotation.z += lift * 0.45;
+      bones.rForeArm.rotation.x += lift * 1.55;
+      bones.rForeArm.rotation.y += lift * 0.35;
+      bones.rHand.rotation.z += (lift * 0.3 + flick * 0.65);
+      bones.rHand.rotation.y += (lift * 0.5 + flick * 0.45);
+      bones.head.rotation.z -= headTilt * 0.35;
+      bones.head.rotation.y += headTilt * 0.25;
+      bones.head.rotation.x -= headTilt * 0.15;
+      if (bones.lArm) bones.lArm.rotation.z -= headTilt * 0.20;
+    }
     return true;
   }
   return render;

@@ -60,7 +60,7 @@ export function createSchoolEntrance(scene) {
     }
     part(campus,0x28545b,side*6.98,2.11,gate,5.18,.08,.10);
   }
-  sign(campus,'RUNVERSE SCHOOL','MAIN ENTRANCE',0,4.45,gate,8.05,1.24);
+  sign(campus,'LMSK HIGHER SECONDARY SCHOOL','MAIN ENTRANCE · LIFE RUSH',0,4.45,gate,8.05,1.24);
   part(campus,0xfff2c8,0,5.14,gate,8.98,.20,1.14);
   for(let i=0;i<9;i++) part(campus,0xfff0cc,-2.97+i*.74,.103,gate+1.85,.37,.022,1.05);
 

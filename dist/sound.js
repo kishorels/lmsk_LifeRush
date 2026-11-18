@@ -44,6 +44,11 @@ export function createSound() {
   else if(name==='laugh'){for(let i=0;i<4;i++)tone(140-i*8,78-i*4,.14,.10,'sawtooth',i*.22);}
   else if(name==='over'){tone(260,80,.45,.15,'triangle');}
   else if(name==='lane')tone(160,95,.07,.04,'triangle');
+  else if(name==='bell'){for(let i=0;i<4;i++){tone(1180,1176,.28,.14,'sine',i*.18);tone(1780,1770,.22,.10,'triangle',i*.18+.02);}}
+  else if(name==='magnet'){tone(420,880,.25,.11,'sine');tone(880,1320,.20,.09,'triangle',.12);}
+  else if(name==='shield'){tone(320,640,.18,.12,'triangle');tone(640,960,.22,.10,'sine',.09);tone(960,1280,.25,.08,'sine',.18);}
+  else if(name==='book'){tone(620,980,.12,.11,'triangle');tone(980,1470,.14,.10,'sine',.06);}
+  else if(name==='swag'){tone(180,680,.22,.18,'triangle');tone(90,45,.32,.22,'sawtooth',.06);tone(680,1200,.18,.12,'sine',.16);}
  }
  return {unlock,play,setEnabled(value){enabled=value;if(master)master.gain.value=enabled?.65:0;if(value)unlock();},
  update(s){
