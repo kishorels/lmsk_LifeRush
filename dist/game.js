@@ -1,5 +1,5 @@
 import {createSound} from './sound.js';
-import {fresh,action,step,height,career,isCapture,SCHOOL_GATE,SCHOOL_VAN} from './engine.js';
+import {SWEEP_SECONDS,fresh,action,step,height,career,isCapture,SCHOOL_GATE,SCHOOL_VAN} from './engine.js';
 import {createRenderer} from './renderer3d.js';
 import {createLiteRenderer} from './renderer-lite.js';
 
@@ -43,7 +43,7 @@ $('sound').onclick=()=>{
 };
 
 function triggerSwag(){
-  s.styleAction = 1.8;
+  s.styleAction = SWEEP_SECONDS;
   effects.unlock();
   effects.play('swag');
   $('toast').textContent='🔥 Thalapathy Swag! Mass Action ✨';
@@ -82,7 +82,8 @@ if($('btn-enter')){
 function start(){
   s=fresh();
   s.turnTime = 0.65;
-  s.mode = 'starting';
+  s.mode = 'intro';
+  s.styleAction = SWEEP_SECONDS;
   s.speed = 0;
   lastCount=0;
   setScreenMode('running');

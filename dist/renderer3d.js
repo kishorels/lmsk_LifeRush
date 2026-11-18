@@ -61,13 +61,13 @@ export function createRenderer(canvas){
  const count=s.skills.reduce((a,b)=>a+b,0);if(count>total){burst=.22;for(const p of particles){p.life=.5+Math.random()*.3;p.m.visible=true;p.m.position.set(s.x*2.2,1.2,0);p.v.set((Math.random()-.5)*4,Math.random()*4,(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
- const inSelect=s.mode==='ready'||s.mode==='select';
+ const inSelect=s.mode==='ready'||s.mode==='select'||s.mode==='intro';
  const targetCamY=inSelect?1.62:3.8+trackCameraY;
  const targetCamZ=inSelect?3.35:6.8;
  const targetLookY=inSelect?1.28:1.35+trackCameraY;
  const targetLookZ=inSelect?0:-12;
  const camBlend=1-Math.exp(-5.5*Math.min(.05,dt||.016));
- camera.position.x+=((inSelect?0:s.x*.65)-camera.position.x)*camBlend;
+ camera.position.x+=((s.mode==='intro'?.48:inSelect?0:s.x*.65)-camera.position.x)*camBlend;
  camera.position.y+=(targetCamY-camera.position.y)*camBlend;
  camera.position.z+=(targetCamZ-camera.position.z)*camBlend;
  currentLookY+=(targetLookY-currentLookY)*camBlend;

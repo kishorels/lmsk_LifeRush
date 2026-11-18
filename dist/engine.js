@@ -242,8 +242,15 @@ function takeHit(s, type) {
   s.hit = HIT_DURATION;
 }
 
+export const SWEEP_SECONDS = 27 / 24;
+
 export function step(s, dt, random = Math.random) {
   dt = clamp(dt, 0, .05);
+  if (s.styleAction > 0) s.styleAction = Math.max(0, s.styleAction - dt);
+  if (s.mode === 'intro') {
+    if (s.styleAction === 0) s.mode = 'starting';
+    return;
+  }
   if (s.mode === 'countdown') {
     s.countdown -= dt;
     if (s.countdown <= 0) s.mode = 'running';
@@ -277,7 +284,6 @@ export function step(s, dt, random = Math.random) {
   s.roll = Math.max(0, s.roll - dt);
   s.hit = Math.max(0, s.hit - dt);
   s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
-  if(s.styleAction>0) s.styleAction=Math.max(0, s.styleAction-dt);
   if(s.magnet>0){
     s.magnet=Math.max(0,s.magnet-dt);
     for(const item of s.items){
