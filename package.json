@@ -1,1 +1,20 @@
-{"name":"lmsk-runverse","version":"0.1.0","type":"module","scripts":{"test":"node --test tests/*.test.mjs","start":"python3 -m http.server 3000 --directory dist"},"dependencies":{"three":"0.180.0"},"devDependencies":{"fbx2gltf":"^0.9.7-p1"}}
+{
+  "name": "lmsk-runverse",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "start": "python -m http.server 3000 --directory dist",
+    "sync:android": "npx cap copy android && npx cap sync android",
+    "open:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
+    "fbx2gltf": "^0.9.7-p1"
+  }
+}
