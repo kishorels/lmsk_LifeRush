@@ -1,11 +1,86 @@
-import { AnimationMixer, AnimationUtils, LoopOnce } from './vendor/three.module.js';
+import { AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { SWEEP_SECONDS, JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
+
+function createSchoolBadgeTexture(CanvasTextureClass) {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 320;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  // Outer Golden Rim (Shield outline)
+  ctx.beginPath();
+  ctx.moveTo(20, 24);
+  ctx.lineTo(236, 24);
+  ctx.lineTo(236, 190);
+  ctx.quadraticCurveTo(236, 275, 128, 306);
+  ctx.quadraticCurveTo(20, 275, 20, 190);
+  ctx.closePath();
+  ctx.fillStyle = '#b38728';
+  ctx.fill();
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = '#fbf5b7';
+  ctx.stroke();
+
+  // Inner Deep Navy Enamel Shield
+  ctx.beginPath();
+  ctx.moveTo(30, 34);
+  ctx.lineTo(226, 34);
+  ctx.lineTo(226, 185);
+  ctx.quadraticCurveTo(226, 265, 128, 294);
+  ctx.quadraticCurveTo(30, 265, 30, 185);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 34, 0, 294);
+  grad.addColorStop(0, '#12326b');
+  grad.addColorStop(1, '#06132b');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Inner Gold Filigree Accent
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#d4af37';
+  ctx.stroke();
+
+  // Golden LMSK Header
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 38px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('LMSK', 128, 78);
+
+  // Decorative Golden Divider
+  ctx.strokeStyle = '#d4af37';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(48, 108);
+  ctx.lineTo(208, 108);
+  ctx.stroke();
+
+  // Golden Star Emblem
+  ctx.font = '34px serif';
+  ctx.fillText('★', 128, 146);
+
+  // Subtitle "LIFE RUSH"
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('LIFE RUSH', 128, 196);
+
+  // School Motto Tag
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('HIGHER SEC', 128, 236);
+
+  const tex = new CanvasTextureClass(canvas);
+  tex.anisotropy = 4;
+  return tex;
+}
 
 export function loadRunnerModel(parent, selected = 'male', onProgress) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   function load() {
-    const asset = selected === 'female' ? './assets/schoolgirl.glb' : './assets/runverse-schoolboy.glb';
+    const asset = selected === 'female' ? './assets/schoolgirl.glb' : './assets/runverse-schoolboy.glb?v=2.1';
     new GLTFLoader().load(new URL(asset, import.meta.url).href, gltf => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall', 'ShoulderSweep'];
@@ -21,6 +96,41 @@ export function loadRunnerModel(parent, selected = 'male', onProgress) {
       if (object.isMesh) {
         object.castShadow = true;
         object.frustumCulled = false;
+        // Hide awkward collar cardboard flaps
+        if (/collar/i.test(object.name)) {
+          object.visible = false;
+          return;
+        }
+        // School Crest Badge on the left chest pocket area
+        if (/pocket/i.test(object.name)) {
+          object.visible = true;
+          const badgeMat = new MeshStandardMaterial({
+            color: 0x0a1b3a,
+            metalness: 0.85,
+            roughness: 0.25,
+            side: DoubleSide,
+          });
+          const badgeTex = createSchoolBadgeTexture(CanvasTexture);
+          if (badgeTex) badgeMat.map = badgeTex;
+          object.material = badgeMat;
+          return;
+        }
+        // Upper Tie Clip (gleaming metallic gold bar across tie)
+        if (/Tie_stripe002/i.test(object.name)) {
+          object.visible = true;
+          object.material = new MeshStandardMaterial({
+            color: 0xffd700,
+            metalness: 0.95,
+            roughness: 0.15,
+            side: DoubleSide,
+          });
+          return;
+        }
+        // Hide extra diagonal stripes so the tie remains clean, solid navy
+        if (/Tie_stripe/i.test(object.name)) {
+          object.visible = false;
+          return;
+        }
         // These face textures use alpha cutouts. Depth-test the solid pixels
         // so eyes, eyelids and brows sort correctly against the glasses.
         const material = object.material;

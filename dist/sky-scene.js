@@ -41,10 +41,10 @@ export function createSky(scene,sun,ambient){
  const halo=new Sprite(new SpriteMaterial({map:texture(true),color:0xffdfaa,transparent:true,depthWrite:false,fog:false}));halo.scale.set(15,15,1);scene.add(halo);
  const cloudMap=texture(),clouds=[];for(let i=0;i<12;i++){const g=new Sprite(new SpriteMaterial({map:cloudMap,transparent:true,depthWrite:false,color:0xffffff,opacity:.85,fog:true}));g.scale.set(20+i%3*5,8+i%3*2,1);scene.add(g);clouds.push(g);}
 
- const moon=new Mesh(new SphereGeometry(2,24,16),new MeshBasicMaterial({color:0xe5edff,fog:false}));moon.position.set(28,29,-95);scene.add(moon);
+ const moon=new Mesh(new SphereGeometry(2,24,16),new MeshBasicMaterial({color:0xe5edff,fog:false}));moon.position.set(28,29,-95);moon.visible=false;scene.add(moon);
  for(let i=0;i<6;i++){const crater=new Mesh(new SphereGeometry(.18+i%3*.09,8,6),new MeshBasicMaterial({color:0xaebed5,fog:false}));const a=i*2.4;crater.position.set(Math.cos(a)*(.6+i%2*.4),Math.sin(a)*.8,1.74);moon.add(crater);}
  const starPositions=[];for(let i=0;i<320;i++){const a=i*2.399;starPositions.push(Math.sin(a)*125,14+(i*17%70),-60-(i*13%70));}
- const starGeo=new BufferGeometry();starGeo.setAttribute('position',new Float32BufferAttribute(starPositions,3));const stars=new Points(starGeo,new PointsMaterial({color:0xeaf3ff,size:.35,transparent:true,depthWrite:false,fog:false}));scene.add(stars);
+ const starGeo=new BufferGeometry();starGeo.setAttribute('position',new Float32BufferAttribute(starPositions,3));const stars=new Points(starGeo,new PointsMaterial({color:0xeaf3ff,size:.35,transparent:true,depthWrite:false,fog:false}));stars.visible=false;scene.add(stars);
  const rainGeo=new BufferGeometry(),drops=new Float32Array(260*6);rainGeo.setAttribute('position',new Float32BufferAttribute(drops,3));const rain=new LineSegments(rainGeo,new LineBasicMaterial({color:0xc7e4ff,transparent:true,opacity:0,depthWrite:false}));scene.add(rain);
  const top=new Color(),horizon=new Color(),warm=new Color('#ffce9f'),white=new Color('#fff5dd');
  return s=>{const weather=weatherAt(s.time),{phase,night}=weather;
@@ -53,10 +53,24 @@ export function createSky(scene,sun,ambient){
   scene.background.copy(horizon);scene.fog.color.copy(horizon);
   for(let i=0;i<positions.count;i++){const blend=Math.pow(Math.max(0,Math.min(1,positions.getY(i)/165*2)),.65);gradient.copy(horizon).lerp(top,blend);domeGeometry.attributes.color.setXYZ(i,gradient.r,gradient.g,gradient.b);}domeGeometry.attributes.color.needsUpdate=true;
   const lowSun=Math.max(0,1-Math.abs(phase-.15)*7);sun.color.copy(white).lerp(warm,lowSun).lerp(moonlight,night);sun.intensity=2.8-night*2.05-weather.rain*2.42;ambient.intensity=1.46-night*.90+weather.rain*.16;
-  disc.position.set(36-phase*72,25+Math.sin(phase*Math.PI*2)*12,-100);disc.visible=night<.75&&weather.rain<.7;halo.visible=disc.visible;halo.position.copy(disc.position);sun.position.set(disc.position.x*.42,18+9*(1-lowSun),-32);
+  const isNight=night>=.45;
+  disc.visible=!isNight&&weather.rain<.7;halo.visible=disc.visible;
+  if(disc.visible){
+    disc.position.set(36-phase*72,25+Math.sin(phase*Math.PI*2)*12,-100);
+    halo.position.copy(disc.position);
+    sun.position.set(disc.position.x*.42,18+9*(1-lowSun),-32);
+  }else{
+    disc.position.set(0,-500,-100);halo.position.set(0,-500,-100);
+  }
   scene.fog.near=75-37*weather.rain;scene.fog.far=172-57*weather.rain;
-  moon.visible=night>.1;moon.material.color.set('#e5edff').multiplyScalar(.65+night*.35);moon.position.x=34-phase*50;
-  stars.visible=night>.05;stars.material.opacity=night*.9;stars.rotation.z=-s.time*.002;
+  moon.visible=isNight;
+  if(moon.visible){
+    moon.position.set(34-phase*50,29,-95);
+    moon.material.color.set('#e5edff').multiplyScalar(.65+night*.35);
+  }else{
+    moon.position.set(0,-500,-95);
+  }
+  stars.visible=isNight;stars.material.opacity=night*.9;stars.rotation.z=-s.time*.002;
   clouds.forEach((g,i)=>{g.position.set(cloudX(i,s.time),17+i%4*3,-72-i%3*19);g.material.color.set('#ffffff').lerp(cloudShadow,Math.max(night*.75,weather.rain*.8));g.material.opacity=.7+weather.rain*.25;});
   rain.visible=weather.rain>.02;rain.material.opacity=weather.rain*.58;
   if(rain.visible){for(let i=0;i<260;i++){const x=(i*7.17%22)-11,y=(((i*.73-s.time*17)%14)+14)%14,z=3-(i*3.71%35),n=i*6;drops.set([x,y,z,x-.10,y-.65,z+.12],n);}rainGeo.attributes.position.needsUpdate=true;}
