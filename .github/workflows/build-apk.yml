@@ -1,13 +1,16 @@
-name: Build Android APK
+name: Build Android APK and Live Updates
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    name: Build LMSK LifeRush APK
+    name: Build LMSK LifeRush APK & Live Updates
     runs-on: ubuntu-latest
 
     steps:
@@ -43,10 +46,38 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk ../LMSK-LifeRush.apk
+
+      - name: Create Web Bundle Zip for Live Updates
+        run: |
+          cd dist
+          zip -r ../dist-bundle.zip .
+          cd ..
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: LMSK-LifeRush-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: LMSK-LifeRush.apk
           retention-days: 30
+
+      - name: Upload Live Update Web Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LMSK-LifeRush-WebBundle
+          path: dist-bundle.zip
+          retention-days: 30
+
+      - name: Publish or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: latest
+          name: LMSK LifeRush Latest (Live Updates & APK)
+          draft: false
+          prerelease: false
+          files: |
+            LMSK-LifeRush.apk
+            dist-bundle.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
