@@ -4,4 +4,4 @@ export function campusAnchor(slot,distance) {
  const first=CAMPUS_START+slot*CAMPUS_SPACING,span=CAMPUS_SLOTS*CAMPUS_SPACING;
  return first+Math.max(0,Math.ceil((distance-40-first)/span))*span;
 }
-export function campusKind(anchor){return Math.floor((anchor-CAMPUS_START)/CAMPUS_SPACING)%4;}
+export function campusKind(anchor){return Math.floor((anchor-CAMPUS_START)/CAMPUS_SPACING)%6;}

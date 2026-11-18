@@ -1,3 +1,4 @@
+import {buildBus} from './bus-model.js';
 import {BoxGeometry,CylinderGeometry,SphereGeometry,Group,Mesh,MeshStandardMaterial} from './vendor/three.module.js';
 import {repeatedVans} from './traffic-rules.js';
 export function createTraffic(scene) {
@@ -6,47 +7,7 @@ export function createTraffic(scene) {
   if(!mats.has(color))mats.set(color,new MeshStandardMaterial({color,roughness:.62}));
   const m=new Mesh(geo,mats.get(color));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;g.add(m);return m;
  }
- function vehicle(length,roof,oncoming) {
-  const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];scene.add(g);
-  part(g,oncoming?0xffb526:0xffc632,0,roof*.49,-length/2,1.94,roof*.92,length);
-  part(g,0xffeac1,0,roof-.04,-length/2,1.95,.13,length);
-  part(g,0x182e40,0,roof*.74,.025,1.65,roof*.33,.06);
-  part(g,0x81c9d1,-.38,roof*.77,.064,.38,roof*.24,.02);
-  part(g,0x243b44,0,.28,.12,1.9,.18,.25);part(g,0x203440,0,.65,.03,.73,.31,.05);
-  for(const x of [-.70,.70]) {
-   const lamp=part(g,oncoming?0xfffaad:0xe8493b,x,.69,.065,.33,.22,.07);
-   if(oncoming){lamp.material.emissive.setHex(0xffe9a0);lamp.material.emissiveIntensity=1.4;}
-   part(g,0xe9efe1,x,roof*.91,.05,.15,.07,.03);
-  }
-  part(g,0x1a3c41,0,roof*.92,.03,.72,.16,.045);
-  for(let i=0;i<6;i++)part(g,0xffeac1,-.25+i*.10,roof*.92,.058,.06,.075,.008);
-  // Body seams, rounded bonnet, wipers, number plate and grille slats.
-  part(g,0xffbc25,0,roof*.43,.02,.94,roof*.12,.12,round);
-  part(g,0xf5f0d8,0,.38,.254,.49,.12,.012);
-  for(let i=0;i<4;i++)part(g,0x8da1af,0,.54+i*.065,.065,.65,.018,.025);
-  for(const x of [-.43,.43]){const w=part(g,0x172732,x,roof*.64,.073,.035,roof*.18,.018);w.rotation.z=-.48;}
-  part(g,0xffeac1,0,roof*.74,.072,.045,roof*.33,.02);
-  for(const x of [-.68,.68])part(g,0xee641d,x,.99,.055,.18,.08,.03);
-  for(const side of [-1,1]) {
-   part(g,0x172732,side*1.00,roof*.70,-.18,.17,.045,.3);
-   part(g,0x273f49,side*1.04,roof*.72,-.10,.13,.26,.20);
-   part(g,0x253c45,side*.98,.76,-length/2,.035,.14,length-.2);
-   for(let z=1.3;z<length-.6;z+=1.5){part(g,0x284c60,side*.977,roof*.74,-z,.035,roof*.29,1.12);part(g,0x73abb7,side*.998,roof*.79,-z+.28,.013,roof*.17,.30);}
-   part(g,0xffeac1,side*.983,roof*.48,-length/2,.024,.09,length-.3);
-   for(let z=1.3;z<length-.6;z+=1.5)part(g,0xffeac1,side*.999,roof*.74,-z,.02,roof*.29,.035);
-   part(g,0x1c3647,side*.982,roof*.42,-.8,.025,roof*.65,.74);
-   part(g,0x94b5bd,side*1.001,roof*.52,-.8,.02,.035,.68);
-   for(const z of [-1.5,-length+1.5]) {
-    const w=part(g,0x172732,side*.91,.34,z,.35,.23,.35,cylinder);w.rotation.z=Math.PI/2;
-    const h=part(g,0x8b9aa4,side*1.035,.34,z,.17,.03,.17,cylinder);h.rotation.z=Math.PI/2;
-    const spokes=new Group();spokes.position.set(side*1.055,.34,z);g.add(spokes);g.userData.wheels.push(spokes);
-    for(let i=0;i<5;i++){const spoke=part(spokes,0xdbe7ed,0,0,0,.025,.29,.035);spoke.rotation.x=i*Math.PI/5;}
-    part(g,0xffb526,side*.985,.70,z,.035,.10,.9);
-
-   }
-  }
-  return g;
- }
+ function vehicle(length,roof,oncoming){const g=buildBus(length,roof,oncoming);scene.add(g);return g;}
  function vanModel(v) {
   const g=vehicle(v.front-v.rear,v.roof,false),run=v.rear-v.ramp;
   if(run>0) {
