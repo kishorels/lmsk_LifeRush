@@ -1,12 +1,36 @@
-import {Group,Mesh,MeshStandardMaterial,BoxGeometry,CylinderGeometry,SphereGeometry,TorusGeometry,Vector3} from './vendor/three.module.js';
+import {Group,Mesh,MeshStandardMaterial,BoxGeometry,CylinderGeometry,SphereGeometry,TorusGeometry,Vector3,BufferGeometry,Float32BufferAttribute} from './vendor/three.module.js';
 import {sideVehicleX} from './traffic-rules.js';
 const cube=new BoxGeometry(),sphere=new SphereGeometry(1,12,8),tyre=new TorusGeometry(.32,.055,6,20),rod=new CylinderGeometry(1,1,1,8),materials=new Map();
 function part(g,c,x,y,z,w,h,d,geometry=cube){if(!materials.has(c))materials.set(c,new MeshStandardMaterial({color:c,roughness:.55}));const m=new Mesh(geometry,materials.get(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=true;g.add(m);return m;}
 function bar(g,c,a,b,r=.035){const p=new Vector3(...a),q=new Vector3(...b),m=part(g,c,0,0,0,r,p.distanceTo(q),r,rod);m.position.copy(p.add(q).multiplyScalar(.5));m.quaternion.setFromUnitVectors(new Vector3(0,1,0),q.sub(new Vector3(...a)).normalize());return m;}
+// Cross-sections taper at the bumpers and rake the cabin glass toward the roof.
+function coachwork(sections) {
+ const positions=[],indices=[];
+ for (const [z,base,top,lowerWidth,upperWidth] of sections) {
+  positions.push(-lowerWidth,base,z, lowerWidth,base,z, upperWidth,top,z, -upperWidth,top,z);
+ }
+ for(let i=0;i<sections.length-1;i++)for(let face=0;face<4;face++) {
+  const a=i*4+face,b=i*4+(face+1)%4;
+  indices.push(a,b,b+4,a,b+4,a+4);
+ }
+ const end=4*(sections.length-1);
+ indices.push(0,2,1,0,3,2,end,end+1,end+2,end,end+2,end+3);
+ const geo=new BufferGeometry();
+ geo.setAttribute('position',new Float32BufferAttribute(positions,3));geo.setIndex(indices);geo.computeVertexNormals();
+ return geo;
+}
+const carBody=coachwork([[-1.6,.35,.64,.66,.67],[-1.36,.31,.84,.78,.74],[-.8,.31,.89,.81,.76],[.65,.31,.87,.81,.76],[1.38,.32,.73,.78,.72],[1.62,.36,.65,.67,.68]]);
+const cabin=coachwork([[-1.12,.83,.86,.69,.66],[-.59,.86,1.33,.72,.58],[.25,.85,1.36,.72,.58],[.89,.83,.86,.71,.67]]);
 export function buildSideVehicle(kind){const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];
  if(kind==='car'){
-  part(g,0xe54a39,0,.52,0,1.65,.6,3.2);part(g,0xe54a39,0,.85,.95,1.6,.18,1.1);part(g,0x244559,0,1.04,-.15,1.4,.54,1.42);part(g,0xee5b43,0,1.34,-.15,1.5,.12,1.55);
-  for(const x of [-.72,.72])part(g,0xe54a39,x,1.05,-.15,.08,.54,.08);
+  part(g,0x973f33,0,0,0,1,1,1,carBody);
+  part(g,0x314950,0,0,0,1,1,1,cabin);
+  part(g,0x973f33,0,1.345,-.16,1.15,.045,.78);
+  for(const side of [-1,1]){
+   bar(g,0x333635,[side*.72,.87,-.17],[side*.58,1.33,-.17],.028);
+   part(g,0x973f33,side*.8,.95,.48,.12,.07,.13,sphere);
+   part(g,0xa02c29,side*.55,.60,-1.59,.34,.11,.04);
+  }
   part(g,0x1d2b37,0,.37,1.64,1.52,.16,.08);part(g,0xeaf9ef,0,.41,1.69,.4,.13,.02);
   for(const x of [-.57,.57])part(g,0xfff1c1,x,.71,1.61,.36,.14,.04);
   for(const x of [-.8,.8])for(const z of [-1.05,1.05]){const w=part(g,0x152131,x,.32,z,1,1,1,tyre);w.rotation.y=Math.PI/2;g.userData.wheels.push(w);part(g,0xb6c9d1,x*1.035,.32,z,.04,.21,.21,sphere);}

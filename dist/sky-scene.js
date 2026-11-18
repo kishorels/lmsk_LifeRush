@@ -7,7 +7,7 @@ function texture(glow=false){const w=128,h=64,data=new Uint8Array(w*h*4);const n
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const u=(x/w-.5)*2,v=(y/h-.5)*2;let density=0;
   if(glow)density=Math.exp(-(u*u+v*v)*7)*.6;
   else{for(const [cx,cy,rx,ry]of [[-.4,.10,.39,.3],[0,-.12,.4,.47],[.38,.06,.35,.3]])density+=Math.exp(-((u-cx)**2/rx**2+(v-cy)**2/ry**2)*2);density=Math.max(0,(density-.10)*1.4)*( .58+.42*smooth(x/9,y/9));}
-  const i=(y*w+x)*4,shade=glow?255:Math.round(238+17*(1-y/h));data.set([shade,shade,glow?220:255,Math.round(Math.min(1,density)*255)],i);
+  const i=(y*w+x)*4,shade=glow?255:Math.round(180+65*(y/h)+10*smooth(x/7,y/6));data.set([shade,shade,glow?220:Math.min(255,shade+8),Math.round(Math.min(1,density)*255)],i);
  }const t=new DataTexture(data,w,h,RGBAFormat);t.magFilter=t.minFilter=LinearFilter;t.needsUpdate=true;return t;}
 export function createSky(scene,sun,ambient){
  const domeGeometry=new SphereGeometry(165,24,12),positions=domeGeometry.attributes.position;
@@ -35,7 +35,7 @@ export function createSky(scene,sun,ambient){
   for(let j=0;j<10;j++)pod(glass,side*.63,.13,2.5-j*.48,.045,.085,.105);
  }
  const fin=pod(blue,0,.62,-3.65,.10,.97,.62);fin.rotation.x=-.38;
- const gradient=new Color();
+ const gradient=new Color(), destination=new Color(), moonlight=new Color('#a9c5ed'), cloudShadow=new Color('#707c88');
 
  const disc=new Mesh(new SphereGeometry(1.35,24,16),new MeshBasicMaterial({color:0xfff7d7,fog:false}));scene.add(disc);
  const halo=new Sprite(new SpriteMaterial({map:texture(true),color:0xffdfaa,transparent:true,depthWrite:false,fog:false}));halo.scale.set(15,15,1);scene.add(halo);
@@ -49,14 +49,15 @@ export function createSky(scene,sun,ambient){
  const top=new Color(),horizon=new Color(),warm=new Color('#ffce9f'),white=new Color('#fff5dd');
  return s=>{const weather=weatherAt(s.time),{phase,night}=weather;
   const flight=flightPhase(s.time);jet.visible=flight<1;jet.position.set(10-12*flight,10+2*flight,-145+170*flight);jet.rotation.set(.02,-.07,.13*Math.sin(Math.PI*flight));
-  top.set(weather.a.top).lerp(new Color(weather.b.top),weather.mix);horizon.set(weather.a.horizon).lerp(new Color(weather.b.horizon),weather.mix);
+  top.set(weather.a.top).lerp(destination.set(weather.b.top),weather.mix);horizon.set(weather.a.horizon).lerp(destination.set(weather.b.horizon),weather.mix);
   scene.background.copy(horizon);scene.fog.color.copy(horizon);
   for(let i=0;i<positions.count;i++){const blend=Math.pow(Math.max(0,Math.min(1,positions.getY(i)/165*2)),.65);gradient.copy(horizon).lerp(top,blend);domeGeometry.attributes.color.setXYZ(i,gradient.r,gradient.g,gradient.b);}domeGeometry.attributes.color.needsUpdate=true;
-  sun.color.copy(warm).lerp(white,1-night).lerp(new Color('#a0bcff'),night);sun.intensity=3.1-night*1.9-weather.rain*1.1;ambient.intensity=2.1-night*.6-weather.rain*.35;
-  disc.position.set(36-phase*72,25+Math.sin(phase*Math.PI*2)*12,-100);disc.visible=night<.75&&weather.rain<.7;halo.visible=disc.visible;halo.position.copy(disc.position);sun.position.set(disc.position.x*.3,26,10);
+  const lowSun=Math.max(0,1-Math.abs(phase-.15)*7);sun.color.copy(white).lerp(warm,lowSun).lerp(moonlight,night);sun.intensity=2.8-night*2.05-weather.rain*2.42;ambient.intensity=1.46-night*.90+weather.rain*.16;
+  disc.position.set(36-phase*72,25+Math.sin(phase*Math.PI*2)*12,-100);disc.visible=night<.75&&weather.rain<.7;halo.visible=disc.visible;halo.position.copy(disc.position);sun.position.set(disc.position.x*.42,18+9*(1-lowSun),-32);
+  scene.fog.near=75-37*weather.rain;scene.fog.far=172-57*weather.rain;
   moon.visible=night>.1;moon.material.color.set('#e5edff').multiplyScalar(.65+night*.35);moon.position.x=34-phase*50;
   stars.visible=night>.05;stars.material.opacity=night*.9;stars.rotation.z=-s.time*.002;
-  clouds.forEach((g,i)=>{g.position.set(cloudX(i,s.time),17+i%4*3,-72-i%3*19);g.material.color.set('#ffffff').lerp(new Color('#6a7894'),Math.max(night*.75,weather.rain*.8));g.material.opacity=.7+weather.rain*.25;});
+  clouds.forEach((g,i)=>{g.position.set(cloudX(i,s.time),17+i%4*3,-72-i%3*19);g.material.color.set('#ffffff').lerp(cloudShadow,Math.max(night*.75,weather.rain*.8));g.material.opacity=.7+weather.rain*.25;});
   rain.visible=weather.rain>.02;rain.material.opacity=weather.rain*.58;
   if(rain.visible){for(let i=0;i<260;i++){const x=(i*7.17%22)-11,y=(((i*.73-s.time*17)%14)+14)%14,z=3-(i*3.71%35),n=i*6;drops.set([x,y,z,x-.10,y-.65,z+.12],n);}rainGeo.attributes.position.needsUpdate=true;}
   return weather;

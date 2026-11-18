@@ -1,3 +1,4 @@
+import {campusMaterial, roadsideTree} from './street-materials.js';
 import {buildBus} from './bus-model.js';
 import { BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SRGBColorSpace } from './vendor/three.module.js';
 import { SCHOOL_GATE, SCHOOL_VAN, ROOF_COINS } from './engine.js';
@@ -8,7 +9,7 @@ export function createSchoolEntrance(scene) {
   const box = new BoxGeometry(), wheel = new CylinderGeometry(1,1,1,18);
   const materials = new Map();
   function part(parent, color, x, y, z, width, height, length, geometry = box) {
-    if (!materials.has(color)) materials.set(color, new MeshStandardMaterial({color, roughness:.76}));
+    if (!materials.has(color)) materials.set(color, campusMaterial(color));
     const mesh = new Mesh(geometry, materials.get(color));
     mesh.position.set(x,y,z);
     mesh.scale.set(width,height,length);
@@ -47,6 +48,12 @@ export function createSchoolEntrance(scene) {
     board.parent.add(face);
   }
 
+  for (const side of [-1, 1]) {
+    roadsideTree(campus, side*6.8, -4-side*2, 6.3, side===1, side*.26);
+    roadsideTree(campus, side*12.4, -10, 9, true, side*.18);
+    roadsideTree(campus, side*7.5, -38-side*2, 7.5, false, side*.36);
+    roadsideTree(campus, side*16, -30, 10, false, -side*.35);
+  }
   const gate = -SCHOOL_GATE;
   for (const side of [-1,1]) {
     const x=side*4.04;

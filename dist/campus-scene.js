@@ -1,10 +1,11 @@
+import {campusMaterial, roadsideTree} from './street-materials.js';
 import {buildBus} from './bus-model.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {Group,Mesh,BoxGeometry,SphereGeometry,CylinderGeometry,MeshStandardMaterial,CanvasTexture,SRGBColorSpace} from './vendor/three.module.js';
 import {campusAnchor,campusKind,CAMPUS_SLOTS} from './campus-layout.js';
 export function createCampus(scene) {
  const cube=new BoxGeometry(),sphere=new SphereGeometry(1,10,7),cyl=new CylinderGeometry(1,1,1,10),mats=new Map(),signs=new Map();
- function part(g,c,x,y,z,w,h,d,geo=cube){if(!mats.has(c))mats.set(c,new MeshStandardMaterial({color:c,roughness:.88}));const m=new Mesh(geo,mats.get(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.receiveShadow=true;g.add(m);return m;}
+ function part(g,c,x,y,z,w,h,d,geo=cube){if(!mats.has(c))mats.set(c,campusMaterial(c));const m=new Mesh(geo,mats.get(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.receiveShadow=true;g.add(m);return m;}
  function sign(g,label,x,y,z,width=3){
   part(g,0x254d50,x,y,z,width,.55,.12);
   if(typeof document==='undefined')return;
@@ -16,16 +17,7 @@ export function createCampus(scene) {
   const m=new Mesh(cube,signs.get(label));m.position.set(x,y,z+.066);m.scale.set(width,.55,.01);g.add(m);
  }
  function tree(g,x,z){
-  part(g,0x795a3e,x,1.35,z,.14,2.7,.14,cyl);
-  for(let branch=0;branch<5;branch++){
-   const angle=branch*2.399,dx=Math.cos(angle),dz=Math.sin(angle),y=2.2+branch*.12;
-   const limb=part(g,0x795a3e,x+dx*.42,y,z+dz*.42,.065,1.25,.065,cyl);limb.rotation.z=-dx*.65;limb.rotation.x=dz*.65;
-   for(let n=0;n<9;n++){
-    const a=n*2.399+branch,r=.18+Math.sqrt(n/9)*.66;
-    const leaf=part(g,n%3?0x438a38:0x72ad46,x+dx*.65+Math.cos(a)*r,y+.65+Math.sin(n*1.7)*.33,z+dz*.65+Math.sin(a)*r,.45,.23,.35,sphere);
-    leaf.rotation.set(Math.sin(a)*.3,a,Math.cos(a)*.25);
-   }
-  }
+  roadsideTree(g,x,z, 5.3 + Math.abs(Math.sin(x+z))*2.7, z<0, Math.sin(x)*.42);
  }
  function bench(g,x,z){part(g,0x9c7651,x,.55,z,1.9,.15,.55);part(g,0xa98760,x,.95,z-.2,1.9,.58,.1);for(const dx of [-.7,.7])part(g,0x455b52,x+dx,.3,z,.10,.6,.5);}
  function building(g,side,label,style=0){
@@ -106,16 +98,21 @@ export function createCampus(scene) {
   if(kind===3){building(g,-1,'CAMPUS CANTEEN',3);parking(g,1);}
   if(kind===4){building(g,-1,'AUDITORIUM',4);building(g,1,'ADMINISTRATION',5);}
   if(kind===5){field(g,-1);building(g,1,'STUDENT CENTRE',3);}
+  for (const side of [-1,1]) {
+   roadsideTree(g,side*(17+kind%2*3),8-kind,9.4,kind%2===0,side*.3);
+   roadsideTree(g,side*18,-10,8.2,kind%3===1,-side*.27);
+  }
   // Batch static campus details by material to keep mobile draw calls low.
   g.updateMatrixWorld(true);const batches=new Map();
   g.traverse(o=>{if(!o.isMesh)return;const geo=(o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone()).applyMatrix4(o.matrixWorld);if(!batches.has(o.material))batches.set(o.material,[]);batches.get(o.material).push(geo);});
-  const merged=new Group();for(const [mat,list]of batches){const mesh=new Mesh(mergeGeometries(list),mat);mesh.receiveShadow=true;merged.add(mesh);for(const geo of list)geo.dispose();}
+  const merged=new Group();for(const [mat,list]of batches){const mesh=new Mesh(mergeGeometries(list),mat);mesh.receiveShadow=true;mesh.castShadow=true;merged.add(mesh);for(const geo of list)geo.dispose();}
   return merged;
  }
  const templates=[0,1,2,3,4,5].map(build);
  const slots=Array.from({length:CAMPUS_SLOTS},(_,slot)=>{const root=new Group();scene.add(root);return{slot,root,kind:-1};});
  const cache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
- return s=>{for(const item of slots){const anchor=campusAnchor(item.slot,s.distance),kind=campusKind(anchor);
+ const glazing=mats.get(0x276fa0);
+ return (s,weather)=>{if(glazing)glazing.emissiveIntensity=(weather?.night||0)*.38;for(const item of slots){const anchor=campusAnchor(item.slot,s.distance),kind=campusKind(anchor);
   if(item.kind!==kind){item.root.clear();if(!cache[item.slot].has(kind))cache[item.slot].set(kind,templates[kind].clone());item.root.add(cache[item.slot].get(kind));item.kind=kind;}
   item.root.position.z=s.distance-anchor;
  }};

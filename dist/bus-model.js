@@ -1,12 +1,58 @@
-import {Group,Mesh,MeshStandardMaterial,BoxGeometry,CylinderGeometry,Shape,ExtrudeGeometry,TorusGeometry,Vector3} from './vendor/three.module.js';
+import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
+import {Group,Mesh,MeshStandardMaterial,BoxGeometry,CylinderGeometry,Shape,ExtrudeGeometry,TorusGeometry,Vector3,CanvasTexture,SRGBColorSpace} from './vendor/three.module.js';
 const mats=new Map(),geometries=new Map(),cube=new BoxGeometry(),tyre=new CylinderGeometry(.40,.40,.20,24),hub=new CylinderGeometry(.22,.22,.025,20),archGeo=new TorusGeometry(.47,.035,6,24,Math.PI),lampGeo=new CylinderGeometry(1,1,1,16);
-function paint(c){if(!mats.has(c))mats.set(c,new MeshStandardMaterial({color:c,roughness:c===0x244759?.22:.5,metalness:c===0xbacbd2?.65:.05}));return mats.get(c);}
+function paint(color) {
+ if (mats.has(color)) return mats.get(color);
+ const glass = color === 0x244759, steel = color === 0xbacbd2, rubber = color === 0x192c38;
+ const material = new MeshStandardMaterial({
+  color, roughness:glass ? .13 : steel ? .32 : rubber ? .91 : .37,
+  metalness:glass ? .55 : steel ? .72 : .06
+ });
+ mats.set(color,material);
+ return material;
+}
+let routeSign;
+function destinationBoard() {
+ if (routeSign || typeof document === 'undefined') return routeSign;
+ const canvas=document.createElement('canvas');canvas.width=512;canvas.height=72;
+ const ctx=canvas.getContext('2d');
+ if (!ctx) return;
+ ctx.fillStyle='#181c1b';ctx.fillRect(0,0,512,72);
+ ctx.fillStyle='#f5bd61';ctx.font='bold 48px sans-serif';ctx.textAlign='center';
+ ctx.fillText('07  SCHOOL BUS',256,52,480);
+ const map=new CanvasTexture(canvas);map.colorSpace=SRGBColorSpace;
+ routeSign=new MeshStandardMaterial({map,emissiveMap:map,emissive:0xffffff,emissiveIntensity:.45});
+ return routeSign;
+}
+// Merge fixed coach panels once per body size. Wheel hubs stay independently animated.
+const bodyBatches=new Map();
+function batchBody(group,key) {
+ if (!bodyBatches.has(key)) {
+  const buckets=new Map();
+  for (const panel of group.children.filter(child=>child.isMesh)) {
+   panel.updateMatrix();
+   const geom=(panel.geometry.index ? panel.geometry.toNonIndexed() : panel.geometry.clone()).applyMatrix4(panel.matrix);
+   if (!buckets.has(panel.material)) buckets.set(panel.material,[]);
+   buckets.get(panel.material).push(geom);
+  }
+  const merged=[];
+  for (const [material,parts] of buckets) {
+   const mesh=new Mesh(mergeGeometries(parts),material);
+   mesh.castShadow=mesh.receiveShadow=true;
+   merged.push(mesh);
+   for (const part of parts) part.dispose();
+  }
+  bodyBatches.set(key,merged);
+ }
+ for (const panel of [...group.children]) if (panel.isMesh) group.remove(panel);
+ for (const panel of bodyBatches.get(key)) group.add(panel.clone());
+}
 function rounded(w,h,d,r=.14){const key=[w,h,d,r].join(':');if(geometries.has(key))return geometries.get(key);const g=new BoxGeometry(w,h,d,6,6,8),p=g.attributes.position,n=new Vector3();for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),cx=Math.max(-w/2+r,Math.min(w/2-r,x)),cy=Math.max(-h/2+r,Math.min(h/2-r,y)),cz=Math.max(-d/2+r,Math.min(d/2-r,z));n.set(x-cx,y-cy,z-cz).normalize().multiplyScalar(r);p.setXYZ(i,cx+n.x,cy+n.y,cz+n.z);}g.computeVertexNormals();geometries.set(key,g);return g;}
 export function buildBus(length=10,roof=2.8,oncoming=true){
  const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];
  const add=(c,x,y,z,w,h,d,geo=cube)=>{const m=new Mesh(geo,paint(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const shell=(c,x,y,z,w,h,d,r=.14)=>add(c,x,y,z,1,1,1,rounded(w,h,d,r));
- const yellow=0xffbc26,dark=0x192c38,glass=0x244759,cream=0xffe9ad,silver=0xbacbd2;
+ const yellow=0xdba22c,dark=0x192c38,glass=0x244759,cream=0xe2d8bd,silver=0xbacbd2;
  const wheelZ=[-1.45,-length+1.45];
  // Rounded upper coach shell; underbody panels have genuine wheel cutouts.
  shell(yellow,0,(roof+.83)/2,-length/2,1.94,roof-.83,length,.20);
@@ -16,7 +62,7 @@ export function buildBus(length=10,roof=2.8,oncoming=true){
   for(const z of [...wheelZ].sort((a,b)=>a-b)){shape.lineTo(z-.47,.23);shape.lineTo(z-.47,.4);shape.absarc(z,.4,.47,Math.PI,0,true);shape.lineTo(z+.47,.23);}
   shape.lineTo(-.15,.23);shape.lineTo(-.15,.9);shape.closePath();
   const key='arch:'+length;let geometry=geometries.get(key);if(!geometry){geometry=new ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false,curveSegments:12});geometries.set(key,geometry);}
-  const panel=add(yellow,side*.88,0,0,1,1,1,geometry);panel.rotation.y=-Math.PI/2;
+  const panel=add(yellow,side*.94+.06,0,0,1,1,1,geometry);panel.rotation.y=-Math.PI/2;
   for(const z of wheelZ){const wheel=add(dark,side*.9,.4,z,1,1,1,tyre);wheel.rotation.z=Math.PI/2;const rim=add(silver,side*1.015,.4,z,1,1,1,hub);rim.rotation.z=Math.PI/2;
    const spokes=new Group();spokes.position.set(side*1.035,.4,z);g.add(spokes);g.userData.wheels.push(spokes);for(let i=0;i<6;i++){const m=new Mesh(cube,paint(dark));m.scale.set(.018,.06,.04);m.position.set(0,Math.cos(i*Math.PI/3)*.15,Math.sin(i*Math.PI/3)*.15);spokes.add(m);}
    const arch=add(cream,side*.958,.4,z,1,1,1,archGeo);arch.rotation.y=Math.PI/2;
@@ -35,9 +81,24 @@ export function buildBus(length=10,roof=2.8,oncoming=true){
  for(let i=0;i<4;i++)add(silver,0,.57+i*.055,.075,.58,.016,.015);
  for(const x of [-.68,.68]){shell(dark,x,.73,.043,.37,.23,.04,.018);for(const dx of [-.085,.085]){const lamp=add(cream,x+dx,.75,.073,.06,.022,.06,lampGeo);lamp.rotation.x=Math.PI/2;}add(0xf27527,x,.60,.075,.24,.045,.02);}
  for(const x of [-.39,.39]){const w=add(dark,x,roof*.64,.15,.025,roof*.17,.02);w.rotation.z=-.38;}
- shell(dark,0,roof*.93,.045,.9,.18,.05,.025);for(let i=0;i<7;i++)add(cream,-.30+i*.10,roof*.93,.079,.055,.075,.012);
+ const frontSign=shell(dark,0,roof*.93,.06,1.22,.21,.06,.024);
+ const sign=destinationBoard();
+ if(sign){const face=add(dark,0,frontSign.position.y,.095,1.16,.17,.006);face.material=sign;}
+ // Rear face is visible when the player approaches a moving roof.
+ shell(glass,0,roof*.72,-length-.015,1.67,roof*.28,.07,.032);
+ shell(dark,0,.32,-length-.018,1.82,.19,.14,.065);
+ for(const x of [-.77,.77]){
+  add(0xaa3027,x,.72,-length-.047,.16,.24,.055);
+  add(0xe29535,x,.91,-length-.048,.16,.075,.055);
+ }
+ for(const side of [-1,1]){
+  add(cream,side*.978,roof*.52,-length*.53,.018,.095,length*.85);
+  add(dark,side*.976,roof*.48,-length*.53,.017,.038,length*.85);
+ }
+ add(cream,0,.58,-length-.041,.39,.12,.035);
  add(cream,0,.34,.09,.43,.095,.015);add(dark,0,.34,.101,.27,.025,.006);
  // A flat central roof walkway retains the existing playable roof height.
  if(!oncoming)add(cream,0,roof-.015,-length/2,1.38,.05,length-.6);
+ batchBody(g,[length,roof,oncoming].join(':'));
  return g;
 }
