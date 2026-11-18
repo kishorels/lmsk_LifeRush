@@ -21,7 +21,7 @@ def frames(g):
         return world[i]
     return [(rotation(parents[i]) if i in parents else R.identity(),rotation(i)) for i in range(len(g['nodes']))]
 
-src,dst=map(Path,sys.argv[1:])
+src,dst=map(Path,sys.argv[1:3])
 boy,source=read(src)
 girl,data=read(dst)
 bf,gf=frames(boy),frames(girl)
@@ -40,8 +40,17 @@ def append(v):
         type={1:'SCALAR',3:'VEC3',4:'VEC4'}[v.shape[1]],min=v.min(0).tolist(),max=v.max(0).tolist()))
     return len(girl['accessors'])-1
 times={}
-for clip in boy['animations']:
-    out=dict(name=clip['name'],channels=[],samplers=[])
+library,library_bytes=boy,source
+for original in library['animations']:
+    override=original['name']=='Run' and len(sys.argv)>3
+    if override:
+        boy,source=read(Path(sys.argv[3]))
+        clip=boy['animations'][0]
+    else:
+        boy,source,clip=library,library_bytes,original
+    bf=frames(boy)
+    times={}
+    out=dict(name=original['name'],channels=[],samplers=[])
     for ch in clip['channels']:
         i=ch['target']['node'];node=boy['nodes'][i];name=node['name'];path=ch['target']['path']
         if name not in ids or not name.startswith('mixamorig:'):continue
@@ -51,6 +60,10 @@ for clip in boy['animations']:
             v=(gf[j][0].inv()*bf[i][0]*R.from_quat(v)*bf[i][1].inv()*gf[j][1]).as_quat()
         else:
             v=(gf[j][0].inv()*bf[i][0]).apply(v-node['translation'])*1.18+girl['nodes'][j]['translation']
+            if override:
+                # Remove travel in the horizontal plane (FBX armature +Z maps to -Y).
+                v[:,0]=girl['nodes'][j]['translation'][0]
+                v[:,1]=girl['nodes'][j]['translation'][1]
         t=sam['input']
         if t not in times:times[t]=append(values(t))
         out['channels'].append(dict(target=dict(node=j,path=path),sampler=len(out['samplers'])))

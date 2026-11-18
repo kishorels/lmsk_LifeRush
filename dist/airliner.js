@@ -11,4 +11,4 @@ export function drawAirliner(ctx) {
   for(let x=-30;x<42;x+=6)ctx.fillRect(x,-2,3,2);
   ctx.fillRect(44,-2,7,2);
 }
-export const flightPhase = time => ((time+3)%30)/10;
+export const flightPhase = time => (time%30)/9;

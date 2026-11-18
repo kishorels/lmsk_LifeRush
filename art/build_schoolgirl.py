@@ -81,6 +81,38 @@ def strand(name,points,width,mat):
     obj.data.materials.append(mat)
     skin(obj)
 
+# Opaque crown under the alpha-cut hair cards. Sweep ridges from the
+# hairline over the crown, following the head down into the braid.
+def scalp(theta, phi, offset=0):
+    return ((.096+offset)*math.sin(theta)*math.cos(phi),
+            .048+(.124+offset)*math.sin(theta)*math.sin(phi),
+            1.641+(.129+offset)*math.cos(theta))
+
+verts=[scalp(0,0)]
+faces=[]
+for row in range(1,17):
+    for i in range(64):
+        phi=i*math.tau/64
+        extent=1.75+.57*math.sin(phi)
+        verts.append(scalp(extent*row/16,phi))
+        a=1+(row-1)*64+i
+        b=1+(row-1)*64+(i+1)%64
+        faces.append((0,a,b) if row==1 else (a-64,a,b,b-64))
+mesh=bpy.data.meshes.new('Solid swept crown')
+mesh.from_pydata(verts,[],faces)
+cap=bpy.data.objects.new('Ash blonde crown',mesh)
+bpy.context.collection.objects.link(cap)
+mesh.materials.append(locks[1])
+for poly in mesh.polygons:poly.use_smooth=True
+skin(cap)
+for i in range(44):
+    phi=i*math.tau/44
+    path=[]
+    for j in range(19):
+        t=j/18
+        theta=.08+t*(1.64+.55*math.sin(phi))
+        path.append((*scalp(theta,phi+.32*(1-t),.0007),.35+.65*math.sin(t*math.pi)))
+    strand('Crown comb line',path,.0015,locks[i%3])
 for k in range(3):
     path=[]
     for i in range(45):

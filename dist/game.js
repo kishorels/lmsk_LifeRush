@@ -8,7 +8,7 @@ const chaseNotice = $('chase-notice'), game = canvas.closest('.game');
 let s=fresh(),best=0,character='male',sound=true,prev=0,w=600,h=700,lastCount=0;
 try{best=Number(localStorage.getItem('runverse-best'))||0;character=localStorage.getItem('runverse-character')==='female'?'female':'male';}catch{}
 const save=()=>{try{localStorage.setItem('runverse-best',best);localStorage.setItem('runverse-character',character);}catch{}};
-function select(c){character=c;document.querySelectorAll('[data-character]').forEach(b=>{b.classList.toggle('selected',b.dataset.character===c);b.setAttribute('aria-pressed',b.dataset.character===c);});save();}select(character);
+function select(c){character=c;$('start').disabled=true;document.querySelectorAll('[data-character]').forEach(b=>{b.classList.toggle('selected',b.dataset.character===c);b.setAttribute('aria-pressed',b.dataset.character===c);});save();}select(character);
 document.querySelectorAll('[data-character]').forEach(b=>b.onclick=()=>select(b.dataset.character));
 const effects=createSound();
 try{sound=localStorage.getItem('runverse-sound')!=='off';}catch{}
@@ -20,7 +20,7 @@ function pause(){if(!['running','countdown'].includes(s.mode))return;s.mode='pau
 function resume(){effects.unlock();s.mode='countdown';s.countdown=3;$('overlay').hidden=true;}
 function show(title,message,button,tag){$('title').textContent=title;$('message').textContent=message;$('start').innerHTML=button+' <span>↗</span>';$('tag').textContent=tag;$('selection').hidden=true;$('selection').style.display='none';$('restart').hidden=s.mode!=='paused';$('tip').textContent='Each new run starts from zero.';$('overlay').hidden=false;}
 function crash(){best=Math.max(best,Math.floor(s.distance));save();effects.play('over');const hint={sideVehicle:'Watch the side entrance. Use the opposite outside lane.',bus:'Dodge the oncoming bus. Change lanes before its headlights reach you.',van:'Take a striped ramp, or use the clear ground lane.',block:'Change lanes to dodge the tall crates.',jump:'Jump over the low orange barriers.',slide:'Slide under the teal overhead beams.'}[s.cause];show('A fresh start awaits.',Math.floor(s.distance)+' m · '+s.skills.reduce((a,b)=>a+b,0)+' skills. '+hint,'RUN AGAIN','RUN COMPLETE');$('tip').textContent='Career tendency: '+career(s.skills)+' · Early mechanic';}
-$('start').onclick=()=>s.mode==='paused'?resume():start();$('restart').onclick=start;$('pause').onclick=()=>s.mode==='paused'?resume():pause();
+$('start').onclick=()=>$('start').dataset.loadError==='true'?location.reload():s.mode==='paused'?resume():start();$('restart').onclick=start;$('pause').onclick=()=>s.mode==='paused'?resume():pause();
 function input(a){const before=[s.jump,s.slide,s.roll,s.drop,s.lane];action(s,a);if(s.mode==='running'&&(s.jump!==before[0]||s.slide!==before[1]||s.roll!==before[2]||s.drop!==before[3]||s.lane!==before[4]))effects.play(a==='jump'?'jump':a==='slide'?'slide':'lane');}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();input(b.dataset.action);}));
 window.addEventListener('keydown',e=>{if(s.mode!=='running'&&e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;const a={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump',ArrowDown:'slide',s:'slide'}[e.key];if(a){e.preventDefault();if(!e.repeat)input(a);}if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}});
@@ -77,7 +77,14 @@ function frame(t) {
   ['k','c','s'].forEach((id,i) => $(id).textContent = s.skills[i]);
   $('countdown').hidden = s.mode !== 'countdown';
   if (s.mode === 'countdown') $('countdown').textContent = Math.ceil(s.countdown);
-  draw(s, character, dt);
+  const status=draw(s, character, dt);
+  if(s.mode==='ready'){
+    const startButton=$('start'),waiting=status==='loading',failed=status==='error';
+    startButton.disabled=waiting;
+    const label=waiting?'Loading runner…':failed?'Retry loading runner':"LET’S RUN ↗";
+    if(startButton.textContent!==label)startButton.textContent=label;
+    startButton.dataset.loadError=String(failed);
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

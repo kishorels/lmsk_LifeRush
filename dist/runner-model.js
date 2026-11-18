@@ -9,7 +9,7 @@ export function loadRunnerModel(parent, selected = 'male') {
     new GLTFLoader().load(new URL(asset, import.meta.url).href, gltf => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall'];
-    if (names.some(name => !clips.has(name))) return;
+    if (names.some(name => !clips.has(name))) { render.failed=true; return; }
 
     clips.set('HeadHit', AnimationUtils.subclip(clips.get('HeadHit'), 'HeadHit', 1, 20, 30));
     model = gltf.scene;
@@ -47,7 +47,7 @@ export function loadRunnerModel(parent, selected = 'male') {
     }
     parent.add(model);
     render.model = model;
-  }, undefined, error => console.warn('Could not load the runner character.', error));
+  }, undefined, error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 
   }
   let requested = selected === 'male';

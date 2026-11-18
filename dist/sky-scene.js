@@ -1,5 +1,5 @@
-import {Shape,ShapeGeometry} from './vendor/three.module.js';
-import {outline,flightPhase} from './airliner.js';
+import {Group,Shape,ExtrudeGeometry,MeshStandardMaterial} from './vendor/three.module.js';
+import {flightPhase} from './airliner.js';
 import {weatherAt,cloudX} from './weather.js';
 import {Mesh,SphereGeometry,MeshBasicMaterial,Color,DataTexture,RGBAFormat,Sprite,SpriteMaterial,LinearFilter,Float32BufferAttribute,BackSide,BufferGeometry,Points,PointsMaterial,LineSegments,LineBasicMaterial} from './vendor/three.module.js';
 function texture(glow=false){const w=128,h=64,data=new Uint8Array(w*h*4);const noise=(x,y)=>{const v=Math.sin(x*127.1+y*311.7)*43758.5453;return v-Math.floor(v);};
@@ -13,10 +13,28 @@ export function createSky(scene,sun,ambient){
  const domeGeometry=new SphereGeometry(165,24,12),positions=domeGeometry.attributes.position;
  domeGeometry.setAttribute('color',new Float32BufferAttribute(new Float32Array(positions.count*3),3));
  const dome=new Mesh(domeGeometry,new MeshBasicMaterial({side:BackSide,depthWrite:false,vertexColors:true,fog:false}));dome.renderOrder=-10;scene.add(dome);
- const silhouette=new Shape();
- outline.forEach(([x,y],i)=>i?silhouette.lineTo(x,-y):silhouette.moveTo(x,-y));
- const jet=new Mesh(new ShapeGeometry(silhouette),new MeshBasicMaterial({color:0x667f96,fog:false}));
- jet.scale.setScalar(.12);scene.add(jet);
+ const jet=new Group();scene.add(jet);
+ const paint=color=>new MeshStandardMaterial({color,roughness:.48});
+ const ivory=paint(0xf3f3ef),blue=paint(0x15509a),glass=paint(0x193647);
+ const sphere=new SphereGeometry(1,24,16);
+ function pod(material,x,y,z,w,h,d){
+  const mesh=new Mesh(sphere,material);mesh.scale.set(w,h,d);mesh.position.set(x,y,z);jet.add(mesh);return mesh;
+ }
+ pod(ivory,0,0,0,.66,.72,4.9);
+ pod(glass,0,.30,3.56,.47,.35,.95);
+ function foil(points,y,material){
+  const shape=new Shape();points.forEach(([x,z],i)=>i?shape.lineTo(x,-z):shape.moveTo(x,-z));
+  const mesh=new Mesh(new ExtrudeGeometry(shape,{depth:.10,bevelEnabled:false}),material);
+  mesh.rotation.x=-Math.PI/2;mesh.position.y=y;jet.add(mesh);
+ }
+ for(const side of [-1,1]){
+  foil([[0,1.5],[side*5.6,-1.25],[side*5.5,-1.78],[0,-.65]],-.12,ivory);
+  foil([[0,-3],[side*2.22,-4.3],[side*2.12,-4.66],[0,-4.05]],.15,blue);
+  pod(blue,side*2.15,-.49,.04,.35,.38,1.15);
+  pod(glass,side*2.15,-.49,.89,.30,.31,.29);
+  for(let j=0;j<10;j++)pod(glass,side*.63,.13,2.5-j*.48,.045,.085,.105);
+ }
+ const fin=pod(blue,0,.62,-3.65,.10,.97,.62);fin.rotation.x=-.38;
  const gradient=new Color();
 
  const disc=new Mesh(new SphereGeometry(1.35,24,16),new MeshBasicMaterial({color:0xfff7d7,fog:false}));scene.add(disc);
@@ -30,7 +48,7 @@ export function createSky(scene,sun,ambient){
  const rainGeo=new BufferGeometry(),drops=new Float32Array(260*6);rainGeo.setAttribute('position',new Float32BufferAttribute(drops,3));const rain=new LineSegments(rainGeo,new LineBasicMaterial({color:0xc7e4ff,transparent:true,opacity:0,depthWrite:false}));scene.add(rain);
  const top=new Color(),horizon=new Color(),warm=new Color('#ffce9f'),white=new Color('#fff5dd');
  return s=>{const weather=weatherAt(s.time),{phase,night}=weather;
-  const flight=flightPhase(s.time);jet.visible=flight<1;jet.position.set(-110+220*flight,15+4*Math.sin(Math.PI*flight),-75);jet.rotation.z=.08*Math.cos(Math.PI*flight);
+  const flight=flightPhase(s.time);jet.visible=flight<1;jet.position.set(10-12*flight,10+2*flight,-145+170*flight);jet.rotation.set(.02,-.07,.13*Math.sin(Math.PI*flight));
   top.set(weather.a.top).lerp(new Color(weather.b.top),weather.mix);horizon.set(weather.a.horizon).lerp(new Color(weather.b.horizon),weather.mix);
   scene.background.copy(horizon);scene.fog.color.copy(horizon);
   for(let i=0;i<positions.count;i++){const blend=Math.pow(Math.max(0,Math.min(1,positions.getY(i)/165*2)),.65);gradient.copy(horizon).lerp(top,blend);domeGeometry.attributes.color.setXYZ(i,gradient.r,gradient.g,gradient.b);}domeGeometry.attributes.color.needsUpdate=true;
