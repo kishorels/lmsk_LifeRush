@@ -112,3 +112,47 @@ export function loadRunnerModel(parent) {
   }
   return render;
 }
+
+export function loadSchoolgirl(parent) {
+  let model, mixer, stride, requested = false;
+  function render(state, character, dt) {
+    if (character === 'female' && !requested) {
+      requested = true;
+      new GLTFLoader().load(new URL('./assets/schoolgirl.glb', import.meta.url).href, gltf => {
+        model = gltf.scene;
+        const clip = gltf.animations.find(animation => animation.name === 'Run');
+        // Keep forward travel under the game engine's control.
+        const hips = clip.tracks.find(track => track.name === 'mixamorigHips.position');
+        if (hips) {
+          for (let i = 3; i < hips.values.length; i += 3) {
+            hips.values[i] = hips.values[0];
+            hips.values[i+1] = hips.values[1];
+          }
+        }
+        mixer = new AnimationMixer(model);
+        stride = mixer.clipAction(clip).play();
+        model.traverse(node => {
+          if (node.isMesh) { node.frustumCulled = false; node.castShadow = true; }
+        });
+        model.visible = false;
+        parent.add(model);
+        render.model = model;
+      }, undefined, error => console.warn('Schoolgirl model could not load.', error));
+    }
+    if (!model) return false;
+    model.visible = character === 'female';
+    if (!model.visible) return false;
+    const running = state.mode === 'running';
+    const rolling = state.roll ? 1-state.roll/ROLL_DURATION : 0;
+    const crouch = state.slide || state.roll;
+    model.scale.set(1.22,crouch ? .76 : 1.22,1.22);
+    model.rotation.set(-Math.PI*2*rolling + (state.slide ? -.4 : 0),Math.PI,(state.lane-state.x)*.14);
+    model.position.y = .04 + .56*(1-Math.cos(2*Math.PI*rolling));
+    stride.paused = !running || Boolean(state.jump || state.drop || crouch);
+    if (state.mode === 'ready') stride.time = 0;
+    stride.timeScale = Math.min(1.6,state.speed/26);
+    mixer.update(Math.min(.05,dt || 0));
+    return true;
+  }
+  return render;
+}

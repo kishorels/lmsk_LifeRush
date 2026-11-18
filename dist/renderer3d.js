@@ -7,7 +7,7 @@ import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js';
 import {createCaptureScene} from './capture-scene.js';
 import {loadChaserModel} from './chaser-model.js';
-import {loadRunnerModel} from './runner-model.js';
+import {loadRunnerModel,loadSchoolgirl} from './runner-model.js';
 import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js';
 const COLORS=[0xffce36,0x73ffb3,0x8edcff];
 export function createRenderer(canvas){
@@ -26,7 +26,7 @@ export function createRenderer(canvas){
  const updateCampus=createCampus(scene);
  const updateSky=createSky(scene,sun,ambient);
  const runner=new T.Group();scene.add(runner);const body=new T.Group();runner.add(body);
- const updateRunnerModel=loadRunnerModel(runner);
+ const updateRunnerModel=loadRunnerModel(runner), updateSchoolgirl=loadSchoolgirl(runner);
  const updateChaserModel=loadChaserModel(scene);
  const capture=createCaptureScene(scene);
  const updateSchool=createSchoolEntrance(scene);
@@ -50,7 +50,7 @@ export function createRenderer(canvas){
  updateSchool(s);updateTraffic(s);updateSideTraffic(s);
  updateCampus(s);const weather=updateSky(s);road.material.roughness=.9-weather.rain*.55;asphalt.offset.y=-s.distance/200*95;
  updateChaserModel(s);
- runner.position.set(s.x*2.2,height(s),0);body.visible=!updateRunnerModel(s,character,frameDt);if(body.visible){const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=(s.lane-s.x)*-.16;torso.material=mat(character==='female'?0xd77bf2:0xffcb38);pony.visible=character==='female';cap.visible=character!=='female';legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{a.rotation.x=s.slide?-1.6:s.jump?-1.6:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):(i?-.1:.1);});}
+ runner.position.set(s.x*2.2,height(s),0);const maleVisible=updateRunnerModel(s,character,frameDt),femaleVisible=updateSchoolgirl(s,character,frameDt);body.visible=!(maleVisible||femaleVisible);if(body.visible){const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=(s.lane-s.x)*-.16;torso.material=mat(character==='female'?0xd77bf2:0xffcb38);pony.visible=character==='female';cap.visible=character!=='female';legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{a.rotation.x=s.slide?-1.6:s.jump?-1.6:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):(i?-.1:.1);});}
  let n=0;for(const o of s.items){if(o.type==='bus'||o.type==='sideVehicle')continue;const z=o.z-s.distance;if(o.done||z< -3||z>125)continue;const g=pool[n++];if(!g)break;const key=o.type+':'+o.skill+':'+o.variant;if(g.userData.key!==key){obstacle(g,o);g.userData.key=key;}g.visible=true;g.position.set(o.lane*2.2,0,-z);g.rotation.y=o.type==='skill'?s.time*2:0;if(o.type==='skill')g.position.y=Math.sin(s.time*3+o.z)*.13;}for(;n<pool.length;n++)pool[n].visible=false;
  const count=s.skills.reduce((a,b)=>a+b,0);if(count>total){burst=.22;for(const p of particles){p.life=.5+Math.random()*.3;p.m.visible=true;p.m.position.set(s.x*2.2,1.2,0);p.v.set((Math.random()-.5)*4,Math.random()*4,(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);camera.position.x+=(s.x*.65-camera.position.x)*(1-Math.exp(-8*(dt||.016)));if(s.time===0)trackCameraY=0;
@@ -66,7 +66,7 @@ export function createRenderer(canvas){
        knee.rotation.x*=1-lift;
      });
    }
-   capture.frame(camera,s,runner,body.visible?null:updateRunnerModel.model,body,updateChaserModel.root,updateChaserModel.model);
+   capture.frame(camera,s,runner,body.visible?null:(femaleVisible?updateSchoolgirl.model:updateRunnerModel.model),body,updateChaserModel.root,updateChaserModel.model);
    stage.show([runner,updateChaserModel.root],camera);
  }
  renderer.render(scene,camera);lastMode=s.mode;};
