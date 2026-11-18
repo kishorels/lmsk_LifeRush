@@ -71,6 +71,13 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 .game.mode-running #overlay {
   display: none !important;
 }
+
+.game.mode-gameover #splash-screen,
+.game.mode-gameover #select-screen,
+.game.mode-gameover #hud-sub-bar,
+.game.mode-gameover #touch-controls {
+  display: none !important;
+}
 .game.mode-running #hud-top-bar {
   display: flex !important;
 }
