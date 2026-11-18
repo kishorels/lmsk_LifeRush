@@ -1,10 +1,10 @@
 import {createSound} from './sound.js';
-import {fresh,action,step,height,career,chaseRemaining,isCapture,SCHOOL_GATE,SCHOOL_VAN} from './engine.js';
+import {fresh,action,step,height,career,isCapture,SCHOOL_GATE,SCHOOL_VAN} from './engine.js';
 import {createRenderer} from './renderer3d.js';
 import {createLiteRenderer} from './renderer-lite.js';
 const $=id=>document.getElementById(id),canvas=$('world');
 let draw;try{draw=createRenderer(canvas);}catch(error){console.warn('Using lightweight graphics:',error.message);draw=createLiteRenderer(canvas);document.querySelector('.edition').textContent='COAST EDITION · LITE';}
-const chaseNotice = $('chase-notice'), game = canvas.closest('.game');
+const game = canvas.closest('.game');
 let s=fresh(),best=0,character='male',sound=true,prev=0,w=600,h=700,lastCount=0;
 try{best=Number(localStorage.getItem('runverse-best'))||0;character=localStorage.getItem('runverse-character')==='female'?'female':'male';}catch{}
 const save=()=>{try{localStorage.setItem('runverse-best',best);localStorage.setItem('runverse-character',character);}catch{}};
@@ -25,12 +25,6 @@ function input(a){const before=[s.jump,s.slide,s.roll,s.drop,s.lane];action(s,a)
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();input(b.dataset.action);}));
 window.addEventListener('keydown',e=>{if(s.mode!=='running'&&e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;const a={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump',ArrowDown:'slide',s:'slide'}[e.key];if(a){e.preventDefault();if(!e.repeat)input(a);}if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}});
 let touch;canvas.addEventListener('pointerdown',e=>{touch={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointerup',e=>{if(!touch)return;const x=e.clientX-touch.x,y=e.clientY-touch.y;if(Math.max(Math.abs(x),Math.abs(y))>20)input(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'slide':'jump');touch=null;});canvas.addEventListener('pointercancel',()=>touch=null);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
-function updateChaseNotice() {
-  const warning=$('encounter-notice');warning.hidden=!(s.mode==='running'&&s.warning&&s.time<s.warning.until);if(!warning.hidden)warning.textContent=s.warning.side===1?'← ESCAPE LEFT · SIDE TRAFFIC':'SIDE TRAFFIC · ESCAPE RIGHT →';
-  const active = s.mode === 'running' && chaseRemaining(s) > 0;
-  chaseNotice.hidden = !active;
-  game.classList.toggle('capture', isCapture(s));
-}
 function frame(t) {
   const dt = prev ? (t-prev)/1000 : 0;
   prev = t;
@@ -39,11 +33,10 @@ function frame(t) {
   step(s, dt);
   effects.update(s);
   if(old==='running' && s.mode==='falling')effects.play('hit',s.cause);
-  updateChaseNotice();
+  game.classList.toggle('capture', isCapture(s));
   if (old !== 'crashed' && s.mode === 'crashed') crash();
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) effects.play('laugh');
 
-  if(distanceBefore<75 && s.distance>=75) $('toast').textContent='Oncoming school buses · Watch the headlights and switch lanes';
   if (coinsBefore !== s.coins) effects.play('coin');
   if (s.mode === 'running' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
     $('toast').textContent = 'Campus pickup zone · Keep right to climb the ramp';
@@ -60,11 +53,9 @@ function frame(t) {
   }
   if (s.firstHitAt !== null && s.firstHitAt !== firstHitBefore) {
     effects.play('hit',s.cause);
-    $('toast').textContent = s.cause==='bus'?'Moved to a clear lane · Escape the mutant!':'One hit left. Keep running!';
   } else if (firstHitBefore !== null && s.firstHitAt === null) {
     $('toast').textContent = 'You escaped. Both hearts restored.';
   }
-  if(s.mode==='running'&&s.warning&&s.time<s.warning.until)$('toast').textContent=s.warning.side===1?'SIDE TRAFFIC + BUS · SWIPE LEFT ←':'SIDE TRAFFIC + BUS · SWIPE RIGHT →';
   const health = $('health'), left = 2-s.damage;
   if (health.dataset.left !== String(left)) {
     health.dataset.left = left;
