@@ -23,7 +23,7 @@ function crash(){best=Math.max(best,Math.floor(s.distance));save();effects.play(
 $('start').onclick=()=>s.mode==='paused'?resume():start();$('restart').onclick=start;$('pause').onclick=()=>s.mode==='paused'?resume():pause();
 function input(a){const before=[s.jump,s.slide,s.roll,s.drop,s.lane];action(s,a);if(s.mode==='running'&&(s.jump!==before[0]||s.slide!==before[1]||s.roll!==before[2]||s.drop!==before[3]||s.lane!==before[4]))effects.play(a==='jump'?'jump':a==='slide'?'slide':'lane');}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();input(b.dataset.action);}));
-window.addEventListener('keydown',e=>{if(e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;const a={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump',ArrowDown:'slide',s:'slide'}[e.key];if(a){e.preventDefault();if(!e.repeat)input(a);}if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}});
+window.addEventListener('keydown',e=>{if(s.mode!=='running'&&e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;const a={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump',ArrowDown:'slide',s:'slide'}[e.key];if(a){e.preventDefault();if(!e.repeat)input(a);}if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}});
 let touch;canvas.addEventListener('pointerdown',e=>{touch={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointerup',e=>{if(!touch)return;const x=e.clientX-touch.x,y=e.clientY-touch.y;if(Math.max(Math.abs(x),Math.abs(y))>20)input(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'slide':'jump');touch=null;});canvas.addEventListener('pointercancel',()=>touch=null);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
 function updateChaseNotice() {
   const warning=$('encounter-notice');warning.hidden=!(s.mode==='running'&&s.warning&&s.time<s.warning.until);if(!warning.hidden)warning.textContent=s.warning.side===1?'← ESCAPE LEFT · SIDE TRAFFIC':'SIDE TRAFFIC · ESCAPE RIGHT →';
@@ -38,7 +38,7 @@ function frame(t) {
   const distanceBefore = s.distance, coinsBefore = s.coins;
   step(s, dt);
   effects.update(s);
-  if(old==='running' && s.mode==='falling')effects.play('hit');
+  if(old==='running' && s.mode==='falling')effects.play('hit',s.cause);
   updateChaseNotice();
   if (old !== 'crashed' && s.mode === 'crashed') crash();
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) effects.play('laugh');
@@ -59,7 +59,7 @@ function frame(t) {
     if (!s.hit) $('toast').textContent = 'Skill collected. Your future is taking shape.';
   }
   if (s.firstHitAt !== null && s.firstHitAt !== firstHitBefore) {
-    effects.play('hit');
+    effects.play('hit',s.cause);
     $('toast').textContent = s.cause==='bus'?'Moved to a clear lane · Escape the mutant!':'One hit left. Keep running!';
   } else if (firstHitBefore !== null && s.firstHitAt === null) {
     $('toast').textContent = 'You escaped. Both hearts restored.';

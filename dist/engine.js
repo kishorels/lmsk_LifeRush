@@ -5,16 +5,16 @@ export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 2.65;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
 export const SCHOOL_GATE = 11;
-export const SCHOOL_VAN = Object.freeze({ lane: 1, ramp: 32, rear: 42, front: 54, roof: 1.72, width: 1.94 });
+export const SCHOOL_VAN = Object.freeze({ lane: 1, ramp: 22, rear: 32, front: 54, roof: 1.72, width: 1.94 });
 export function routeVans(distance) { return [{...SCHOOL_VAN,id:'entry'},...repeatedVans(distance)]; }
-export const ROOF_COINS = Object.freeze([44, 47, 50, 53]);
+export const ROOF_COINS = Object.freeze([35, 41, 47, 53]);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export function fresh() {
   return {
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 28,
     jump: 0, slide: 0, roll: 0, drop: null, jumpBuffer: 0, motionId: 0, lastGroundDown: -Infinity,
-    floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
+    roofGrace: 0, floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
     damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 100,
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
@@ -27,13 +27,13 @@ export function action(s, input) {
   if (input === 'right') s.lane = clamp(s.lane + 1, -1, 1);
   if (s.hit) return;
   if (input === 'jump') {
-    if(s.jump || s.drop || s.fallSpeed) {
+    if(s.jump || s.drop || (s.fallSpeed && !s.roofGrace)) {
       // Queue near-landing inputs without granting an unlimited midair jump.
       s.jumpBuffer=.18;
       return;
     }
     s.slide=s.roll=0;
-    s.jump=JUMP_DURATION;s.jumpBuffer=0;s.motionId++;
+    s.fallSpeed=s.roofGrace=0;s.jump=JUMP_DURATION;s.jumpBuffer=0;s.motionId++;
     s.lastGroundDown=-Infinity;
     return;
   }
@@ -112,6 +112,8 @@ function updateElevation(s, dt) {
     s.fallSpeed = 0;
   }
 
+  s.roofGrace = surface>0 && Math.abs(height(s)-surface)<.02 && !s.jump && !s.drop && !s.fallSpeed
+    ? .12 : Math.max(0,s.roofGrace-dt);
   for(const van of routeVans(s.distance)) {
     if(van.id==='entry')continue;
     for(let n=0;n<4;n++) {
@@ -272,7 +274,7 @@ export function step(s, dt, random = Math.random) {
     s.items.push(...trafficPattern(s.next,s.trafficIndex++));s.next+=160;
   }
   for(const item of s.items){
-    if(item.roofRide&&!item.started&&s.distance>=item.activate){item.started=true;item.velocity=-s.speed*.35;item.z=s.distance+14;}
+    if(item.roofRide&&!item.started&&s.distance>=item.activate){item.started=true;item.velocity=-s.speed*.35;}
     if(item.encounter&&!item.started&&s.distance>=item.trigger){
       item.started=true;item.startedAt=s.time;
       item.z=s.distance+(s.speed+(item.velocity||0))*1.45;

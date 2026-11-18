@@ -93,7 +93,7 @@ export function createSchoolEntrance(scene) {
   }
   sign(campus,'PICKUP ZONE','RAMP  ·  RIGHT LANE',4.54,2.72,-33,2.36,.74);
   part(campus,0x315763,4.54,1.29,-33,.10,2.58,.10);
-  for(const mark of [28.5,30.5,32.3]){
+  for(const mark of [16,18,20]){
     for(const side of [-1,1]){
       part(campus,0xffd663,2.2+side*.23,.111,-mark,.13,.022,.68).rotation.y=side*.65;
     }

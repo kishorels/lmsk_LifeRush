@@ -1,3 +1,5 @@
+import {Shape,ShapeGeometry} from './vendor/three.module.js';
+import {outline,flightPhase} from './airliner.js';
 import {weatherAt,cloudX} from './weather.js';
 import {Mesh,SphereGeometry,MeshBasicMaterial,Color,DataTexture,RGBAFormat,Sprite,SpriteMaterial,LinearFilter,Float32BufferAttribute,BackSide,BufferGeometry,Points,PointsMaterial,LineSegments,LineBasicMaterial} from './vendor/three.module.js';
 function texture(glow=false){const w=128,h=64,data=new Uint8Array(w*h*4);const noise=(x,y)=>{const v=Math.sin(x*127.1+y*311.7)*43758.5453;return v-Math.floor(v);};
@@ -11,6 +13,10 @@ export function createSky(scene,sun,ambient){
  const domeGeometry=new SphereGeometry(165,24,12),positions=domeGeometry.attributes.position;
  domeGeometry.setAttribute('color',new Float32BufferAttribute(new Float32Array(positions.count*3),3));
  const dome=new Mesh(domeGeometry,new MeshBasicMaterial({side:BackSide,depthWrite:false,vertexColors:true,fog:false}));dome.renderOrder=-10;scene.add(dome);
+ const silhouette=new Shape();
+ outline.forEach(([x,y],i)=>i?silhouette.lineTo(x,-y):silhouette.moveTo(x,-y));
+ const jet=new Mesh(new ShapeGeometry(silhouette),new MeshBasicMaterial({color:0x667f96,fog:false}));
+ jet.scale.setScalar(.12);scene.add(jet);
  const gradient=new Color();
 
  const disc=new Mesh(new SphereGeometry(1.35,24,16),new MeshBasicMaterial({color:0xfff7d7,fog:false}));scene.add(disc);
@@ -24,6 +30,7 @@ export function createSky(scene,sun,ambient){
  const rainGeo=new BufferGeometry(),drops=new Float32Array(260*6);rainGeo.setAttribute('position',new Float32BufferAttribute(drops,3));const rain=new LineSegments(rainGeo,new LineBasicMaterial({color:0xc7e4ff,transparent:true,opacity:0,depthWrite:false}));scene.add(rain);
  const top=new Color(),horizon=new Color(),warm=new Color('#ffce9f'),white=new Color('#fff5dd');
  return s=>{const weather=weatherAt(s.time),{phase,night}=weather;
+  const flight=flightPhase(s.time);jet.visible=flight<1;jet.position.set(-110+220*flight,15+4*Math.sin(Math.PI*flight),-75);jet.rotation.z=.08*Math.cos(Math.PI*flight);
   top.set(weather.a.top).lerp(new Color(weather.b.top),weather.mix);horizon.set(weather.a.horizon).lerp(new Color(weather.b.horizon),weather.mix);
   scene.background.copy(horizon);scene.fog.color.copy(horizon);
   for(let i=0;i<positions.count;i++){const blend=Math.pow(Math.max(0,Math.min(1,positions.getY(i)/165*2)),.65);gradient.copy(horizon).lerp(top,blend);domeGeometry.attributes.color.setXYZ(i,gradient.r,gradient.g,gradient.b);}domeGeometry.attributes.color.needsUpdate=true;

@@ -28,7 +28,7 @@ export function createTraffic(scene) {
   }
   for(const [id,g]of parked)if(!visible.has(id)){scene.remove(g);parked.delete(id);}
   const live=new Set();
-  for(const o of s.items){if(o.type!=='bus'||((o.encounter||o.roofRide)&&!o.started)||o.z-s.distance>140)continue;live.add(o);if(!moving.has(o)){
+  for(const o of s.items){if(o.type!=='bus'||(o.encounter&&!o.started)||o.z-s.distance>140)continue;live.add(o);if(!moving.has(o)){
    let model;
    if(o.roofRide){model=new Group();model.userData.captureObstacle=true;const bus=buildBus(o.length,o.roof,false);bus.rotation.y=Math.PI;bus.position.z=-o.length;model.add(bus);model.userData.wheels=bus.userData.wheels;model.userData.coins=[];
     for(let i=0;i<4;i++){const c=part(model,0xffcb32,0,o.roof+.6,-4-i*4,.23,.075,.23,cylinder);c.rotation.x=Math.PI/2;model.userData.coins.push(c);}scene.add(model);

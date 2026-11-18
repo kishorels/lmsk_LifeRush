@@ -14,6 +14,7 @@ export function trafficPattern(base,index) {
     return [
       {z:base+110,lane,type:'sideVehicle',variant:['cycle','bike','car'][Math.floor(index/2)%3],trigger,encounter:true,started:false,length:3.4,done:false},
       {z:base+140,lane:0,type:'bus',velocity:22,trigger,encounter:true,started:false,length:10,done:false},
+      {z:base+130,lane,type:'bus',velocity:20,activate:base+45,length:10,done:false},
       {z:base+145,lane,type:['jump','slide','block'][Math.floor(index/2)%3],variant:'scaffold',done:false},
       {z:base+122,lane:-lane,type:'skill',skill:index%3,done:false}
     ];
@@ -23,6 +24,7 @@ export function trafficPattern(base,index) {
   // hide an approaching bus or ask the player to slide into its path.
   return [
     {z:base+130,lane,type:'bus',velocity:18,activate:base-25,length:10,done:false},
+    {z:base+235,lane:roofLane,type:'bus',velocity:18,activate:base+65,length:10,done:false},
     {z:base+190,lane,type:'bus',velocity:24,activate:base-25,length:10,done:false},
     {id:'moving-roof-'+index,z:base+70,lane:roofLane,type:'bus',roofRide:true,started:false,activate:base+56,length:22,roof:2.8,done:false},
     {z:base+158,lane:roofLane,type:Math.floor(index/2)%2?'jump':'slide',variant:Math.floor(index/2)%2?'hurdle':'scaffold',done:false},
