@@ -14,8 +14,8 @@ export function trafficPattern(base,index) {
   return [
     {z:base+130,lane,type:'bus',velocity:18,activate:base-25,length:10,done:false},
     {z:base+190,lane,type:'bus',velocity:24,activate:base-25,length:10,done:false},
-    {z:base+108,lane:roofLane,type:index%2?'slide':'jump',done:false},
-    {z:base+148,lane:roofLane,type:index%2?'jump':'slide',done:false},
+    {z:base+108,lane:roofLane,type:index%2?'slide':'jump',variant:index%2?'scaffold':['bench','hurdle'][Math.floor(index/2)%2],done:false},
+    {z:base+148,lane:roofLane,type:index%2?'jump':'slide',variant:index%2?['bench','hurdle'][Math.floor(index/2)%2]:'scaffold',done:false},
     {z:base+82,lane:-roofLane-lane,type:'skill',skill:index%3,done:false},
   ];
 }

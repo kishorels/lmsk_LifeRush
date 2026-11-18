@@ -14,21 +14,23 @@ export function createCampus(scene) {
   }
   const m=new Mesh(cube,signs.get(label));m.position.set(x,y,z+.066);m.scale.set(width,.55,.01);g.add(m);
  }
- function tree(g,x,z){part(g,0x8c6d49,x,1.1,z,.17,2.2,.17,cyl);part(g,0x59815a,x,2.9,z,1.3,1.6,1.1,sphere);part(g,0x789a64,x-.65,2.65,z,.9,1.0,.9,sphere);}
+ function tree(g,x,z){part(g,0x8c6d49,x,1.1,z,.17,2.2,.17,cyl);part(g,0x329849,x,2.9,z,1.3,1.6,1.1,sphere);part(g,0x77c852,x-.65,2.65,z,.9,1.0,.9,sphere);}
  function bench(g,x,z){part(g,0x9c7651,x,.55,z,1.9,.15,.55);part(g,0xa98760,x,.95,z-.2,1.9,.58,.1);for(const dx of [-.7,.7])part(g,0x455b52,x+dx,.3,z,.10,.6,.5);}
  function building(g,side,label){
   const x=side*10;
-  part(g,0xe0cfaa,x,2.8,-3,8,5.6,20);part(g,0x7f9989,x,5.7,-3,8.4,.24,20.4);part(g,0xf3ead2,x,.38,-3,8.2,.65,20.2);
+  part(g,0xffd888,x,2.8,-3,8,5.6,20);part(g,0x208d9e,x,5.7,-3,8.4,.24,20.4);part(g,0xf3ead2,x,.38,-3,8.2,.65,20.2);
+  for(const y of [2.65,5.25])part(g,0xf3ead2,side*5.78,y,-3,.22,.16,20);
+  for(let i=0;i<6;i++){const z=5-i*3.1;part(g,0x208d9e,side*5.63,2.48,z,.68,.12,2);part(g,0xf3ead2,side*5.81,1.72,z,.03,.055,1.6);}
   for(let level=0;level<2;level++)for(let i=0;i<6;i++){
-   const z=5-i*3.1;part(g,0xf7edda,side*5.96,1.7+level*2.45,z,.12,1.38,1.85);part(g,0x5d8190,side*5.87,1.7+level*2.45,z,.05,1.13,1.60);part(g,0xd8dfd4,side*5.83,1.7+level*2.45,z,.025,1.1,.06);
+   const z=5-i*3.1;part(g,0xf7edda,side*5.96,1.7+level*2.45,z,.12,1.38,1.85);part(g,0x276fa0,side*5.87,1.7+level*2.45,z,.05,1.13,1.60);part(g,0xd8dfd4,side*5.83,1.7+level*2.45,z,.025,1.1,.06);
   }
-  for(const dx of [-2.6,-.9,.9,2.6]){part(g,0xf7edda,x+dx,4,7.04,1.3,1.5,.1);part(g,0x5d8190,x+dx,4,7.1,1.1,1.25,.04);}
+  for(const dx of [-2.6,-.9,.9,2.6]){part(g,0xf7edda,x+dx,4,7.04,1.3,1.5,.1);part(g,0x276fa0,x+dx,4,7.1,1.1,1.25,.04);}
   part(g,0x37595b,x,1.15,7.08,1.4,2.3,.12);sign(g,label,x,2.9,7.13,4.4);
   for(let i=0;i<5;i++)part(g,0xe9dfc7,side*5.4,1.25,5-i*4,.22,2.5,.22);
-  part(g,0x79978a,side*5.3,2.58,-3,1.5,.18,20);
+  part(g,0xe8794e,side*5.3,2.58,-3,1.5,.18,20);
  }
  function field(g,side){const x=side*11;
-  part(g,0x608e69,x,.12,-2,12,.08,24);
+  part(g,0x3da85a,x,.12,-2,12,.08,24);
   for(const dx of [-5,5])part(g,0xe6e7cc,x+dx,.17,-2,.06,.02,22);
   for(const z of [-13,-2,9])part(g,0xe6e7cc,x,.17,z,10,.02,.06);
   for(const z of [-12.8,8.8]){for(const dx of [-1.5,1.5])part(g,0xe5e6d9,x+dx,1.1,z,.10,2.2,.10);part(g,0xe5e6d9,x,2.2,z,3.1,.10,.10);}
@@ -51,6 +53,7 @@ export function createCampus(scene) {
    part(g,0x9ea98d,side*4.9,.24,0,.25,.48,32);part(g,0x476d59,side*4.9,1.03,0,.06,.07,32);
    for(let i=0;i<4;i++){part(g,0xe9e3ca,side*1.1,.105,12-i*8,.06,.018,3.5);}
   }
+  for(const side of [-1,1]){for(let i=0;i<16;i++){const z=15-i*2;part(g,0xcac9b3,side*4.3,.177,z,1.25,.008,.025);}for(const z of [-8,8]){part(g,0x455b52,side*4.65,2.1,z,.07,4.2,.07);part(g,0xf3ead2,side*4.4,4.2,z,.65,.12,.35);}}
   if(kind===0){building(g,-1,'CLASSROOM BLOCK');courtyard(g,1);}
   if(kind===1){field(g,-1);building(g,1,'SCIENCE LAB');}
   if(kind===2){building(g,-1,'SCHOOL LIBRARY');field(g,1);}
