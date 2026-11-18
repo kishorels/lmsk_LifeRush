@@ -70,13 +70,23 @@ export function vanSurface(distance, lanePosition) {
   return surface;
 }
 
+export function busSurface(s){
+ let surface=0;
+ for(const bus of s.items){
+  if(bus.type!=='bus'||((bus.encounter||bus.roofRide)&&!bus.started))continue;
+  if(Math.abs(s.x-bus.lane)*2.2>.94||s.distance<bus.z||s.distance>=bus.z+bus.length)continue;
+  surface=Math.max(surface,bus.roof||2.8);
+ }
+ return surface;
+}
+
 function updateElevation(s, dt) {
   const previous = height(s);
   const jumped = s.jump > 0;
   const dropped = s.drop !== null;
   s.jump = Math.max(0, s.jump-dt);
   if (dropped) s.drop.remaining = Math.max(0, s.drop.remaining-dt);
-  const surface = vanSurface(s.distance, s.x);
+  const surface = Math.max(vanSurface(s.distance, s.x),busSurface(s));
   const wasFalling = s.fallSpeed > 0;
   if (wasFalling) {
     s.fallSpeed += 18*dt;
@@ -110,6 +120,11 @@ function updateElevation(s, dt) {
         s.collected.push(id);s.coins++;
       }
     }
+  }
+  for(const bus of s.items){if(!bus.roofRide||!bus.started)continue;
+   for(let i=0;i<4;i++){const id=bus.id+':'+i,z=bus.z+4+i*4;
+    if(!s.collected.includes(id)&&Math.abs(s.distance-z)<1.2&&Math.abs(s.x-bus.lane)<.34&&height(s)>=bus.roof-.12&&height(s)<bus.roof+1.1){s.collected.push(id);s.coins++;}
+   }
   }
   ROOF_COINS.forEach((distance,index) => {
     if ((s.roofCoins & (1<<index)) || Math.abs(s.distance-distance) > .60 ||
@@ -174,7 +189,8 @@ export function hits(s, obstacle) {
   if (Math.abs(s.x - lane) > .48) return false;
   if (obstacle.type === 'jump') return height(s) < 1.05;
   if (obstacle.type === 'slide') return !(s.slide || s.roll);
-  return obstacle.type === 'block' || obstacle.type === 'bus' || obstacle.type === 'sideVehicle';
+  if(obstacle.type==='bus')return height(s)<(obstacle.roof||2.8)-.12;
+  return obstacle.type === 'block' || obstacle.type === 'sideVehicle';
 }
 
 function advanceDrop(s, dt) {
@@ -252,6 +268,19 @@ export function step(s, dt, random = Math.random) {
   s.roll = Math.max(0, s.roll - dt);
   s.hit = Math.max(0, s.hit - dt);
   s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
+  if(s.distance+120>s.next) {
+    s.items.push(...trafficPattern(s.next,s.trafficIndex++));s.next+=160;
+  }
+  for(const item of s.items){
+    if(item.roofRide&&!item.started&&s.distance>=item.activate){item.started=true;item.velocity=-s.speed*.35;item.z=s.distance+14;}
+    if(item.encounter&&!item.started&&s.distance>=item.trigger){
+      item.started=true;item.startedAt=s.time;
+      item.z=s.distance+(s.speed+(item.velocity||0))*1.45;
+      s.warning={until:s.time+1.45,side:item.type==='sideVehicle'?item.lane:s.warning?.side};
+    }
+    if(item.velocity && ((item.encounter||item.roofRide)?item.started:s.distance>=item.activate))item.z-=item.velocity*dt;
+  }
+
   updateElevation(s, dt);
   if(s.jumpBuffer>0 && !s.jump && !s.drop && !s.fallSpeed && !s.hit)action(s,'jump');
   for(const van of routeVans(s.distance)) {
@@ -262,17 +291,6 @@ export function step(s, dt, random = Math.random) {
       if(van.id==='entry')s.vanHit=true;
       if(s.mode!=='running')return;
     }
-  }
-  if(s.distance+120>s.next) {
-    s.items.push(...trafficPattern(s.next,s.trafficIndex++));s.next+=160;
-  }
-  for(const item of s.items){
-    if(item.encounter&&!item.started&&s.distance>=item.trigger){
-      item.started=true;item.startedAt=s.time;
-      item.z=s.distance+(s.speed+(item.velocity||0))*1.45;
-      s.warning={until:s.time+1.45,side:item.type==='sideVehicle'?item.lane:s.warning?.side};
-    }
-    if(item.velocity && (item.encounter?item.started:s.distance>=item.activate))item.z-=item.velocity*dt;
   }
 
   for (const obstacle of s.items) {

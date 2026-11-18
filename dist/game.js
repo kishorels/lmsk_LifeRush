@@ -51,6 +51,7 @@ function frame(t) {
   if (s.mode === 'running' && distanceBefore < SCHOOL_VAN.rear && s.distance >= SCHOOL_VAN.rear && s.floor > 1) {
     $('toast').textContent = 'Roof route · Follow the coins and run off the far end';
   }
+  if(s.mode==='running'&&s.items.some(o=>o.roofRide&&o.started&&o.lane===s.lane&&o.z-s.distance<20&&o.z+o.length>s.distance))$('toast').textContent='Jump onto the moving bus · Follow the roof coins';
   const count = s.skills.reduce((a,b) => a+b, 0);
   if (count > lastCount) {
     effects.play('coin');
