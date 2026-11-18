@@ -3,6 +3,7 @@ import math
 import sys
 import bpy
 import bmesh
+from mathutils import Vector
 
 source, target = sys.argv[-2:]
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -61,7 +62,10 @@ def rings(name, levels, mat, bone, pleats=False):
     obj=bpy.data.objects.new(name,mesh)
     bpy.context.collection.objects.link(obj)
     mesh.materials.append(mat)
+    for face in mesh.polygons:
+        face.use_smooth = True
     attach(obj,bone)
+    return obj
 
 def oval(name, pos, scale, mat, bone, tilt=0):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=16,ring_count=10,location=pos)
@@ -73,20 +77,68 @@ def oval(name, pos, scale, mat, bone, tilt=0):
     obj.data.materials.append(mat)
     attach(obj,bone)
 
-rings('Pleated skirt',[(.54,.34,.27),(.64,.32,.25),(.99,.215,.174),(1.045,.207,.168)],navy,'Hips',True)
-for z in [.565,.59]:
-    r=.34-(z-.54)*.2
-    rings('Woven hem stripe',[(z,r+.002,r-.068),(z+.006,r+.002,r-.068)],white,'Hips',True)
-rings('Blouse',[(.99,.215,.175),(1.16,.213,.17),(1.34,.245,.188),(1.43,.214,.16),(1.49,.087,.09)],blue,'Spine1')
-rings('Waistband',[(.993,.22,.18),(1.04,.215,.175)],navy,'Hips')
-rings('Sailor collar',[(1.385,.237,.183),(1.44,.218,.164),(1.492,.084,.091)],navy,'Spine2')
-rings('Collar piping',[(1.40,.235,.182),(1.408,.233,.18)],white,'Spine2')
-for side,sign in [('Left',1),('Right',-1)]:
-    oval('Puff sleeve',(.243*sign,.05,1.41),(.111,.115,.108),blue,side+'Arm')
-    oval('Sleeve cuff',(.324*sign,.055,1.404),(.021,.085,.082),navy,side+'Arm')
-    oval('Bow loop',(.051*sign,-.151,1.365),(.065,.031,.045),navy,'Spine2',sign*.4)
-    oval('Ribbon tail',(.032*sign,-.163,1.31),(.019,.021,.054),navy,'Spine2',-sign*.3)
-oval('Bow knot',(0,-.174,1.364),(.024,.021,.023),white,'Spine2')
+# Shorter, softer folds taper into the waist, with both stripes following the folds.
+def skirt_ring(z, extra=0):
+    t=(1.045-z)/.47
+    return z,.179+.108*t+extra,.146+.082*t+extra
+
+rings('Pleated skirt',[skirt_ring(z) for z in [.575,.60,.70,.83,.96,1.045]],navy,'Hips',True)
+for z in [.599,.619]:
+    rings('Hem braid',[skirt_ring(z,.0018),skirt_ring(z+.006,.0018)],white,'Hips',True)
+blouse=rings('Tailored cotton blouse',[(1.003,.177,.145),(1.06,.181,.148),
+    (1.15,.169,.142),(1.24,.184,.153),(1.33,.201,.156),
+    (1.407,.206,.141),(1.45,.169,.115),(1.49,.081,.085)],blue,'Spine1')
+rings('Waistband',[(1.011,.184,.151),(1.048,.181,.149)],navy,'Hips')
+
+# Skin each sleeve across the elbow using actual bind joints, including the forearm
+# that the original costumed character doesn't model underneath its clothing.
+def sleeve(side):
+    names=[side+n for n in ('Arm','ForeArm','Hand')]
+    joints=[rig.matrix_world@rig.data.bones['mixamorig:'+n].head_local for n in names]
+    rows=[(0,.086),(.16,.094),(.43,.081),(.74,.067),(1,.057),
+          (1.28,.054),(1.58,.049),(1.85,.039),(2.025,.034)]
+    verts=[];faces=[];weights=[]
+    for t,r in rows:
+        seg=min(int(t),1)
+        center=joints[seg].lerp(joints[seg+1],t-seg)
+        axis=(joints[seg+1]-joints[seg]).normalized()
+        u=axis.cross(Vector((0,0,1))).normalized();v=axis.cross(u)
+        for i in range(24):
+            a=i*math.tau/24
+            verts.append(center+r*(u*math.cos(a)+v*math.sin(a)))
+            weights.append(max(0,min(1,(t-.74)/.54)))
+    for j in range(len(rows)-1):
+        for i in range(24):
+            n=j*24+i;k=j*24+(i+1)%24;faces.append((n,k,k+24,n+24))
+    mesh=bpy.data.meshes.new('Shaped sleeve');mesh.from_pydata(verts,[],faces)
+    obj=bpy.data.objects.new(side+' sleeve',mesh);bpy.context.collection.objects.link(obj)
+    for m in (blue,navy):mesh.materials.append(m)
+    for poly in mesh.polygons:
+        poly.use_smooth=True;poly.material_index=int(poly.index>=24*(len(rows)-2))
+    attach(obj,names[0])
+    arm=obj.vertex_groups[0];fore=obj.vertex_groups.new(name='mixamorig:'+names[1])
+    for i,w in enumerate(weights):
+        arm.add([i],1-w,'REPLACE');fore.add([i],w,'REPLACE')
+
+# A broad rectangular sailor flap and twin U-shaped embroidered stripes face the player.
+def back_panel(name,coords,mat):
+    mesh=bpy.data.meshes.new(name);mesh.from_pydata(coords,[],[(0,1,2,3)])
+    obj=bpy.data.objects.new(name,mesh);bpy.context.collection.objects.link(obj)
+    mesh.materials.append(mat);attach(obj,'Spine1')
+for sign,side in [(1,'Left'),(-1,'Right')]:
+    sleeve(side)
+    oval('Bow loop',(.048*sign,-.133,1.364),(.06,.028,.036),navy,'Spine1',sign*.4)
+    oval('Ribbon tail',(.028*sign,-.138,1.31),(.017,.018,.055),navy,'Spine1',-sign*.3)
+oval('Bow knot',(0,-.149,1.364),(.022,.02,.02),white,'Spine1')
+levels=[(1.46,.115,.091),(1.415,.162,.143),(1.35,.155,.176),(1.245,.14,.179)]
+for n,((z,w,y),(zz,ww,yy)) in enumerate(zip(levels,levels[1:])):
+    def panel_strip(name,l,r,mat,offset):
+        back_panel(name,[(l*w,y+offset,z),(r*w,y+offset,z),(r*ww,yy+offset,zz),(l*ww,yy+offset,zz)],mat)
+    panel_strip('Sailor flap',-1,1,navy,0)
+    for x in (.81,.91):
+        for sign in (-1,1):panel_strip('Collar braid',sign*x-.015,sign*x+.015,white,.0012)
+for z in (1.256,1.269):
+    back_panel('Back braid',[(-.13,.1804,z),(.13,.1804,z),(.13,.1804,z+.004),(-.13,.1804,z+.004)],white)
 for image in bpy.data.images:
     if image.size[0]>1024:
         image.scale(1024,1024)

@@ -7,7 +7,7 @@ import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js';
 import {createCaptureScene} from './capture-scene.js';
 import {loadChaserModel} from './chaser-model.js';
-import {loadRunnerModel,loadSchoolgirl} from './runner-model.js';
+import {loadRunnerModel} from './runner-model.js';
 import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js';
 const COLORS=[0xffce36,0x73ffb3,0x8edcff];
 export function createRenderer(canvas){
@@ -26,7 +26,7 @@ export function createRenderer(canvas){
  const updateCampus=createCampus(scene);
  const updateSky=createSky(scene,sun,ambient);
  const runner=new T.Group();scene.add(runner);const body=new T.Group();runner.add(body);
- const updateRunnerModel=loadRunnerModel(runner), updateSchoolgirl=loadSchoolgirl(runner);
+ const updateRunnerModel=loadRunnerModel(runner), updateSchoolgirl=loadRunnerModel(runner,'female');
  const updateChaserModel=loadChaserModel(scene);
  const capture=createCaptureScene(scene);
  const updateSchool=createSchoolEntrance(scene);

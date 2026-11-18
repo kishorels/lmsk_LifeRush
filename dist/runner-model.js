@@ -2,9 +2,11 @@ import { AnimationMixer, AnimationUtils, LoopOnce } from './vendor/three.module.
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 
-export function loadRunnerModel(parent) {
+export function loadRunnerModel(parent, selected = 'male') {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1;
-  new GLTFLoader().load(new URL('./assets/runverse-schoolboy.glb', import.meta.url).href, gltf => {
+  function load() {
+    const asset = selected === 'female' ? './assets/schoolgirl.glb' : './assets/runverse-schoolboy.glb';
+    new GLTFLoader().load(new URL(asset, import.meta.url).href, gltf => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall'];
     if (names.some(name => !clips.has(name))) return;
@@ -47,9 +49,13 @@ export function loadRunnerModel(parent) {
     render.model = model;
   }, undefined, error => console.warn('Could not load the runner character.', error));
 
+  }
+  let requested = selected === 'male';
+  if (requested) load();
   function render(state, character, dt) {
+    if (!requested && character === selected) { requested = true; load(); }
     if (!model) return false;
-    model.visible = character === 'male';
+    model.visible = character === selected;
     if (!model.visible) return false;
 
     if (isCapture(state)) {
@@ -108,50 +114,6 @@ export function loadRunnerModel(parent) {
     pace+=(Math.min(1.65,1+(state.speed-22)/40)-pace)*blend;
     if (name === 'Run') next.setEffectiveTimeScale(pace);
     mixer.update(frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0)));
-    return true;
-  }
-  return render;
-}
-
-export function loadSchoolgirl(parent) {
-  let model, mixer, stride, requested = false;
-  function render(state, character, dt) {
-    if (character === 'female' && !requested) {
-      requested = true;
-      new GLTFLoader().load(new URL('./assets/schoolgirl.glb', import.meta.url).href, gltf => {
-        model = gltf.scene;
-        const clip = gltf.animations.find(animation => animation.name === 'Run');
-        // Keep forward travel under the game engine's control.
-        const hips = clip.tracks.find(track => track.name === 'mixamorigHips.position');
-        if (hips) {
-          for (let i = 3; i < hips.values.length; i += 3) {
-            hips.values[i] = hips.values[0];
-            hips.values[i+1] = hips.values[1];
-          }
-        }
-        mixer = new AnimationMixer(model);
-        stride = mixer.clipAction(clip).play();
-        model.traverse(node => {
-          if (node.isMesh) { node.frustumCulled = false; node.castShadow = true; }
-        });
-        model.visible = false;
-        parent.add(model);
-        render.model = model;
-      }, undefined, error => console.warn('Schoolgirl model could not load.', error));
-    }
-    if (!model) return false;
-    model.visible = character === 'female';
-    if (!model.visible) return false;
-    const running = state.mode === 'running';
-    const rolling = state.roll ? 1-state.roll/ROLL_DURATION : 0;
-    const crouch = state.slide || state.roll;
-    model.scale.set(1.22,crouch ? .76 : 1.22,1.22);
-    model.rotation.set(-Math.PI*2*rolling + (state.slide ? -.4 : 0),Math.PI,(state.lane-state.x)*.14);
-    model.position.y = .04 + .56*(1-Math.cos(2*Math.PI*rolling));
-    stride.paused = !running || Boolean(state.jump || state.drop || crouch);
-    if (state.mode === 'ready') stride.time = 0;
-    stride.timeScale = Math.min(1.6,state.speed/26);
-    mixer.update(Math.min(.05,dt || 0));
     return true;
   }
   return render;
