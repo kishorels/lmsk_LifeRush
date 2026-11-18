@@ -2,7 +2,7 @@ import { AnimationMixer, AnimationUtils, LoopOnce } from './vendor/three.module.
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { SWEEP_SECONDS, JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 
-export function loadRunnerModel(parent, selected = 'male') {
+export function loadRunnerModel(parent, selected = 'male', onProgress) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   function load() {
     const asset = selected === 'female' ? './assets/schoolgirl.glb' : './assets/runverse-schoolboy.glb';
@@ -47,7 +47,9 @@ export function loadRunnerModel(parent, selected = 'male') {
     }
     parent.add(model);
     render.model = model;
-  }, undefined, error => { render.failed=true; console.warn('Could not load the runner character.', error); });
+  }, xhr => {
+    if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
+  }, error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 
   }
   let requested = selected === 'male';

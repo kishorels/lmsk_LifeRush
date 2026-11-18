@@ -147,6 +147,37 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   font-weight: 700;
   color: #e4f4ff;
 }
+/* Splash Loader & Dynamic Progress Bar */
+.splash-loader-wrap {
+  margin: 8px 0 16px;
+  width: 100%;
+}
+.splash-progress-track {
+  width: 100%;
+  height: 8px;
+  background: #09172bf0;
+  border-radius: 20px;
+  border: 1px solid #5ab0f650;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px #000a;
+}
+.splash-progress-bar {
+  height: 100%;
+  width: 5%;
+  background: linear-gradient(90deg, #00e5ff, #ffd754, #ff9100);
+  border-radius: 20px;
+  box-shadow: 0 0 14px #00e5ffcc;
+  transition: width 0.22s ease-out;
+}
+.splash-status-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #a5d8ff;
+  letter-spacing: 0.8px;
+  margin-top: 8px;
+  text-align: center;
+}
+
 .enter-btn {
   width: 100%;
   background: linear-gradient(135deg, #ffd754, #ff9d1b);
@@ -163,13 +194,36 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   justify-content: center;
   gap: 12px;
   box-shadow: 0 6px 0 #b36e0c, 0 12px 28px #ff980045;
-  transition: transform .12s, box-shadow .12s;
+  transition: transform .12s, box-shadow .12s, background .2s;
 }
-.enter-btn:hover {
+.enter-btn.loading {
+  background: linear-gradient(135deg, #1b385e, #132540) !important;
+  color: #7ba3c7 !important;
+  box-shadow: 0 4px 0 #0d1a2d !important;
+  cursor: wait !important;
+  border: 1px solid #4a82b540 !important;
+  transform: none !important;
+  pointer-events: none;
+  opacity: 0.9;
+}
+.enter-btn.ready {
+  background: linear-gradient(135deg, #ffd754, #ff9d1b) !important;
+  color: #151d3b !important;
+  box-shadow: 0 6px 0 #b36e0c, 0 12px 28px #ff980055 !important;
+  cursor: pointer !important;
+  border: 0 !important;
+  pointer-events: auto !important;
+  animation: enterPulse 1.8s infinite alternate ease-in-out;
+}
+@keyframes enterPulse {
+  0% { box-shadow: 0 6px 0 #b36e0c, 0 10px 22px #ff980040; }
+  100% { box-shadow: 0 6px 0 #b36e0c, 0 14px 35px #ff980080, 0 0 15px #ffd75466; }
+}
+.enter-btn:hover:not(.loading) {
   transform: translateY(-2px);
   box-shadow: 0 8px 0 #b36e0c, 0 16px 32px #ff980060;
 }
-.enter-btn:active {
+.enter-btn:active:not(.loading) {
   transform: translateY(3px);
   box-shadow: 0 2px 0 #b36e0c;
 }
@@ -177,7 +231,7 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   font-size: 20px;
   transition: transform .15s;
 }
-.enter-btn:hover .btn-arrow {
+.enter-btn:hover:not(.loading) .btn-arrow {
   transform: translateX(5px);
 }
 .splash-tip {

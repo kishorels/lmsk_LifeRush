@@ -4,13 +4,65 @@ import {createRenderer} from './renderer3d.js';
 import {createLiteRenderer} from './renderer-lite.js';
 
 const $=id=>document.getElementById(id),canvas=$('world');
+let assetsReady = false;
+let boyProgress = 0, chaserProgress = 0;
+
+function updateAssetProgress(type, fraction) {
+  if (type === 'boy') boyProgress = Math.max(boyProgress, fraction);
+  if (type === 'chaser') chaserProgress = Math.max(chaserProgress, fraction);
+  const total = Math.min(1, boyProgress * 0.85 + chaserProgress * 0.15);
+  const pct = Math.max(5, Math.floor(total * 100));
+
+  const bar = $('splash-progress-bar');
+  const txt = $('splash-status-text');
+  const btnTxt = $('btn-enter-text');
+
+  if (bar) bar.style.width = pct + '%';
+  if (txt) {
+    if (pct < 35) txt.textContent = `⏳ Downloading 3D Hero... ${pct}%`;
+    else if (pct < 75) txt.textContent = `⚡ Downloading Campus & Mutant... ${pct}%`;
+    else if (pct < 100) txt.textContent = `✨ Preparing GPU Shaders... ${pct}%`;
+    else txt.textContent = `✅ 3D Assets Ready! (100%)`;
+  }
+  if (btnTxt && !assetsReady) {
+    btnTxt.textContent = `DOWNLOADING ASSETS... ${pct}%`;
+  }
+}
+
+function onAllAssetsReady() {
+  if (assetsReady) return;
+  assetsReady = true;
+
+  const bar = $('splash-progress-bar');
+  const txt = $('splash-status-text');
+  const btn = $('btn-enter');
+  const btnTxt = $('btn-enter-text');
+  const arrow = $('btn-enter-arrow');
+  const tip = $('splash-tip');
+
+  if (bar) bar.style.width = '100%';
+  if (txt) txt.textContent = `✅ 3D Assets Ready! (100%)`;
+  if (btn) {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.classList.add('ready');
+  }
+  if (btnTxt) btnTxt.textContent = 'ENTER GAME';
+  if (arrow) arrow.hidden = false;
+  if (tip) tip.textContent = '★ All 3D Assets Loaded! Click to Enter ★';
+}
+
 let draw;
 try{
-  draw=createRenderer(canvas);
+  draw=createRenderer(canvas, {
+    onBoyProgress: f => updateAssetProgress('boy', f),
+    onChaserProgress: f => updateAssetProgress('chaser', f)
+  });
 }catch(error){
   console.warn('Using lightweight graphics:',error.message);
   draw=createLiteRenderer(canvas);
   document.querySelector('.edition').textContent='COAST EDITION · LITE';
+  onAllAssetsReady();
 }
 const game = canvas.closest('.game');
 let s=fresh(),best=0,character='male',sound=true,prev=0,w=600,h=700,lastCount=0;
@@ -72,6 +124,7 @@ setScreenMode('splash');
 
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
+    if (!assetsReady) return;
     effects.unlock();
     effects.play('coin');
     setScreenMode('select');
@@ -319,6 +372,7 @@ function frame(t) {
   if (s.mode === 'countdown') $('countdown').textContent = Math.ceil(s.countdown);
   
   const status=draw(s, character, dt);
+  if(status==='ready'&&!assetsReady){onAllAssetsReady();}
   if(s.mode==='ready'){
     const startButton=$('start'),waiting=status==='loading',failed=status==='error';
     if(startButton){

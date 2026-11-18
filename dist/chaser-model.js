@@ -2,7 +2,7 @@ import { AnimationMixer, Group } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { chasePose, isCapture, SCHOOL_VAN } from './engine.js';
 
-export function loadChaserModel(scene) {
+export function loadChaserModel(scene, onProgress) {
   const chaser = new Group();
   chaser.position.y = .09;
   chaser.scale.setScalar(1.18);
@@ -27,7 +27,9 @@ export function loadChaserModel(scene) {
     mixer = new AnimationMixer(model);
     run = mixer.clipAction(clip).play();
     idle = mixer.clipAction(rest).play();
-  }, undefined, error => console.warn('Could not load the Mutant chaser.', error));
+  }, xhr => {
+    if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
+  }, error => console.warn('Could not load the Mutant chaser.', error));
 
   function render(state) {
     const capture = isCapture(state);

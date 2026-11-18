@@ -11,7 +11,7 @@ import {loadChaserModel} from './chaser-model.js';
 import {loadRunnerModel} from './runner-model.js';
 import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js';
 const COLORS=[0xffce36,0x73ffb3,0x8edcff];
-export function createRenderer(canvas){
+export function createRenderer(canvas, callbacks = {}){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;
  const scene=new T.Scene();scene.background=new T.Color('#a5c9dc');scene.fog=new T.Fog('#b9d0d5',85,175);
@@ -28,8 +28,9 @@ export function createRenderer(canvas){
  const runner=new T.Group();scene.add(runner);const body=new T.Group();runner.add(body);
  const podium=mesh(cyl,0x1b4347,scene,0,.04,0,1.4,.08,1.4);mesh(cyl,0xf4d03f,podium,0,.045,0,1.25,.02,1.25);
  const shieldBubble=mesh(sphere,0x00e5ff,runner,0,1.15,0,1.25,1.25,1.25);shieldBubble.material=new T.MeshStandardMaterial({color:0x4fc3f7,emissive:0x00e5ff,emissiveIntensity:.6,transparent:true,opacity:.38,roughness:.2});shieldBubble.visible=false;
- const updateRunnerModel=loadRunnerModel(runner), updateSchoolgirl=loadRunnerModel(runner,'female');
- const updateChaserModel=loadChaserModel(scene);
+ const updateRunnerModel=loadRunnerModel(runner, 'male', callbacks?.onBoyProgress), updateSchoolgirl=loadRunnerModel(runner,'female');
+ const updateChaserModel=loadChaserModel(scene, callbacks?.onChaserProgress);
+ let compiled = false;
  const capture=createCaptureScene(scene);
  const updateSchool=createSchoolEntrance(scene);
  const updateTraffic=createTraffic(scene);const updateSideTraffic=createSideTraffic(scene);const stage=createCaptureStage(scene);
@@ -86,5 +87,6 @@ export function createRenderer(canvas){
    capture.frame(camera,s,runner,body.visible?null:(femaleVisible?updateSchoolgirl.model:updateRunnerModel.model),body,updateChaserModel.root,updateChaserModel.model);
    stage.show([runner,updateChaserModel.root],camera);
  }
+  if((maleVisible||femaleVisible)&&!compiled&&typeof renderer.compile==='function'){try{renderer.compile(scene,camera);compiled=true;}catch{}}
  renderer.render(scene,camera);lastMode=s.mode;return selectedModel.failed?'error':maleVisible||femaleVisible?'ready':'loading';};
 }

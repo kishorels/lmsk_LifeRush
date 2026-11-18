@@ -97,11 +97,20 @@
           <span>🧲 Power-ups</span>
           <span>🔥 Vijay Swag</span>
         </div>
-        <button id="btn-enter" class="enter-btn">
-          <span>ENTER GAME</span>
-          <span class="btn-arrow">➔</span>
+
+        <!-- Asset Download Progress Bar -->
+        <div class="splash-loader-wrap" id="splash-loader-wrap">
+          <div class="splash-progress-track">
+            <div id="splash-progress-bar" class="splash-progress-bar" style="width: 5%;"></div>
+          </div>
+          <div id="splash-status-text" class="splash-status-text">⏳ Downloading 3D Assets... 5%</div>
+        </div>
+
+        <button id="btn-enter" class="enter-btn loading" disabled>
+          <span id="btn-enter-text">DOWNLOADING ASSETS...</span>
+          <span class="btn-arrow" id="btn-enter-arrow" hidden>➔</span>
         </button>
-        <p class="splash-tip">Choose your character & sprint to class!</p>
+        <p class="splash-tip" id="splash-tip">Loading 3D Campus, Hero & Audio...</p>
       </div>
     </div>
 
