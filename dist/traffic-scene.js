@@ -67,7 +67,7 @@ export function createTraffic(scene) {
   }
   for(const [id,g]of parked)if(!visible.has(id)){scene.remove(g);parked.delete(id);}
   const live=new Set();
-  for(const o of s.items){if(o.type!=='bus'||o.z-s.distance>140)continue;live.add(o);if(!moving.has(o))moving.set(o,vehicle(o.length,2.8,true));const g=moving.get(o);g.position.set(o.lane*2.2,.09,s.distance-o.z);g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);}
+  for(const o of s.items){if(o.type!=='bus'||(o.encounter&&!o.started)||o.z-s.distance>140)continue;live.add(o);if(!moving.has(o))moving.set(o,vehicle(o.length,2.8,true));const g=moving.get(o);g.position.set(o.lane*2.2,.09,s.distance-o.z);g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);}
   for(const [o,g]of moving)if(!live.has(o)){scene.remove(g);moving.delete(o);}
  };
 }

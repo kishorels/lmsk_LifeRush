@@ -14,7 +14,18 @@ export function createCampus(scene) {
   }
   const m=new Mesh(cube,signs.get(label));m.position.set(x,y,z+.066);m.scale.set(width,.55,.01);g.add(m);
  }
- function tree(g,x,z){part(g,0x8c6d49,x,1.1,z,.17,2.2,.17,cyl);part(g,0x329849,x,2.9,z,1.3,1.6,1.1,sphere);part(g,0x77c852,x-.65,2.65,z,.9,1.0,.9,sphere);}
+ function tree(g,x,z){
+  part(g,0x795a3e,x,1.35,z,.14,2.7,.14,cyl);
+  for(let branch=0;branch<5;branch++){
+   const angle=branch*2.399,dx=Math.cos(angle),dz=Math.sin(angle),y=2.2+branch*.12;
+   const limb=part(g,0x795a3e,x+dx*.42,y,z+dz*.42,.065,1.25,.065,cyl);limb.rotation.z=-dx*.65;limb.rotation.x=dz*.65;
+   for(let n=0;n<9;n++){
+    const a=n*2.399+branch,r=.18+Math.sqrt(n/9)*.66;
+    const leaf=part(g,n%3?0x438a38:0x72ad46,x+dx*.65+Math.cos(a)*r,y+.65+Math.sin(n*1.7)*.33,z+dz*.65+Math.sin(a)*r,.45,.23,.35,sphere);
+    leaf.rotation.set(Math.sin(a)*.3,a,Math.cos(a)*.25);
+   }
+  }
+ }
  function bench(g,x,z){part(g,0x9c7651,x,.55,z,1.9,.15,.55);part(g,0xa98760,x,.95,z-.2,1.9,.58,.1);for(const dx of [-.7,.7])part(g,0x455b52,x+dx,.3,z,.10,.6,.5);}
  function building(g,side,label){
   const x=side*10;

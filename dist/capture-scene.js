@@ -120,8 +120,8 @@ export function createCaptureScene(scene) {
     }
 
     const pushIn = ease(.04,1.50,s.capture);
-    camera.position.set(center+1.58*(1-pushIn)+.016, 1.46+.39*pushIn, -4.05+1.42*pushIn);
-    camera.lookAt(center+.065,.99+.64*pushIn,-.01);
+    camera.position.set(center+1.58*(1-pushIn)+.016, 2.0+.15*pushIn, -5.8+.45*pushIn);
+    camera.lookAt(center+.065,.90,-.01);
     fill.intensity = 1.35 * lift;
     fill.position.set(center+.45,2.75,-2.5);
     fill.target.position.set(center,1.75,0);

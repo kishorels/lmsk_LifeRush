@@ -25,6 +25,6 @@ export function createSound() {
   if(s.time<lastTime)nextStep=0;lastTime=s.time;
   if(s.mode!=='running')return;
   if(!s.jump&&!s.drop&&!s.fallSpeed&&!s.slide&&!s.roll&&s.time>=nextStep){tone(100,40,.055,.055,'triangle');nextStep=s.time+.19*22/s.speed;}
-  for(const bus of s.items)if(bus.type==='bus'&&!bus.horned&&bus.z-s.distance<65&&bus.z>s.distance){bus.horned=true;play('horn');}
+  for(const bus of s.items)if(bus.type==='bus'&&(!bus.encounter||bus.started)&&!bus.horned&&bus.z-s.distance<65&&bus.z>s.distance){bus.horned=true;play('horn');}
  }};
 }

@@ -1,4 +1,4 @@
-import {repeatedVans,trafficPattern} from './traffic-rules.js';
+import {repeatedVans,trafficPattern,sideVehicleX} from './traffic-rules.js';
 export {trafficPattern};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 2.65;
@@ -170,10 +170,11 @@ export function pattern(z, random = Math.random) {
 }
 
 export function hits(s, obstacle) {
-  if (Math.abs(s.x - obstacle.lane) > .48) return false;
+  const lane=obstacle.type==='sideVehicle'?sideVehicleX(obstacle,s.time)/2.2:obstacle.lane;
+  if (Math.abs(s.x - lane) > .48) return false;
   if (obstacle.type === 'jump') return height(s) < 1.05;
   if (obstacle.type === 'slide') return !(s.slide || s.roll);
-  return obstacle.type === 'block' || obstacle.type === 'bus';
+  return obstacle.type === 'block' || obstacle.type === 'bus' || obstacle.type === 'sideVehicle';
 }
 
 function advanceDrop(s, dt) {
@@ -265,13 +266,21 @@ export function step(s, dt, random = Math.random) {
   if(s.distance+120>s.next) {
     s.items.push(...trafficPattern(s.next,s.trafficIndex++));s.next+=160;
   }
-  for(const item of s.items)if(item.velocity && s.distance>=item.activate)item.z-=item.velocity*dt;
+  for(const item of s.items){
+    if(item.encounter&&!item.started&&s.distance>=item.trigger){
+      item.started=true;item.startedAt=s.time;
+      item.z=s.distance+(s.speed+(item.velocity||0))*1.45;
+      s.warning={until:s.time+1.45,side:item.type==='sideVehicle'?item.lane:s.warning?.side};
+    }
+    if(item.velocity && (item.encounter?item.started:s.distance>=item.activate))item.z-=item.velocity*dt;
+  }
 
   for (const obstacle of s.items) {
-    if(obstacle.type==='bus') {
+    if(obstacle.encounter&&!obstacle.started)continue;
+    if(obstacle.type==='bus'||obstacle.type==='sideVehicle') {
       const relative=obstacle.z-s.distance;
       if(!obstacle.done && relative<=1.1 && relative>=-obstacle.length && hits(s,obstacle)) {
-        obstacle.done=true;if(!s.hit){takeHit(s,'bus');if(s.mode==='running')recoverFromBus(s);}if(s.mode!=='running')break;
+        obstacle.done=true;if(!s.hit){takeHit(s,obstacle.type);if(s.mode==='running')recoverFromBus(s);}if(s.mode!=='running')break;
       }
       continue;
     }

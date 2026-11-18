@@ -19,13 +19,14 @@ function start(){s=fresh();s.mode='running';lastCount=0;$('overlay').hidden=true
 function pause(){if(!['running','countdown'].includes(s.mode))return;s.mode='paused';$('countdown').hidden=true;show('Take a breath.','Your story will be right here.','RESUME RUN','PAUSED');}
 function resume(){effects.unlock();s.mode='countdown';s.countdown=3;$('overlay').hidden=true;}
 function show(title,message,button,tag){$('title').textContent=title;$('message').textContent=message;$('start').innerHTML=button+' <span>↗</span>';$('tag').textContent=tag;$('selection').hidden=true;$('selection').style.display='none';$('restart').hidden=s.mode!=='paused';$('tip').textContent='Each new run starts from zero.';$('overlay').hidden=false;}
-function crash(){best=Math.max(best,Math.floor(s.distance));save();effects.play('over');const hint={bus:'Dodge the oncoming bus. Change lanes before its headlights reach you.',van:'Take a striped ramp, or use the clear ground lane.',block:'Change lanes to dodge the tall crates.',jump:'Jump over the low orange barriers.',slide:'Slide under the teal overhead beams.'}[s.cause];show('A fresh start awaits.',Math.floor(s.distance)+' m · '+s.skills.reduce((a,b)=>a+b,0)+' skills. '+hint,'RUN AGAIN','RUN COMPLETE');$('tip').textContent='Career tendency: '+career(s.skills)+' · Early mechanic';}
+function crash(){best=Math.max(best,Math.floor(s.distance));save();effects.play('over');const hint={sideVehicle:'Watch the side entrance. Use the opposite outside lane.',bus:'Dodge the oncoming bus. Change lanes before its headlights reach you.',van:'Take a striped ramp, or use the clear ground lane.',block:'Change lanes to dodge the tall crates.',jump:'Jump over the low orange barriers.',slide:'Slide under the teal overhead beams.'}[s.cause];show('A fresh start awaits.',Math.floor(s.distance)+' m · '+s.skills.reduce((a,b)=>a+b,0)+' skills. '+hint,'RUN AGAIN','RUN COMPLETE');$('tip').textContent='Career tendency: '+career(s.skills)+' · Early mechanic';}
 $('start').onclick=()=>s.mode==='paused'?resume():start();$('restart').onclick=start;$('pause').onclick=()=>s.mode==='paused'?resume():pause();
 function input(a){const before=[s.jump,s.slide,s.roll,s.drop,s.lane];action(s,a);if(s.mode==='running'&&(s.jump!==before[0]||s.slide!==before[1]||s.roll!==before[2]||s.drop!==before[3]||s.lane!==before[4]))effects.play(a==='jump'?'jump':a==='slide'?'slide':'lane');}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();input(b.dataset.action);}));
 window.addEventListener('keydown',e=>{if(e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;const a={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump',ArrowDown:'slide',s:'slide'}[e.key];if(a){e.preventDefault();if(!e.repeat)input(a);}if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}});
 let touch;canvas.addEventListener('pointerdown',e=>{touch={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointerup',e=>{if(!touch)return;const x=e.clientX-touch.x,y=e.clientY-touch.y;if(Math.max(Math.abs(x),Math.abs(y))>20)input(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'slide':'jump');touch=null;});canvas.addEventListener('pointercancel',()=>touch=null);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
 function updateChaseNotice() {
+  const warning=$('encounter-notice');warning.hidden=!(s.mode==='running'&&s.warning&&s.time<s.warning.until);if(!warning.hidden)warning.textContent=s.warning.side===1?'← ESCAPE LEFT · SIDE TRAFFIC':'SIDE TRAFFIC · ESCAPE RIGHT →';
   const active = s.mode === 'running' && chaseRemaining(s) > 0;
   chaseNotice.hidden = !active;
   game.classList.toggle('capture', isCapture(s));
@@ -62,6 +63,7 @@ function frame(t) {
   } else if (firstHitBefore !== null && s.firstHitAt === null) {
     $('toast').textContent = 'You escaped. Both hearts restored.';
   }
+  if(s.mode==='running'&&s.warning&&s.time<s.warning.until)$('toast').textContent=s.warning.side===1?'SIDE TRAFFIC + BUS · SWIPE LEFT ←':'SIDE TRAFFIC + BUS · SWIPE RIGHT →';
   const health = $('health'), left = 2-s.damage;
   if (health.dataset.left !== String(left)) {
     health.dataset.left = left;

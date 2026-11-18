@@ -14,6 +14,7 @@ test('bus lane never contains a slide/jump barrier and roof exit has reaction sp
   const base=100+i*160,row=trafficPattern(base,i),busLane=row.find(o=>o.type==='bus').lane;
   const barriers=row.filter(o=>['slide','jump','block'].includes(o.type));
   assert.ok(barriers.every(o=>o.lane!==busLane));
+  if(!barriers.length){assert.ok(row.some(o=>o.type==='sideVehicle'));continue;}
   assert.ok(barriers[0].z-(base+68)>=40);assert.ok(barriers[1].z-barriers[0].z>=40);
  }
 });
