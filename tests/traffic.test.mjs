@@ -22,7 +22,7 @@ test('every traffic block leaves a ground lane free',()=>{
 test('jump bridges roof gap and lands on the second vehicle',()=>{
  const s=fresh();s.mode='running';s.next=100000;s.distance=110;s.x=s.lane=-1;
  while(s.distance<137)step(s,.025);assert.equal(height(s),1.72);action(s,'jump');
- while(s.distance<160)step(s,.025);assert.equal(s.damage,0);assert.equal(height(s),1.72);
+ while(s.jump>0)step(s,.01);assert.ok(s.distance<168);assert.equal(s.damage,0);assert.equal(height(s),1.72);
 });
 
 test('first bus hit relocates to an empty ground lane and second hit still ends run',()=>{

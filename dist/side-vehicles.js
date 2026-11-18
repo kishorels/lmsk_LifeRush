@@ -3,7 +3,7 @@ import {sideVehicleX} from './traffic-rules.js';
 const cube=new BoxGeometry(),sphere=new SphereGeometry(1,12,8),tyre=new TorusGeometry(.32,.055,6,20),rod=new CylinderGeometry(1,1,1,8),materials=new Map();
 function part(g,c,x,y,z,w,h,d,geometry=cube){if(!materials.has(c))materials.set(c,new MeshStandardMaterial({color:c,roughness:.55}));const m=new Mesh(geometry,materials.get(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=true;g.add(m);return m;}
 function bar(g,c,a,b,r=.035){const p=new Vector3(...a),q=new Vector3(...b),m=part(g,c,0,0,0,r,p.distanceTo(q),r,rod);m.position.copy(p.add(q).multiplyScalar(.5));m.quaternion.setFromUnitVectors(new Vector3(0,1,0),q.sub(new Vector3(...a)).normalize());return m;}
-export function buildSideVehicle(kind){const g=new Group();g.userData.wheels=[];
+export function buildSideVehicle(kind){const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];
  if(kind==='car'){
   part(g,0xe54a39,0,.52,0,1.65,.6,3.2);part(g,0xe54a39,0,.85,.95,1.6,.18,1.1);part(g,0x244559,0,1.04,-.15,1.4,.54,1.42);part(g,0xee5b43,0,1.34,-.15,1.5,.12,1.55);
   for(const x of [-.72,.72])part(g,0xe54a39,x,1.05,-.15,.08,.54,.08);

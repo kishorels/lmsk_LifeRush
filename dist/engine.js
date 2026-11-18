@@ -12,7 +12,7 @@ export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export function fresh() {
   return {
-    mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 22,
+    mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 28,
     jump: 0, slide: 0, roll: 0, drop: null, jumpBuffer: 0, motionId: 0, lastGroundDown: -Infinity,
     floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
     damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 100,
@@ -244,7 +244,7 @@ export function step(s, dt, random = Math.random) {
     s.chaseReentered = false;
     s.damage = 0;
   }
-  s.speed = Math.min(40, 22 + s.distance / 70);
+  s.speed = Math.min(48, 28 + s.distance / 55);
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * (1-Math.exp(-18*dt));
   s.chaserX += (s.x - s.chaserX) * (1-Math.exp(-5*dt));

@@ -1,5 +1,5 @@
-import {Mesh,SphereGeometry,MeshBasicMaterial,Color,DataTexture,RGBAFormat,Sprite,SpriteMaterial,LinearFilter,Float32BufferAttribute,BackSide} from './vendor/three.module.js';
-export function daylight(time){const phase=(time%180)/180;return {phase,noon:(1-Math.cos(phase*Math.PI*2))/2};}
+import {weatherAt,cloudX} from './weather.js';
+import {Mesh,SphereGeometry,MeshBasicMaterial,Color,DataTexture,RGBAFormat,Sprite,SpriteMaterial,LinearFilter,Float32BufferAttribute,BackSide,BufferGeometry,Points,PointsMaterial,LineSegments,LineBasicMaterial} from './vendor/three.module.js';
 function texture(glow=false){const w=128,h=64,data=new Uint8Array(w*h*4);const noise=(x,y)=>{const v=Math.sin(x*127.1+y*311.7)*43758.5453;return v-Math.floor(v);};
  const smooth=(x,y)=>{const i=Math.floor(x),j=Math.floor(y);let a=x-i,b=y-j;a=a*a*(3-2*a);b=b*b*(3-2*b);return (noise(i,j)*(1-a)+noise(i+1,j)*a)*(1-b)+(noise(i,j+1)*(1-a)+noise(i+1,j+1)*a)*b;};
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const u=(x/w-.5)*2,v=(y/h-.5)*2;let density=0;
@@ -16,8 +16,24 @@ export function createSky(scene,sun,ambient){
  const disc=new Mesh(new SphereGeometry(1.35,24,16),new MeshBasicMaterial({color:0xfff7d7,fog:false}));scene.add(disc);
  const halo=new Sprite(new SpriteMaterial({map:texture(true),color:0xffdfaa,transparent:true,depthWrite:false,fog:false}));halo.scale.set(15,15,1);scene.add(halo);
  const cloudMap=texture(),clouds=[];for(let i=0;i<12;i++){const g=new Sprite(new SpriteMaterial({map:cloudMap,transparent:true,depthWrite:false,color:0xffffff,opacity:.85,fog:true}));g.scale.set(20+i%3*5,8+i%3*2,1);scene.add(g);clouds.push(g);}
- const morning=new Color('#f7c19c'),blue=new Color('#409ce8'),haze=new Color('#c3e6f7'),warm=new Color('#ffce9f'),white=new Color('#fff5dd');
- return s=>{const {phase,noon}=daylight(s.time);scene.background.copy(morning).lerp(blue,.4+.6*noon);scene.fog.color.copy(morning).lerp(haze,.35+.65*noon);for(let i=0;i<positions.count;i++){const blend=Math.pow(Math.max(0,Math.min(1,positions.getY(i)/165*2)),.65);gradient.copy(scene.fog.color).lerp(blue,blend);domeGeometry.attributes.color.setXYZ(i,gradient.r,gradient.g,gradient.b);}domeGeometry.attributes.color.needsUpdate=true;sun.color.copy(warm).lerp(white,noon);sun.intensity=2.5+noon*.7;ambient.intensity=1.8+noon*.3;
-  disc.position.set(-48*Math.cos(phase*2*Math.PI),20+30*noon,-100);halo.position.copy(disc.position);sun.position.set(disc.position.x*.3,20+noon*15,10);clouds.forEach((g,i)=>{g.position.set(((i*19+s.time*(.22+i%3*.07)+110)%220)-110,19+i%4*3,-80-i%3*19);});
+
+ const moon=new Mesh(new SphereGeometry(2,24,16),new MeshBasicMaterial({color:0xe5edff,fog:false}));moon.position.set(28,29,-95);scene.add(moon);
+ for(let i=0;i<6;i++){const crater=new Mesh(new SphereGeometry(.18+i%3*.09,8,6),new MeshBasicMaterial({color:0xaebed5,fog:false}));const a=i*2.4;crater.position.set(Math.cos(a)*(.6+i%2*.4),Math.sin(a)*.8,1.74);moon.add(crater);}
+ const starPositions=[];for(let i=0;i<320;i++){const a=i*2.399;starPositions.push(Math.sin(a)*125,14+(i*17%70),-60-(i*13%70));}
+ const starGeo=new BufferGeometry();starGeo.setAttribute('position',new Float32BufferAttribute(starPositions,3));const stars=new Points(starGeo,new PointsMaterial({color:0xeaf3ff,size:.35,transparent:true,depthWrite:false,fog:false}));scene.add(stars);
+ const rainGeo=new BufferGeometry(),drops=new Float32Array(260*6);rainGeo.setAttribute('position',new Float32BufferAttribute(drops,3));const rain=new LineSegments(rainGeo,new LineBasicMaterial({color:0xc7e4ff,transparent:true,opacity:0,depthWrite:false}));scene.add(rain);
+ const top=new Color(),horizon=new Color(),warm=new Color('#ffce9f'),white=new Color('#fff5dd');
+ return s=>{const weather=weatherAt(s.time),{phase,night}=weather;
+  top.set(weather.a.top).lerp(new Color(weather.b.top),weather.mix);horizon.set(weather.a.horizon).lerp(new Color(weather.b.horizon),weather.mix);
+  scene.background.copy(horizon);scene.fog.color.copy(horizon);
+  for(let i=0;i<positions.count;i++){const blend=Math.pow(Math.max(0,Math.min(1,positions.getY(i)/165*2)),.65);gradient.copy(horizon).lerp(top,blend);domeGeometry.attributes.color.setXYZ(i,gradient.r,gradient.g,gradient.b);}domeGeometry.attributes.color.needsUpdate=true;
+  sun.color.copy(warm).lerp(white,1-night).lerp(new Color('#a0bcff'),night);sun.intensity=3.1-night*1.9-weather.rain*1.1;ambient.intensity=2.1-night*.6-weather.rain*.35;
+  disc.position.set(36-phase*72,25+Math.sin(phase*Math.PI*2)*12,-100);disc.visible=night<.75&&weather.rain<.7;halo.visible=disc.visible;halo.position.copy(disc.position);sun.position.set(disc.position.x*.3,26,10);
+  moon.visible=night>.1;moon.material.color.set('#e5edff').multiplyScalar(.65+night*.35);moon.position.x=34-phase*50;
+  stars.visible=night>.05;stars.material.opacity=night*.9;stars.rotation.z=-s.time*.002;
+  clouds.forEach((g,i)=>{g.position.set(cloudX(i,s.time),17+i%4*3,-72-i%3*19);g.material.color.set('#ffffff').lerp(new Color('#6a7894'),Math.max(night*.75,weather.rain*.8));g.material.opacity=.7+weather.rain*.25;});
+  rain.visible=weather.rain>.02;rain.material.opacity=weather.rain*.58;
+  if(rain.visible){for(let i=0;i<260;i++){const x=(i*7.17%22)-11,y=(((i*.73-s.time*17)%14)+14)%14,z=3-(i*3.71%35),n=i*6;drops.set([x,y,z,x-.10,y-.65,z+.12],n);}rainGeo.attributes.position.needsUpdate=true;}
+  return weather;
  };
 }

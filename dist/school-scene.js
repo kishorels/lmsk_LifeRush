@@ -98,43 +98,44 @@ export function createSchoolEntrance(scene) {
     }
   }
 
+  const vehicle=new Group();vehicle.userData.captureObstacle=true;campus.add(vehicle);
   const van = SCHOOL_VAN, x = van.lane*2.2, length = van.front-van.rear;
   const mid=-(van.front+van.rear)/2, rear=-van.rear;
   const road=.09, roof=road+van.roof;
-  part(campus,0xe5a338,x,.77,mid,van.width,1.19,length);
-  part(campus,0xf6c04a,x,1.39,mid,van.width*.98,.62,length-.25);
-  part(campus,0xf5d477,x,roof-.07,mid,van.width,.14,length-.06);
+  part(vehicle,0xe5a338,x,.77,mid,van.width,1.19,length);
+  part(vehicle,0xf6c04a,x,1.39,mid,van.width*.98,.62,length-.25);
+  part(vehicle,0xf5d477,x,roof-.07,mid,van.width,.14,length-.06);
   for(const side of [-1,1]){
     for(const dz of [-4.15,4]){
-      const tire=part(campus,0x25343c,x+side*.86,.34,mid+dz,.31,.26,.31,wheel);
+      const tire=part(vehicle,0x25343c,x+side*.86,.34,mid+dz,.31,.26,.31,wheel);
       tire.rotation.z=Math.PI/2;
-      const hub=part(campus,0x7d92a1,x+side*1.001,.34,mid+dz,.14,.06,.14,wheel);
+      const hub=part(vehicle,0x7d92a1,x+side*1.001,.34,mid+dz,.14,.06,.14,wheel);
       hub.rotation.z=Math.PI/2;
     }
-    part(campus,0x394a56,x+side*.972,.72,mid,.034,.14,length-.22);
+    part(vehicle,0x394a56,x+side*.972,.72,mid,.034,.14,length-.22);
     for(let j=0;j<7;j++){
-      part(campus,0x365b6c,x+side*.965,1.38,mid-4.8+j*1.58,.037,.42,1.29);
-      part(campus,0x79aeb9,x+side*.987,1.43,mid-5.17+j*1.58,.012,.27,.38);
+      part(vehicle,0x365b6c,x+side*.965,1.38,mid-4.8+j*1.58,.037,.42,1.29);
+      part(vehicle,0x79aeb9,x+side*.987,1.43,mid-5.17+j*1.58,.012,.27,.38);
     }
-    part(campus,0xff785a,x+side*.69,.64,rear+.015,.24,.225,.054);
-    part(campus,0xfbf1cb,x+side*.61,.67,-van.front-.02,.32,.18,.06);
-    part(campus,0xffedb0,x+side*.76,roof-.013,mid,.082,.025,length-.38);
+    part(vehicle,0xff785a,x+side*.69,.64,rear+.015,.24,.225,.054);
+    part(vehicle,0xfbf1cb,x+side*.61,.67,-van.front-.02,.32,.18,.06);
+    part(vehicle,0xffedb0,x+side*.76,roof-.013,mid,.082,.025,length-.38);
   }
-  part(campus,0x263e4d,x,1.43,rear+.035,1.60,.44,.077);
-  part(campus,0x263e4d,x,1.44,-van.front-.025,1.55,.44,.08);
-  sign(campus,'SCHOOL VAN','PICKUP SERVICE',x,.91,rear-.035,1.14,.28);
+  part(vehicle,0x263e4d,x,1.43,rear+.035,1.60,.44,.077);
+  part(vehicle,0x263e4d,x,1.44,-van.front-.025,1.55,.44,.08);
+  sign(vehicle,'SCHOOL VAN','PICKUP SERVICE',x,.91,rear-.035,1.14,.28);
 
   const run=van.rear-van.ramp, slope=Math.atan2(van.roof,run);
-  const ramp=part(campus,0x327a75,x,road+van.roof/2-.06,-(van.ramp+van.rear)/2,van.width,.12,Math.hypot(run,van.roof));
+  const ramp=part(vehicle,0x327a75,x,road+van.roof/2-.06,-(van.ramp+van.rear)/2,van.width,.12,Math.hypot(run,van.roof));
   ramp.rotation.x=slope;
   for(let j=1;j<=7;j++){
     const t=j/8;
-    const stripe=part(campus,j%2?0xf8db79:0xe6f5db,x,road+van.roof*t+.019,-(van.ramp+run*t),van.width-.19,.034,.088);
+    const stripe=part(vehicle,j%2?0xf8db79:0xe6f5db,x,road+van.roof*t+.019,-(van.ramp+run*t),van.width-.19,.034,.088);
     stripe.rotation.x=slope;
   }
   const coinGeo = new CylinderGeometry(.19,.19,.072,20);
   const coins=ROOF_COINS.map(distance=>{
-    const coin=part(campus,0xffc428,x,roof+.58,-distance,1,1,1,coinGeo);
+    const coin=part(vehicle,0xffc428,x,roof+.58,-distance,1,1,1,coinGeo);
     coin.rotation.x=Math.PI/2;
     coin.castShadow=false;
     return coin;

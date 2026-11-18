@@ -1,7 +1,7 @@
 export function repeatedVans(distance) {
   const vans=[],start=Math.max(0,Math.floor((distance-100)/160)-1);
   for(let i=start;i<start+3;i++) {
-    if(i%4===3)continue;
+    if(i%2===1)continue;
     const base=100+i*160,lane=[-1,1,0][i%3];
     vans.push({id:`van-${i}`,lane,ramp:base+12,rear:base+22,front:base+42,roof:1.72,width:1.94});
     vans.push({id:`roof-${i}`,lane,ramp:base+48,rear:base+48,front:base+68,roof:1.72,width:1.94});
@@ -9,11 +9,12 @@ export function repeatedVans(distance) {
   return vans;
 }
 export function trafficPattern(base,index) {
-  if(index%4===3){
-    const lane=Math.floor(index/4)%2? -1:1,trigger=base+45;
+  if(index%2===1){
+    const lane=Math.floor(index/2)%2? -1:1,trigger=base+45;
     return [
-      {z:base+110,lane,type:'sideVehicle',variant:['cycle','bike','car'][Math.floor(index/4)%3],trigger,encounter:true,started:false,length:3.4,done:false},
+      {z:base+110,lane,type:'sideVehicle',variant:['cycle','bike','car'][Math.floor(index/2)%3],trigger,encounter:true,started:false,length:3.4,done:false},
       {z:base+140,lane:0,type:'bus',velocity:22,trigger,encounter:true,started:false,length:10,done:false},
+      {z:base+145,lane,type:['jump','slide','block'][Math.floor(index/2)%3],variant:'scaffold',done:false},
       {z:base+122,lane:-lane,type:'skill',skill:index%3,done:false}
     ];
   }

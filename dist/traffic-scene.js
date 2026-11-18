@@ -7,7 +7,7 @@ export function createTraffic(scene) {
   const m=new Mesh(geo,mats.get(color));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;g.add(m);return m;
  }
  function vehicle(length,roof,oncoming) {
-  const g=new Group();g.userData.wheels=[];scene.add(g);
+  const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];scene.add(g);
   part(g,oncoming?0xffb526:0xffc632,0,roof*.49,-length/2,1.94,roof*.92,length);
   part(g,0xffeac1,0,roof-.04,-length/2,1.95,.13,length);
   part(g,0x182e40,0,roof*.74,.025,1.65,roof*.33,.06);
