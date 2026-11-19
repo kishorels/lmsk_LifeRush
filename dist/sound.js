@@ -6,6 +6,8 @@ const SAMPLES = {
  shield: './assets/shiled_collect.mp3',
  magnet: './assets/magnectic_power_collect.mp3',
  swag: './assets/gesture_action_sound.mp3',
+ evil_smile: './assets/evil_smile.mp3',
+ damage: './assets/damage.wav',
 };
 
 const audioCache = new Map();
@@ -153,9 +155,12 @@ export function createSound() {
    jetVoice = { source, filter, gain };
   }
   const level = Math.exp(-Math.abs(phase - 0.83) * (phase < 0.83 ? 6 : 19)), now = context.currentTime;
-  jetVoice.gain.gain.setTargetAtTime(0.52 * level, now, 0.06);
-  jetVoice.filter.frequency.setTargetAtTime(240 + 1900 * level, now, 0.07);
+  jetVoice.gain.gain.setTargetAtTime(1.35 * level, now, 0.05);
+  jetVoice.filter.frequency.setTargetAtTime(320 + 2800 * level, now, 0.06);
   jetVoice.source.playbackRate.setTargetAtTime(phase < 0.83 ? 1.13 : 0.76, now, 0.18);
+  if (bgm && enabled) {
+   bgm.volume = Math.max(0.18, 0.45 * (1 - 0.55 * level));
+  }
  }
 
  function play(name, cause) {
@@ -168,11 +173,9 @@ export function createSound() {
    playSample('coin', 0.75);
   }
   else if (name === 'hit') {
+   playSample('damage', 0.95);
    const impact = { bus: [97, 780], van: [125, 590], sideVehicle: [155, 890], block: [100, 200], jump: [180, 270], slide: [200, 1050] }[cause] || [140, 400];
-   tone(impact[0], 32, 0.18, 0.19, 'triangle');
-   tone(impact[1], impact[1] * 0.4, 0.12, 0.10, 'square');
-   tone(185, 84, 0.21, 0.12, 'sawtooth', 0.065);
-   tone(510, 290, 0.15, 0.055, 'triangle', 0.075);
+   tone(impact[0], 32, 0.14, 0.12, 'triangle');
   }
   else if (name === 'horn') {
    tone(185, 180, 0.30, 0.10, 'sawtooth');
@@ -182,7 +185,9 @@ export function createSound() {
    for (let i = 0; i < 3; i++) tone(440 * 2 ** (i / 4), 440 * 2 ** (i / 4), 0.13, 0.1, 'triangle', i * 0.10);
   }
   else if (name === 'laugh') {
-   for (let i = 0; i < 4; i++) tone(140 - i * 8, 78 - i * 4, 0.14, 0.10, 'sawtooth', i * 0.22);
+   if (!playSample('evil_smile', 0.95)) {
+    for (let i = 0; i < 4; i++) tone(140 - i * 8, 78 - i * 4, 0.14, 0.10, 'sawtooth', i * 0.22);
+   }
   }
   else if (name === 'over') {
    tone(260, 80, 0.45, 0.15, 'triangle');

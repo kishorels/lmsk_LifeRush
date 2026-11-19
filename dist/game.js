@@ -348,6 +348,7 @@ function frame(t) {
     game.classList.add('impact-flash');
     if (navigator.vibrate) try { navigator.vibrate([140, 60, 180]); } catch {}
   } else if (hitBefore === 0 && s.hit > 0 && !s.shieldAbsorbed) {
+    effects.play('hit', s.cause);
     game.classList.remove('impact-flash');
     void game.offsetWidth;
     game.classList.add('impact-flash');
