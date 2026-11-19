@@ -10,33 +10,39 @@ export function loadChaserModel(scene, onProgress) {
   chaser.visible = false;
   scene.add(chaser);
 
-  let mixer, run, idle;
-  const url = new URL('./assets/villain.glb', import.meta.url).href;
-  new GLTFLoader().load(url, ({scene: model, animations}) => {
-    const clip = animations.find(animation => animation.name === 'Run') || animations[0];
-    const rest = animations.find(animation => animation.name === 'Idle') || clip;
-    if (!clip || !rest) return;
-    model.traverse(object => {
-      if (object.isMesh) {
-        object.castShadow = true;
-        object.frustumCulled = false;
-      }
-    });
-    model.rotation.y = Math.PI;
-    chaser.add(model);
-    render.model = model;
-    saveGestureBindPose(model);
-    mixer = new AnimationMixer(model);
-    run = mixer.clipAction(clip).play();
-    idle = mixer.clipAction(rest).play();
-    if (onProgress) onProgress(1.0);
-  }, xhr => {
-    if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
-  }, error => console.warn('Could not load the villain chaser.', error));
+  let mixer, run, idle, started = false;
+  function ensureLoaded() {
+    if (started) return;
+    started = true;
+    const url = new URL('./assets/villain.glb', import.meta.url).href;
+    new GLTFLoader().load(url, ({scene: model, animations}) => {
+      const clip = animations.find(animation => animation.name === 'Run') || animations[0];
+      const rest = animations.find(animation => animation.name === 'Idle') || clip;
+      if (!clip || !rest) return;
+      model.traverse(object => {
+        if (object.isMesh) {
+          object.castShadow = true;
+          object.frustumCulled = false;
+        }
+      });
+      model.rotation.y = Math.PI;
+      chaser.add(model);
+      render.model = model;
+      saveGestureBindPose(model);
+      mixer = new AnimationMixer(model);
+      run = mixer.clipAction(clip).play();
+      idle = mixer.clipAction(rest).play();
+      if (onProgress) onProgress(1.0);
+    }, xhr => {
+      if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
+    }, error => console.warn('Could not load the villain chaser.', error));
+  }
+  setTimeout(ensureLoaded, 1600);
 
   function render(state) {
     const capture = isCapture(state);
     const pose = chasePose(state);
+    if (capture || pose || state.mode === 'running') ensureLoaded();
     chaser.visible = Boolean((capture || pose) && run);
     if (!chaser.visible) return;
     if (capture) {

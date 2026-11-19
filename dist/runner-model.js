@@ -1,4 +1,4 @@
-import { AnimationClip, AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide, VectorKeyframeTrack, QuaternionKeyframeTrack } from './vendor/three.module.js';
+import { AnimationClip, AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide, VectorKeyframeTrack, QuaternionKeyframeTrack, Group, Mesh, BufferGeometry, Float32BufferAttribute } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { SWEEP_SECONDS, JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 import {saveGestureBindPose} from './signature-gesture.js';
@@ -194,6 +194,65 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
         }
       }
     });
+    if (selected === 'female') {
+      let crownMesh = null;
+      model.traverse(o => { if (!crownMesh && o.isMesh && /swept_crown|Hair_smooth/i.test(o.name)) crownMesh = o; });
+      const headBone = model.getObjectByName('mixamorigHead') || model.getObjectByName('mixamorig:Head');
+      if (crownMesh && headBone) {
+        const rawMat = crownMesh.material?.clone?.() || new MeshStandardMaterial({ color: 0x3b2618, roughness: 0.72, metalness: 0 });
+        rawMat.roughness = 0.72;
+        rawMat.metalness = 0;
+        rawMat.transparent = false;
+        rawMat.side = DoubleSide;
+        const hairGroup = new Group();
+        hairGroup.name = 'SchoolgirlFrontHair';
+        // Smoothly contoured swept curtain bangs emerging seamlessly from inside the crown hairline
+        const cols = 48, rows = 14;
+        const pos = [], uvs = [], idx = [];
+        const cx = 0, cy = 1.664, cz = -0.006;
+        for (let r = 0; r <= rows; r++) {
+          const v = r / rows;
+          for (let c = 0; c <= cols; c++) {
+            const u = c / cols;
+            const theta = (u - 0.5) * Math.PI * 0.90;
+            const absT = Math.abs(theta);
+            const partLift = Math.exp(-Math.pow((theta + 0.12) / 0.24, 2)) * 0.022;
+            const wisp = Math.sin(theta * 15) * 0.0045 * Math.max(0, 1 - absT * 0.55);
+            const templeDrop = Math.pow(Math.max(0, absT - 0.68) / 0.72, 1.3) * 0.054;
+            const yTop = 1.750 - absT * 0.018;
+            const yBot = 1.658 + partLift + wisp - templeDrop;
+            const y = yTop * (1 - v) + yBot * v;
+            const lat = (y - cy) / 0.095;
+            const profileR = Math.sqrt(Math.max(0.24, 1 - lat * lat * 0.50));
+            // Tuck top edge inside existing crown (0.071) so there is zero visor ledge, then drape closely over forehead
+            const easeOut = Math.sin(Math.min(1, v * 1.35) * Math.PI * 0.5);
+            const strandRipple = Math.cos(theta * 40) * 0.0014 * Math.sin(v * Math.PI);
+            const baseR = 0.071 + 0.0205 * easeOut - Math.pow(absT / 1.42, 2) * 0.005 + strandRipple;
+            const x = cx + Math.sin(theta) * baseR * profileR;
+            const z = cz + Math.cos(theta) * (baseR + 0.003 * easeOut) * profileR;
+            pos.push(x, y, z);
+            uvs.push(u * 6.0, v * 1.2);
+          }
+        }
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const a = r * (cols + 1) + c, b = a + 1, d = a + cols + 1, e = d + 1;
+            idx.push(a, d, b, b, d, e);
+          }
+        }
+        const bangsGeo = new BufferGeometry();
+        bangsGeo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+        bangsGeo.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+        bangsGeo.setIndex(idx);
+        bangsGeo.computeVertexNormals();
+        const bangsMesh = new Mesh(bangsGeo, rawMat);
+        bangsMesh.castShadow = false;
+        hairGroup.add(bangsMesh);
+        model.add(hairGroup);
+        model.updateMatrixWorld(true);
+        headBone.attach(hairGroup);
+      }
+    }
     saveGestureBindPose(model);
     mixer = new AnimationMixer(model);
     actions = Object.fromEntries(names.map(name => [name, mixer.clipAction(clips.get(name))]));

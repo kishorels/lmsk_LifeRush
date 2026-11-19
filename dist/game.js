@@ -1,10 +1,12 @@
-import {createSound} from './sound.js?v=2.9.4';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.4';
-import {createRenderer} from './renderer3d.js?v=2.9.4';
-import {createLiteRenderer} from './renderer-lite.js?v=2.9.4';
+import {createSound} from './sound.js?v=2.9.5';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.5';
+import {createRenderer} from './renderer3d.js?v=2.9.5';
+import {createLiteRenderer} from './renderer-lite.js?v=2.9.5';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
+let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuRenderAccum = 1;
+const nameModalEl = $('name-modal');
 // Remove controls from a cached older HTML shell as well.
 document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
 let assetsReady = false;
@@ -887,21 +889,50 @@ function tick(t) {
     $('toast').textContent = 'You escaped the chaser!';
   }
   
-  $('distance').innerHTML = Math.floor(s.distance)+'<span> m</span>';
-  $('coins').textContent = s.coins;
-  $('best').textContent = best+' m';
+  const distInt = Math.floor(s.distance);
+  if (distInt !== lastHudDist) {
+    lastHudDist = distInt;
+    $('distance').innerHTML = distInt+'<span> m</span>';
+  }
+  if (s.coins !== lastHudCoins) {
+    lastHudCoins = s.coins;
+    $('coins').textContent = s.coins;
+  }
+  if (best !== lastHudBest) {
+    lastHudBest = best;
+    $('best').textContent = best+' m';
+  }
   
   // Powerup HUD indicators
+  const magActive = s.magnet > 0;
+  const magSec = magActive ? Math.ceil(s.magnet) : 0;
   const magPill = $('magnet-pill');
-  if (magPill) {
-    magPill.hidden = !(s.magnet > 0);
-    if (s.magnet > 0 && $('magnet-timer')) $('magnet-timer').textContent = Math.ceil(s.magnet) + 's';
+  if (magPill && magSec !== lastMagSec) {
+    lastMagSec = magSec;
+    magPill.hidden = !magActive;
+    if (magActive && $('magnet-timer')) $('magnet-timer').textContent = magSec + 's';
   }
+  const shieldActive = Boolean(s.shield);
   const shieldPill = $('shield-pill');
-  if (shieldPill) shieldPill.hidden = !s.shield;
+  if (shieldPill && shieldActive !== lastShield) {
+    lastShield = shieldActive;
+    shieldPill.hidden = !shieldActive;
+  }
 
-  $('countdown').hidden = s.mode !== 'countdown';
-  if (s.mode === 'countdown') $('countdown').textContent = Math.ceil(s.countdown);
+  const cdSec = s.mode === 'countdown' ? Math.ceil(s.countdown) : -1;
+  if (cdSec !== lastCountdown) {
+    lastCountdown = cdSec;
+    $('countdown').hidden = cdSec < 0;
+    if (cdSec >= 0) $('countdown').textContent = cdSec;
+  }
+
+  // Throttle heavy 3D redraws while static overlay tabs (Maps/Settings/Name modal) are open
+  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'maps' || currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden));
+  if (staticOverlayOpen && assetsReady) {
+    menuRenderAccum += dt || 0.016;
+    if (menuRenderAccum < 0.08) return;
+    menuRenderAccum = 0;
+  }
   
   let status = 'ready';
   const renderCharId = (s.mode === 'ready' && currentHub === 'characters')
@@ -919,14 +950,19 @@ function tick(t) {
   }
   if(status==='ready'&&!assetsReady){onAllAssetsReady();}
   const showCharBlur = (s.mode === 'ready' && !usingLiteRenderer && status !== 'ready');
-  game.classList.toggle('is-char-loading', showCharBlur);
-  game.classList.toggle('is-char-error', showCharBlur && status === 'error');
-  if ($('char-loading-veil')) {
-    $('char-loading-veil').hidden = !showCharBlur;
-    if (showCharBlur && $('char-loading-label')) {
-      $('char-loading-label').textContent = status === 'error'
-        ? "Character didn't load — Tap Retry"
-        : 'Loading 3D Hero...';
+  const showCharErr = showCharBlur && status === 'error';
+  if (showCharBlur !== lastShowCharBlur || showCharErr !== lastShowCharErr) {
+    lastShowCharBlur = showCharBlur;
+    lastShowCharErr = showCharErr;
+    game.classList.toggle('is-char-loading', showCharBlur);
+    game.classList.toggle('is-char-error', showCharErr);
+    if ($('char-loading-veil')) {
+      $('char-loading-veil').hidden = !showCharBlur;
+      if (showCharBlur && $('char-loading-label')) {
+        $('char-loading-label').textContent = showCharErr
+          ? "Character didn't load — Tap Retry"
+          : 'Loading 3D Hero...';
+      }
     }
   }
   if(s.mode==='ready'){
