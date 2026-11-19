@@ -1,7 +1,7 @@
-import {createSound} from './sound.js?v=2.8.8';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.8';
-import {createRenderer} from './renderer3d.js?v=2.8.8';
-import {createLiteRenderer} from './renderer-lite.js?v=2.8.8';
+import {createSound} from './sound.js?v=2.8.9';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.9';
+import {createRenderer} from './renderer3d.js?v=2.8.9';
+import {createLiteRenderer} from './renderer-lite.js?v=2.8.9';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
@@ -75,17 +75,51 @@ function onAllAssetsReady() {
   assetsReady = true;
 }
 
+const COLLEGE_UNLOCK_DISTANCE = 10000;
+const COLLEGE_UNLOCK_COINS = 20000;
+const CHARACTER_ROSTER = [
+  { id: 'male', name: 'SCHOOL BOY', outfit: 'School Uniform · School Campus', map: 'school', gender: 'male', lockedByCollege: false },
+  { id: 'female', name: 'SCHOOL GIRL', outfit: 'School Uniform · School Campus', map: 'school', gender: 'female', lockedByCollege: false },
+  { id: 'college-male', name: 'COLLEGE BOY', outfit: 'Casual Outfit · College Campus', map: 'college', gender: 'male', lockedByCollege: true },
+  { id: 'college-female', name: 'COLLEGE GIRL', outfit: 'Casual Outfit · College Campus', map: 'college', gender: 'female', lockedByCollege: true }
+];
+
 const game = canvas.closest('.game');
-let s=fresh(),best=0,character='male',selectedMap='school',sound=true,prev=0,w=600,h=700;
+let s=fresh(),best=0,totalCoins=0,collegeDistDone=false,collegeCoinsDone=false,
+    equippedCharId='male',character='male',selectedMap='school',carouselIndex=0,currentHub='home',
+    sound=true,prev=0,w=600,h=700;
+
+const isDistGoalMet = () => collegeDistDone || best >= COLLEGE_UNLOCK_DISTANCE;
+const isCoinsGoalMet = () => collegeCoinsDone || totalCoins >= COLLEGE_UNLOCK_COINS;
+const isCollegeUnlocked = () => isDistGoalMet() && isCoinsGoalMet();
+const isCharUnlocked = entry => !entry?.lockedByCollege || isCollegeUnlocked();
 
 try{
   best=Number(localStorage.getItem('runverse-best'))||0;
-  character=localStorage.getItem('runverse-character')==='female'?'female':'male';
-  selectedMap=localStorage.getItem('runverse-map')==='college'?'college':'school';
+  totalCoins=Math.max(0,Math.floor(Number(localStorage.getItem('runverse-total-coins'))||0));
+  collegeDistDone=localStorage.getItem('runverse-college-dist-done')==='1' || best >= COLLEGE_UNLOCK_DISTANCE;
+  collegeCoinsDone=localStorage.getItem('runverse-college-coins-done')==='1' || totalCoins >= COLLEGE_UNLOCK_COINS;
+  const savedChar=localStorage.getItem('runverse-character')||'male';
+  const savedMap=localStorage.getItem('runverse-map')==='college'?'college':'school';
+  if (!isCollegeUnlocked()) {
+    selectedMap = 'school';
+    equippedCharId = (savedChar === 'female' || savedChar === 'college-female') ? 'female' : 'male';
+  } else {
+    selectedMap = savedMap;
+    if (CHARACTER_ROSTER.some(c => c.id === savedChar)) {
+      equippedCharId = savedChar;
+    } else {
+      equippedCharId = savedChar === 'female'
+        ? (selectedMap === 'college' ? 'college-female' : 'female')
+        : (selectedMap === 'college' ? 'college-male' : 'male');
+    }
+  }
+  character = equippedCharId.includes('female') ? 'female' : 'male';
+  carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
 }catch{}
 s.map=selectedMap;
 
-const initialModelKey = selectedMap === 'college' ? ('college-' + character) : character;
+const initialModelKey = equippedCharId;
 
 let draw;
 let usingLiteRenderer = false;
@@ -100,7 +134,11 @@ function bindCanvasPointer(target) {
   target.addEventListener('pointerup',e=>{
     if(!touch)return;
     const x=e.clientX-touch.x,y=e.clientY-touch.y;
-    if(Math.max(Math.abs(x),Math.abs(y))>20)input(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'slide':'jump');
+    if(s.mode==='ready'&&currentHub==='characters'&&Math.abs(x)>Math.abs(y)&&Math.abs(x)>24){
+      moveCarousel(x<0?1:-1);
+    } else if(Math.max(Math.abs(x),Math.abs(y))>20){
+      input(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'slide':'jump');
+    }
     touch=null;
   });
   target.addEventListener('pointercancel',()=>touch=null);
@@ -138,7 +176,10 @@ try{
 const save=()=>{
   try{
     localStorage.setItem('runverse-best',best);
-    localStorage.setItem('runverse-character',character);
+    localStorage.setItem('runverse-total-coins',totalCoins);
+    localStorage.setItem('runverse-college-dist-done',isDistGoalMet()?'1':'0');
+    localStorage.setItem('runverse-college-coins-done',isCoinsGoalMet()?'1':'0');
+    localStorage.setItem('runverse-character',equippedCharId);
     localStorage.setItem('runverse-map',selectedMap);
   }catch{}
 };
@@ -192,40 +233,187 @@ function triggerSwag(){
   effects.play('swag');
 }
 
-function select(c){
-  character=c;
-  document.querySelectorAll('[data-character]').forEach(b=>{
-    const match = b.dataset.character===c;
-    b.classList.toggle('selected', match);
-    b.setAttribute('aria-pressed', match);
-  });
-  save();
-  triggerSwag();
+function renderChecklistHtml() {
+  const distMet = isDistGoalMet();
+  const coinsMet = isCoinsGoalMet();
+  const bestClamped = Math.min(COLLEGE_UNLOCK_DISTANCE, Math.floor(best));
+  const distPct = distMet ? 100 : Math.min(100, Math.round((bestClamped / COLLEGE_UNLOCK_DISTANCE) * 100));
+  const coinsClamped = Math.min(COLLEGE_UNLOCK_COINS, Math.floor(totalCoins));
+  const coinsPct = coinsMet ? 100 : Math.min(100, Math.round((coinsClamped / COLLEGE_UNLOCK_COINS) * 100));
+  return `
+    <div class="unlock-goal ${distMet ? 'is-done' : ''}">
+      <div class="unlock-goal-top">
+        <span>🏃 10,000m in 1 Play</span>
+        <span class="unlock-goal-status">${distMet ? '✅ OPEN!' : `${bestClamped.toLocaleString()} / 10,000m`}</span>
+      </div>
+      <div class="unlock-bar-track"><div class="unlock-bar-fill" style="width:${distPct}%"></div></div>
+    </div>
+    <div class="unlock-goal ${coinsMet ? 'is-done' : ''}">
+      <div class="unlock-goal-top">
+        <span>🪙 20,000 Coins Bank</span>
+        <span class="unlock-goal-status">${coinsMet ? '✅ OPEN!' : `${coinsClamped.toLocaleString()} / 20,000`}</span>
+      </div>
+      <div class="unlock-bar-track"><div class="unlock-bar-fill" style="width:${coinsPct}%"></div></div>
+    </div>
+  `;
 }
-select(character);
-document.querySelectorAll('[data-character]').forEach(b=>b.onclick=()=>select(b.dataset.character));
 
-function selectMap(map){
-  selectedMap=map==='college'?'college':'school';
-  s.map=selectedMap;
+function pulseChecklist(el) {
+  if (!el) return;
+  el.classList.remove('is-shake');
+  void el.offsetWidth;
+  el.classList.add('is-shake');
+}
+
+function updateUnlockUI() {
+  const unlocked = isCollegeUnlocked();
+  const bankEl = $('hub-coin-bank');
+  if (bankEl) {
+    bankEl.textContent = unlocked
+      ? `🪙 ${totalCoins.toLocaleString()} Coins · ★ College Open`
+      : `🪙 ${totalCoins.toLocaleString()} / 20,000`;
+  }
+  const collegeCard = document.querySelector('[data-map="college"]');
+  if (collegeCard) {
+    collegeCard.classList.toggle('is-locked', !unlocked);
+    collegeCard.setAttribute('aria-disabled', String(!unlocked));
+  }
+  if ($('college-map-sub')) {
+    $('college-map-sub').textContent = unlocked ? 'Casual outfits · blocks' : '🔒 Complete 2 goals';
+  }
+  if ($('college-map-badge')) {
+    $('college-map-badge').textContent = unlocked ? '✓' : '🔒';
+  }
+  const checklistHtml = renderChecklistHtml();
+  if ($('map-unlock-checklist')) $('map-unlock-checklist').innerHTML = checklistHtml;
+  if ($('char-unlock-checklist')) $('char-unlock-checklist').innerHTML = checklistHtml;
+}
+
+function syncMapHeaderUI() {
   document.querySelectorAll('[data-map]').forEach(button=>{
     const active=button.dataset.map===selectedMap;
     button.classList.toggle('selected',active);
     button.setAttribute('aria-pressed',String(active));
   });
   const school=selectedMap==='school';
-  $('hub-map-name').textContent=school?'SCHOOL CAMPUS':'COLLEGE CAMPUS';
-  $('hub-outfit-name').textContent=school?'School uniform':'Casual outfit';
-  $('boy-outfit').textContent=school?'School uniform':'Original casual look';
-  $('girl-outfit').textContent=school?'School uniform':'Original casual look';
-  document.querySelector('.hud-top-bar .location').textContent=school?'🏫 RUNVERSE SCHOOL':'🎓 RUNVERSE COLLEGE';
+  if($('hub-map-name')) $('hub-map-name').textContent=school?'SCHOOL CAMPUS':'COLLEGE CAMPUS';
+  if($('hub-outfit-name')) $('hub-outfit-name').textContent=school?'School uniform':'Casual outfit';
+  const loc = document.querySelector('.hud-top-bar .location');
+  if(loc) loc.textContent=school?'🏫 RUNVERSE SCHOOL':'🎓 RUNVERSE COLLEGE';
+}
+
+function updateCarouselUI() {
+  const entry = CHARACTER_ROSTER[carouselIndex] || CHARACTER_ROSTER[0];
+  const unlocked = isCharUnlocked(entry);
+  const equipped = entry.id === equippedCharId;
+  if ($('char-step-badge')) $('char-step-badge').textContent = `CHARACTER ${carouselIndex + 1} / ${CHARACTER_ROSTER.length}`;
+  const lockPill = $('char-lock-pill');
+  if (lockPill) {
+    lockPill.classList.toggle('is-locked', !unlocked);
+    lockPill.textContent = unlocked ? '✓ UNLOCKED' : '🔒 LOCKED';
+  }
+  if ($('char-carousel-name')) $('char-carousel-name').textContent = entry.name;
+  if ($('char-carousel-outfit')) $('char-carousel-outfit').textContent = entry.outfit;
+  document.querySelectorAll('#char-carousel-dots .char-dot').forEach((dot, idx) => {
+    const item = CHARACTER_ROSTER[idx];
+    dot.classList.toggle('active', idx === carouselIndex);
+    dot.classList.toggle('locked', !isCharUnlocked(item));
+  });
+  const equipBtn = $('char-equip-btn');
+  if (equipBtn) {
+    equipBtn.classList.remove('is-selected', 'is-locked');
+    if (!unlocked) {
+      equipBtn.classList.add('is-locked');
+      equipBtn.textContent = '🔒 COMPLETE BOTH GOALS TO UNLOCK';
+    } else if (equipped) {
+      equipBtn.classList.add('is-selected');
+      equipBtn.textContent = '✓ SELECTED';
+    } else {
+      equipBtn.textContent = 'SELECT CHARACTER';
+    }
+  }
+  const checklist = $('char-unlock-checklist');
+  if (checklist) checklist.hidden = !entry.lockedByCollege;
+  updateUnlockUI();
+}
+
+function selectUnlockedCharacter(id) {
+  const entry = CHARACTER_ROSTER.find(c => c.id === id);
+  if (!entry || !isCharUnlocked(entry)) return false;
+  equippedCharId = entry.id;
+  character = entry.gender;
+  selectedMap = entry.map;
+  s.map = selectedMap;
+  carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === entry.id));
+  syncMapHeaderUI();
+  updateCarouselUI();
+  save();
+  triggerSwag();
+  return true;
+}
+
+function moveCarousel(delta) {
+  carouselIndex = (carouselIndex + delta + CHARACTER_ROSTER.length) % CHARACTER_ROSTER.length;
+  const entry = CHARACTER_ROSTER[carouselIndex];
+  if (isCharUnlocked(entry)) {
+    selectUnlockedCharacter(entry.id);
+  } else {
+    updateCarouselUI();
+    triggerSwag();
+  }
+}
+
+if ($('char-prev')) $('char-prev').onclick = () => moveCarousel(-1);
+if ($('char-next')) $('char-next').onclick = () => moveCarousel(1);
+document.querySelectorAll('#char-carousel-dots .char-dot').forEach((dot, idx) => {
+  dot.onclick = () => {
+    carouselIndex = idx;
+    const entry = CHARACTER_ROSTER[carouselIndex];
+    if (isCharUnlocked(entry)) selectUnlockedCharacter(entry.id);
+    else { updateCarouselUI(); triggerSwag(); }
+  };
+});
+if ($('char-equip-btn')) {
+  $('char-equip-btn').onclick = () => {
+    const entry = CHARACTER_ROSTER[carouselIndex];
+    if (!isCharUnlocked(entry)) {
+      pulseChecklist($('char-unlock-checklist'));
+      effects.unlock?.();
+      return;
+    }
+    selectUnlockedCharacter(entry.id);
+  };
+}
+
+function selectMap(map, fromUser = false){
+  if (map === 'college' && !isCollegeUnlocked()) {
+    if (fromUser) {
+      pulseChecklist($('map-unlock-checklist'));
+      effects.unlock?.();
+    }
+    return;
+  }
+  selectedMap=map==='college'?'college':'school';
+  s.map=selectedMap;
+  equippedCharId = selectedMap === 'college'
+    ? (character === 'female' ? 'college-female' : 'college-male')
+    : (character === 'female' ? 'female' : 'male');
+  carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
+  syncMapHeaderUI();
+  updateCarouselUI();
   save();
 }
-selectMap(selectedMap);
-document.querySelectorAll('[data-map]').forEach(button=>button.onclick=()=>{selectMap(button.dataset.map);triggerSwag();});
+syncMapHeaderUI();
+updateCarouselUI();
+document.querySelectorAll('[data-map]').forEach(button=>button.onclick=()=>{
+  const before = selectedMap;
+  selectMap(button.dataset.map, true);
+  if (selectedMap !== before || button.dataset.map === 'school') triggerSwag();
+});
 
 function showHub(page='home'){
   const next=['home','characters','maps','settings'].includes(page)?page:'home';
+  currentHub = next;
   game.classList.remove('hub-home','hub-characters','hub-maps','hub-settings');
   game.classList.add(`hub-${next}`);
   document.querySelectorAll('[data-hub]').forEach(button=>{
@@ -233,6 +421,12 @@ function showHub(page='home'){
     button.classList.toggle('selected',active);
     if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
   });
+  if (next === 'characters') {
+    carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
+    updateCarouselUI();
+  } else if (next === 'maps') {
+    updateUnlockUI();
+  }
   if(next==='home'||next==='characters')triggerSwag();
 }
 document.querySelectorAll('[data-hub]').forEach(button=>button.onclick=()=>showHub(button.dataset.hub));
@@ -327,6 +521,12 @@ if($('btn-enter')){
 }
 
 function start(){
+  if (!isCollegeUnlocked()) {
+    selectedMap = 'school';
+    equippedCharId = character === 'female' ? 'female' : 'male';
+    carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
+    syncMapHeaderUI();
+  }
   s=fresh();
   s.map=selectedMap;
   s.turnTime = 0.65;
@@ -377,6 +577,8 @@ function crash(){
   const previousBest = best;
   const runDist = Math.floor(s.distance);
   best=Math.max(best, runDist);
+  if (runDist >= COLLEGE_UNLOCK_DISTANCE) collegeDistDone = true;
+  if (totalCoins >= COLLEGE_UNLOCK_COINS) collegeCoinsDone = true;
   save();
   effects.play('over');
   setScreenMode('gameover');
@@ -425,7 +627,7 @@ function crash(){
     'RUN AGAIN',
     'REPORT CARD'
   );
-  $('tip').textContent='Coins: '+s.coins+' | Grade: '+grade;
+  $('tip').textContent=`Coins: ${s.coins} | Bank: ${totalCoins.toLocaleString()} | Grade: ${grade}`;
 }
 
 if($('start')) $('start').onclick=e=>{
@@ -444,6 +646,8 @@ if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   if($('report-records')) $('report-records').hidden=true;
   if($('report-challenge-banner')) $('report-challenge-banner').hidden=true;
   if($('selection')) $('selection').hidden=false;
+  syncMapHeaderUI();
+  updateCarouselUI();
   setScreenMode('select');
   showHub('home');
 };
@@ -457,6 +661,8 @@ if($('btn-change-char')) $('btn-change-char').onclick=()=>{
   if($('report-records')) $('report-records').hidden=true;
   if($('report-challenge-banner')) $('report-challenge-banner').hidden=true;
   if($('selection')) $('selection').hidden=false;
+  syncMapHeaderUI();
+  updateCarouselUI();
   setScreenMode('select');
   showHub('characters');
 };
@@ -477,6 +683,10 @@ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointe
 window.addEventListener('keydown',e=>{
   if(e.target?.closest?.('input, textarea, select')) return;
   if(s.mode!=='running'&&e.target?.closest?.('button')&&(e.key===' '||e.key==='Enter'))return;
+  if(s.mode!=='running' && game.classList.contains('mode-select') && game.classList.contains('hub-characters')) {
+    if(e.key==='ArrowLeft'){ e.preventDefault(); moveCarousel(-1); return; }
+    if(e.key==='ArrowRight'){ e.preventDefault(); moveCarousel(1); return; }
+  }
   const a={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump',ArrowDown:'slide',s:'slide'}[e.key];
   if(a){e.preventDefault();if(!e.repeat)input(a);}
   if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}
@@ -542,6 +752,18 @@ function tick(t) {
   if (old === 'captured' && captureBefore < CAPTURE_GESTURE_START && s.capture >= CAPTURE_GESTURE_START) effects.play('swag');
 
   if (s.coins > coinsBefore) {
+    const gained = s.coins - coinsBefore;
+    const wasUnlocked = isCollegeUnlocked();
+    totalCoins += gained;
+    if (!collegeCoinsDone && totalCoins >= COLLEGE_UNLOCK_COINS) {
+      collegeCoinsDone = true;
+      effects.play('bell');
+      $('toast').textContent = isCollegeUnlocked()
+        ? '🎓 20,000 COINS SAVED · COLLEGE CAMPUS & CHARACTERS UNLOCKED!'
+        : '🪙 Goal 2 Complete: 20,000 Coins Saved! Reach 10,000m in 1 run to unlock College!';
+    }
+    save();
+    if (!wasUnlocked && isCollegeUnlocked()) updateUnlockUI();
     if (s.y > 1.2 || s.roofRide) effects.play('roofCoin');
     else effects.play('coin');
     const counter=$('coins').parentElement;
@@ -594,8 +816,15 @@ function tick(t) {
     $('toast').textContent = '🚀 8,000m · MORE MORE SPEED! 2X HYPER MODE!';
   }
   if (distanceBefore < 10000 && s.distance >= 10000) {
+    if (!collegeDistDone) {
+      collegeDistDone = true;
+      save();
+      if (isCollegeUnlocked()) updateUnlockUI();
+    }
     effects.play('bell');
-    $('toast').textContent = '💀 10,000m · VERY VERY FAST & 1-HIT SUDDEN DEATH!';
+    $('toast').textContent = isCollegeUnlocked()
+      ? '🎓 10,000m REACHED · COLLEGE CAMPUS & CHARACTERS UNLOCKED!'
+      : '💀 10,000m · 10k Goal Open! Collect 20,000 Coins to unlock College!';
   }
 
   if (s.mode === 'running' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
@@ -629,15 +858,18 @@ function tick(t) {
   if (s.mode === 'countdown') $('countdown').textContent = Math.ceil(s.countdown);
   
   let status = 'ready';
+  const renderCharId = (s.mode === 'ready' && currentHub === 'characters')
+    ? (CHARACTER_ROSTER[carouselIndex]?.id || equippedCharId)
+    : equippedCharId;
   try {
-    status = draw(s, character, dt);
+    status = draw(s, renderCharId, dt);
     if (status === 'context-lost') {
       switchToLiteRenderer('WebGL context lost');
-      status = draw(s, character, dt);
+      status = draw(s, renderCharId, dt);
     }
   } catch (err) {
     switchToLiteRenderer(err?.message || err);
-    try { status = draw(s, character, dt); } catch {}
+    try { status = draw(s, renderCharId, dt); } catch {}
   }
   if(status==='ready'&&!assetsReady){onAllAssetsReady();}
   if(s.mode==='ready'){

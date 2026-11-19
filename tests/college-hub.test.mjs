@@ -77,3 +77,34 @@ test('typing inside text input is never blocked by game keydown controls',async(
  assert.ok(htmlSrc.includes('id="report-records"')&&htmlSrc.includes('id="report-challenge-banner"')&&gameSrc.includes('ARE YOU A LOSER?!'),
    'report card displays Highest Record comparison and challenge replay prompt');
 });
+
+test('unified character carousel with left/right arrows and 2-step College unlock (10k distance + 20k coins)',async()=>{
+ const gameSrc=await readFile(new URL('../dist/game.js',import.meta.url),'utf8');
+ const htmlSrc=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
+ const r3dSrc=await readFile(new URL('../dist/renderer3d.js',import.meta.url),'utf8');
+ const liteSrc=await readFile(new URL('../dist/renderer-lite.js',import.meta.url),'utf8');
+
+ // No Boy/Girl gender-split selector buttons remain in the Characters hub or top bar
+ assert.ok(!htmlSrc.includes('hub-character-options')&&!htmlSrc.includes('char-selector-pills'),
+   'gender-split character menus removed in favor of unified carousel');
+ assert.ok(htmlSrc.includes('id="char-prev"')&&htmlSrc.includes('id="char-next"')&&htmlSrc.includes('id="char-equip-btn"'),
+   'Characters screen exposes Left/Right arrow navigation and select button');
+ assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&gameSrc.includes("id: 'female'")&&gameSrc.includes("id: 'college-male'")&&gameSrc.includes("id: 'college-female'"),
+   'unified roster cycles cleanly through all 4 characters');
+
+ // Two-step College unlock thresholds: 10,000m in 1 run + 20,000 cumulative coins
+ assert.ok(gameSrc.includes('COLLEGE_UNLOCK_DISTANCE = 10000')&&gameSrc.includes('COLLEGE_UNLOCK_COINS = 20000'),
+   'College unlock defines 10,000m single-run and 20,000 cumulative coin targets');
+ assert.ok(gameSrc.includes('runverse-total-coins')&&gameSrc.includes('runverse-college-dist-done')&&gameSrc.includes('runverse-college-coins-done'),
+   'single-run 10k milestone and cumulative coin bank persist across runs');
+ assert.ok(gameSrc.includes('isDistGoalMet')&&gameSrc.includes('isCoinsGoalMet')&&gameSrc.includes('isCollegeUnlocked'),
+   'both goals must complete before College map and College characters unlock');
+ assert.ok(htmlSrc.includes('id="map-unlock-checklist"')&&htmlSrc.includes('id="char-unlock-checklist"'),
+   'both Maps and Characters tabs render the 2-step unlock checklist');
+
+ // 3D and 2D renderers handle full model keys ('college-male' / 'college-female') even when previewing on School map
+ assert.ok(r3dSrc.includes("rawChar.startsWith('college-')?rawChar"),
+   '3D renderer supports explicit college character preview keys without double-prefixing');
+ assert.ok(liteSrc.includes("String(character).includes('female')")&&liteSrc.includes("String(character).startsWith('college-')"),
+   '2D lite renderer supports full character preview keys');
+});
