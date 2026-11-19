@@ -1,11 +1,11 @@
-import {createSound} from './sound.js?v=2.9.5';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.5';
-import {createRenderer} from './renderer3d.js?v=2.9.5';
-import {createLiteRenderer} from './renderer-lite.js?v=2.9.5';
+import {createSound} from './sound.js?v=2.9.6';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.6';
+import {createRenderer} from './renderer3d.js?v=2.9.6';
+import {createLiteRenderer} from './renderer-lite.js?v=2.9.6';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
-let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuRenderAccum = 1;
+let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuRenderAccum = 1, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false;
 const nameModalEl = $('name-modal');
 // Remove controls from a cached older HTML shell as well.
 document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
@@ -91,6 +91,7 @@ setupIntroVideo();
 function onAllAssetsReady() {
   if (assetsReady) return;
   assetsReady = true;
+  if (typeof startHeroPreloader === 'function') startHeroPreloader();
 }
 
 const COLLEGE_UNLOCK_DISTANCE = 10000;
@@ -291,6 +292,9 @@ function pulseChecklist(el) {
 
 function updateUnlockUI() {
   const unlocked = isCollegeUnlocked();
+  const key = `${Math.floor(best)}:${Math.floor(totalCoins)}:${unlocked ? 1 : 0}`;
+  if (key === lastUnlockUiKey) return;
+  lastUnlockUiKey = key;
   const bankEl = $('hub-coin-bank');
   if (bankEl) {
     bankEl.textContent = unlocked
@@ -371,10 +375,43 @@ function updateCarouselUI() {
   updateUnlockUI();
 }
 
+let activePreviewCharId = equippedCharId;
+function scheduleCarouselPreview() {
+  clearTimeout(carouselSwapTimer);
+  const targetId = CHARACTER_ROSTER[carouselIndex]?.id || equippedCharId;
+  menuRenderAccum = 1;
+  if (draw?.isLoaded?.(targetId)) {
+    activePreviewCharId = targetId;
+    return;
+  }
+  carouselSwapTimer = setTimeout(() => {
+    activePreviewCharId = targetId;
+    menuRenderAccum = 1;
+  }, 130);
+}
+function startHeroPreloader() {
+  if (preloaderStarted) return;
+  preloaderStarted = true;
+  const order = ['female', 'college-man', 'college-woman', 'college-male', 'male'];
+  let idx = 0;
+  const stepPreload = () => {
+    while (idx < order.length && (order[idx] === equippedCharId || draw?.isLoaded?.(order[idx]))) idx++;
+    if (idx >= order.length) return;
+    if (s.mode === 'ready' && !game.classList.contains('mode-splash') && draw?.preload) {
+      draw.preload(order[idx++]);
+      setTimeout(stepPreload, 950);
+    } else {
+      setTimeout(stepPreload, 1600);
+    }
+  };
+  setTimeout(stepPreload, 850);
+}
+
 function selectUnlockedCharacter(id) {
   const entry = CHARACTER_ROSTER.find(c => c.id === id);
   if (!entry || !isCharUnlocked(entry)) return false;
   equippedCharId = entry.id;
+  activePreviewCharId = entry.id;
   character = entry.gender;
   selectedMap = entry.map;
   s.map = selectedMap;
@@ -389,7 +426,7 @@ function selectUnlockedCharacter(id) {
 function moveCarousel(delta) {
   carouselIndex = (carouselIndex + delta + CHARACTER_ROSTER.length) % CHARACTER_ROSTER.length;
   updateCarouselUI();
-  triggerSwag();
+  scheduleCarouselPreview();
 }
 
 if ($('char-prev')) $('char-prev').onclick = () => moveCarousel(-1);
@@ -406,7 +443,7 @@ document.querySelectorAll('#char-carousel-dots .char-dot').forEach((dot, idx) =>
   dot.onclick = () => {
     carouselIndex = idx;
     updateCarouselUI();
-    triggerSwag();
+    scheduleCarouselPreview();
   };
 });
 if ($('char-equip-btn')) {
@@ -456,6 +493,7 @@ document.querySelectorAll('[data-map]').forEach(button=>button.onclick=()=>{
 function showHub(page='home'){
   const next=['home','characters','maps','settings'].includes(page)?page:'home';
   currentHub = next;
+  menuRenderAccum = 1;
   game.classList.remove('hub-home','hub-characters','hub-maps','hub-settings');
   game.classList.add(`hub-${next}`);
   document.querySelectorAll('[data-hub]').forEach(button=>{
@@ -465,11 +503,12 @@ function showHub(page='home'){
   });
   if (next === 'characters') {
     carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
+    activePreviewCharId = equippedCharId;
     updateCarouselUI();
   } else if (next === 'maps') {
     updateUnlockUI();
   }
-  if(next==='home'||next==='characters')triggerSwag();
+  if((next==='home'||next==='characters')&&draw?.isLoaded?.(equippedCharId))triggerSwag();
 }
 document.querySelectorAll('[data-hub]').forEach(button=>button.onclick=()=>showHub(button.dataset.hub));
 showHub('home');
@@ -548,8 +587,6 @@ if ($('btn-edit-player-name')) {
 
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
-    assetsReady = true;
-    ensureRenderer();
     try { $('intro-video')?.pause(); } catch {}
     effects.setEnabled(sound);
     effects.unlock();
@@ -559,6 +596,9 @@ if($('btn-enter')){
     } else {
       setScreenMode('select');
       showHub('home');
+    }
+    if (!rendererStarted) {
+      requestAnimationFrame(() => requestAnimationFrame(ensureRenderer));
     }
   };
 }
@@ -930,14 +970,19 @@ function tick(t) {
   const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'maps' || currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden));
   if (staticOverlayOpen && assetsReady) {
     menuRenderAccum += dt || 0.016;
-    if (menuRenderAccum < 0.08) return;
+    if (menuRenderAccum < 0.12) return;
     menuRenderAccum = 0;
   }
-  
+
   let status = 'ready';
   const renderCharId = (s.mode === 'ready' && currentHub === 'characters')
-    ? (CHARACTER_ROSTER[carouselIndex]?.id || equippedCharId)
+    ? (activePreviewCharId || CHARACTER_ROSTER[carouselIndex]?.id || equippedCharId)
     : equippedCharId;
+  if (s.mode === 'ready' && lastRenderStatus === 'loading' && !draw?.isLoaded?.(renderCharId)) {
+    loadingThrottleAccum += dt || 0.016;
+    if (loadingThrottleAccum < 0.12) return;
+    loadingThrottleAccum = 0;
+  }
   try {
     status = draw(s, renderCharId, dt);
     if (status === 'context-lost') {
@@ -948,6 +993,7 @@ function tick(t) {
     switchToLiteRenderer(err?.message || err);
     try { status = draw(s, renderCharId, dt); } catch {}
   }
+  lastRenderStatus = status;
   if(status==='ready'&&!assetsReady){onAllAssetsReady();}
   const showCharBlur = (s.mode === 'ready' && !usingLiteRenderer && status !== 'ready');
   const showCharErr = showCharBlur && status === 'error';

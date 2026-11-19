@@ -81,6 +81,8 @@ function createSchoolBadgeTexture(CanvasTextureClass) {
 let sharedMaleClipsPromise = null;
 let sharedInjuredClipsPromise = null;
 let sharedCollegeIdlePromise = null;
+let sharedSchoolBadgeTex = null;
+const isTouchDevice = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
 
 function loadInjuredRunData() {
   if (!sharedInjuredClipsPromise) {
@@ -108,8 +110,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   function load() {
     const assets = {
-      male: './assets/runverse-schoolboy.glb?v=2.1',
-      female: './assets/schoolgirl.glb?v=uniform-2-hair',
+      male: './assets/runverse-schoolboy.glb?v=2.2-opt',
+      female: './assets/schoolgirl.glb?v=uniform-3-opt',
       'college-male': './assets/runverse-runner-v6.glb',
       'college-woman': './assets/college-woman.glb?v=1',
       'college-man': './assets/college-man.glb?v=1'
@@ -144,7 +146,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     model.visible = false;
     model.traverse(object => {
       if (object.isMesh) {
-        object.castShadow = true;
+        object.castShadow = !(isTouchDevice && selected === 'female');
         object.frustumCulled = false;
         // Hide awkward collar cardboard flaps
         if (/collar/i.test(object.name)) {
@@ -160,8 +162,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
             roughness: 0.25,
             side: DoubleSide,
           });
-          const badgeTex = createSchoolBadgeTexture(CanvasTexture);
-          if (badgeTex) badgeMat.map = badgeTex;
+          if (!sharedSchoolBadgeTex) sharedSchoolBadgeTex = createSchoolBadgeTexture(CanvasTexture);
+          if (sharedSchoolBadgeTex) badgeMat.map = sharedSchoolBadgeTex;
           object.material = badgeMat;
           return;
         }
@@ -370,5 +372,6 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     mixer.update(frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0)));
     return true;
   }
+  render.preload = () => { if (!requested) { requested = true; load(); } };
   return render;
 }

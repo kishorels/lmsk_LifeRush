@@ -994,7 +994,7 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 .hub-heading span,.hub-heading small{display:block}.hub-heading span{font-size:11.5px;letter-spacing:1.3px;font-weight:900;color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,0.5)}.hub-heading small{font-size:10px;font-weight:700;color:#ffd754;margin-top:2px;letter-spacing:0.3px}#hub-coin-bank{color:#7ee8ff;font-size:9.5px}
 .hub-gear-btn{width:40px;height:40px;flex:none;border-radius:50%;border:1.5px solid rgba(0,212,255,0.7);background:linear-gradient(155deg,#123972,#081d3f);color:#eaf6ff;font-size:18px;display:grid;place-items:center;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.45),0 0 12px rgba(0,212,255,0.25);transition:transform .15s ease}
 .hub-gear-btn:hover{transform:rotate(24deg) scale(1.06)}.hub-gear-btn:active{transform:scale(0.92)}
-.game.is-char-loading #world{filter:blur(11px) saturate(1.25) brightness(0.78);transition:filter .25s ease}
+.game.is-char-loading #world{filter:blur(3px) brightness(0.84)}
 .char-loading-veil{position:absolute;inset:0;z-index:22;display:grid;place-content:center;justify-items:center;gap:10px;background:radial-gradient(circle at 50% 44%,rgba(0,180,255,0.26) 0%,rgba(6,20,46,0.45) 55%,rgba(5,14,34,0.15) 100%);pointer-events:none}
 .game.is-char-error .char-loading-veil{pointer-events:auto;cursor:pointer}
 .char-loading-ring{width:46px;height:46px;border-radius:50%;border:3px solid rgba(56,189,248,0.25);border-top-color:#00e5ff;box-shadow:0 0 18px rgba(0,229,255,0.65);animation:spinHero 0.9s linear infinite}
