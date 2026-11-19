@@ -575,3 +575,17 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 
 /* Keep the start screen and playfield free of gesture controls and hint text. */
 #btn-swag,.btn-swag-action,.select-guide-text,#toast { display:none !important; }
+
+.impact-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255, 30, 30, 0.45) 0%, rgba(200, 0, 0, 0.8) 100%);
+  pointer-events: none;
+  z-index: 99;
+  animation: impactFade 0.45s ease-out forwards;
+}
+@keyframes impactFade {
+  0% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 0; transform: scale(1); }
+}

@@ -199,7 +199,14 @@ export function loadRunnerModel(parent, selected = 'male', onProgress) {
     if (frozen && current) return true;
 
     let name = 'Run';
-    if (state.mode === 'falling' || state.mode === 'crashed') name = 'Fall';
+    if (state.mode === 'falling' || state.mode === 'crashed') {
+      const progress = 1 - (state.fall || 0) / FALL_DURATION;
+      if (progress < 0.38) {
+        name = state.cause === 'slide' ? 'HeadHit' : 'Stumble';
+      } else {
+        name = 'Fall';
+      }
+    }
     else if (state.mode !== 'running') name = 'Idle';
     else if (state.hit) name = state.cause === 'slide' ? 'HeadHit' : 'Stumble';
     else if (state.jump || state.drop || state.fallSpeed) name = 'Jump';

@@ -303,7 +303,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
 function frame(t) {
   const dt = prev ? (t-prev)/1000 : 0;
   prev = t;
-  const old = s.mode, firstHitBefore = s.firstHitAt, captureBefore = s.capture;
+  const old = s.mode, firstHitBefore = s.firstHitAt, captureBefore = s.capture, hitBefore = s.hit;
   const distanceBefore = s.distance, coinsBefore = s.coins;
   
   if (s.mode === 'starting') {
@@ -321,7 +321,18 @@ function frame(t) {
   step(s, dt);
   effects.update(s);
   
-  if(old==='running' && s.mode==='falling')effects.play('hit',s.cause);
+  if(old==='running' && s.mode==='falling') {
+    effects.play('hit',s.cause);
+    game.classList.remove('impact-flash');
+    void game.offsetWidth;
+    game.classList.add('impact-flash');
+    if (navigator.vibrate) try { navigator.vibrate([140, 60, 180]); } catch {}
+  } else if (hitBefore === 0 && s.hit > 0 && !s.shieldAbsorbed) {
+    game.classList.remove('impact-flash');
+    void game.offsetWidth;
+    game.classList.add('impact-flash');
+    if (navigator.vibrate) try { navigator.vibrate(80); } catch {}
+  }
   game.classList.toggle('capture', isCapture(s));
   if (old !== 'crashed' && s.mode === 'crashed') crash();
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) effects.play('laugh');
