@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH — School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=2.7.8">
+  <link rel="stylesheet" href="style.css?v=2.7.9">
 </head>
 <body>
 <header>
@@ -107,6 +107,24 @@
       </div>
     </div>
 
+    <!-- SCREEN 1.5: NAME REGISTRATION MODAL (First Time / Edit Name) -->
+    <div id="name-modal" class="name-modal-overlay" hidden>
+      <div class="name-modal-card">
+        <div class="name-modal-tag">★ LMSK LIFE RUSH ★</div>
+        <div class="name-modal-icon">🎒🏃</div>
+        <h2>WELCOME, STUDENT!</h2>
+        <p class="name-modal-desc">Enter your name to register your school ID and start your endless rush.</p>
+        <div class="name-input-group">
+          <input type="text" id="player-name-input" class="player-name-input" maxlength="15" placeholder="Enter your name..." autocomplete="off" spellcheck="false" aria-label="Student Name">
+          <div id="name-error" class="name-error-msg" hidden>Please enter your name</div>
+        </div>
+        <button id="btn-save-name" class="btn-name-confirm">
+          <span>START ADVENTURE</span>
+          <span class="arrow">➔</span>
+        </button>
+      </div>
+    </div>
+
     <!-- SCREEN 2: CHARACTER SELECTION SCREEN (Properly Aligned, No Overlap) -->
     <div id="select-screen" class="select-screen" hidden>
       <!-- Top Navigation Bar -->
@@ -121,14 +139,12 @@
             <span class="char-icon">👦</span>
             <div class="char-meta">
               <strong>Boy</strong>
-              <small>Muthu</small>
             </div>
           </button>
           <button class="char-tab-btn" data-character="female">
             <span class="char-icon">👧</span>
             <div class="char-meta">
               <strong>Girl</strong>
-              <small>Kayal</small>
             </div>
           </button>
         </div>
@@ -136,6 +152,13 @@
 
       <!-- Bottom Actions Container (Vertical Stack, Zero Overlap) -->
       <div class="select-bottom-panel">
+
+        <!-- Student Name Badge -->
+        <div class="select-player-badge" id="btn-edit-player-name" role="button" tabindex="0" title="Change Student Name">
+          <span class="player-badge-icon">🪪</span>
+          <span class="player-badge-text">STUDENT: <b id="char-screen-player-name">Student</b></span>
+          <span class="player-badge-edit">✏️</span>
+        </div>
 
         <!-- Start Run Button -->
         <button id="start" class="btn-start-rush">
@@ -154,6 +177,9 @@
         <div id="report-grade" class="report-grade" hidden>
           <div class="grade-label">ACADEMIC GRADE</div>
           <div id="grade-badge" class="grade-badge">A+</div>
+        </div>
+        <div id="report-student-tag" class="report-student-tag">
+          STUDENT: <strong id="report-player-name">Student</strong>
         </div>
         <p id="message">Swipe. Jump. Slide. Make your own story.</p>
         <button id="btn-play-again" class="primary">RUN AGAIN <span>↺</span></button>
@@ -182,6 +208,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=2.7.8"></script>
+<script type="module" src="boot.js?v=2.7.9"></script>
 </body>
 </html>

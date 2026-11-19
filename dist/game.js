@@ -168,14 +168,82 @@ function setScreenMode(mode) {
 }
 setScreenMode('splash');
 
+const PLAYER_NAME_KEY = 'runverse-player-name';
+let playerName = '';
+try {
+  playerName = (localStorage.getItem(PLAYER_NAME_KEY) || '').trim();
+} catch {}
+
+function updatePlayerNameDisplays(name) {
+  const display = name || playerName || 'Student';
+  if ($('char-screen-player-name')) $('char-screen-player-name').textContent = display;
+  if ($('report-player-name')) $('report-player-name').textContent = display;
+  if ($('player-name-input')) $('player-name-input').value = display === 'Student' ? '' : display;
+}
+updatePlayerNameDisplays();
+
+function showNameModal(isEdit = false) {
+  const modal = $('name-modal');
+  const input = $('player-name-input');
+  const error = $('name-error');
+  if (!modal || !input) return;
+  if (error) error.hidden = true;
+  input.value = playerName;
+  modal.hidden = false;
+  setTimeout(() => input.focus(), 100);
+}
+
+function hideNameModal() {
+  const modal = $('name-modal');
+  if (modal) modal.hidden = true;
+}
+
+function submitPlayerName() {
+  const input = $('player-name-input');
+  const error = $('name-error');
+  const raw = (input ? input.value : '').trim().slice(0, 15);
+  if (!raw) {
+    if (error) {
+      error.textContent = 'Please enter your name!';
+      error.hidden = false;
+    }
+    input?.focus();
+    return;
+  }
+  playerName = raw;
+  try {
+    localStorage.setItem(PLAYER_NAME_KEY, playerName);
+  } catch {}
+  updatePlayerNameDisplays(playerName);
+  hideNameModal();
+  setScreenMode('select');
+  triggerSwag();
+}
+
+if ($('btn-save-name')) {
+  $('btn-save-name').onclick = submitPlayerName;
+}
+if ($('player-name-input')) {
+  $('player-name-input').onkeydown = (e) => {
+    if (e.key === 'Enter') submitPlayerName();
+  };
+}
+if ($('btn-edit-player-name')) {
+  $('btn-edit-player-name').onclick = () => showNameModal(true);
+}
+
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
     if (!assetsReady) return;
     effects.setEnabled(sound);
     effects.unlock();
     if(sound) effects.startBgm?.();
-    setScreenMode('select');
-    triggerSwag();
+    if (!playerName) {
+      showNameModal();
+    } else {
+      setScreenMode('select');
+      triggerSwag();
+    }
   };
 }
 
@@ -218,6 +286,7 @@ function show(title,message,button,tag){
   if($('selection')) $('selection').hidden=true;
   if($('restart')) $('restart').hidden=s.mode!=='paused';
   $('tip').textContent='Each new run starts from zero.';
+  updatePlayerNameDisplays(playerName);
   $('overlay').hidden=false;
 }
 
