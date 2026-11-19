@@ -205,7 +205,7 @@ test('continuous multi-tier speed climbs across 0, 1k, 2k, 5k, 8k, 10k and beyon
   }
 });
 
-test('first hit enables injured state for InjuredRun playback', () => {
+test('first hit enables injured state for InjuredRun playback and recovers after 10 seconds', () => {
   const s = fresh(0);
   assert.equal(s.injured, false);
   s.mode = 'running';
@@ -214,6 +214,12 @@ test('first hit enables injured state for InjuredRun playback', () => {
   step(s, .05);
   assert.equal(s.damage, 1);
   assert.equal(s.injured, true);
+  // Still injured at ~9.5s after hit (even after chaser escapes at 5s)
+  for (let i = 0; i < 190; i++) step(s, .05);
+  assert.equal(s.injured, true);
+  // Recovers back to normal run once 10s have elapsed
+  for (let i = 0; i < 15; i++) step(s, .05);
+  assert.equal(s.injured, false);
 });
 
 test('above 10k m one hit causes instant game over', () => {

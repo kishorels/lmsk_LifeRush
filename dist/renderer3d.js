@@ -1,19 +1,19 @@
-import {createMagnetCoins} from './magnet-coins.js?v=2.9.6';
-import {createPickupModels} from './pickup-models.js?v=2.9.6';
-import {createGuardEffect} from './guard-effect.js?v=2.9.6';
-import {streetSurfaces,curveRelX,curveRelY,roadCurveSlope} from './street-materials.js?v=2.9.6';
-import {createSideTraffic} from './side-vehicles.js?v=2.9.6';
-import {createCaptureStage} from './capture-stage.js?v=2.9.6';
-import {createSky} from './sky-scene.js?v=2.9.6';
-import {createCampus} from './campus-scene.js?v=2.9.6';
-import {createCollegeCampus} from './college-scene.js?v=2.9.6';
-import {createTraffic} from './traffic-scene.js?v=2.9.6';
+import {createMagnetCoins} from './magnet-coins.js?v=2.9.7';
+import {createPickupModels} from './pickup-models.js?v=2.9.7';
+import {createGuardEffect} from './guard-effect.js?v=2.9.7';
+import {streetSurfaces,curveRelX,curveRelY,roadCurveSlope} from './street-materials.js?v=2.9.7';
+import {createSideTraffic} from './side-vehicles.js?v=2.9.7';
+import {createCaptureStage} from './capture-stage.js?v=2.9.7';
+import {createSky} from './sky-scene.js?v=2.9.7';
+import {createCampus} from './campus-scene.js?v=2.9.7';
+import {createCollegeCampus} from './college-scene.js?v=2.9.7';
+import {createTraffic} from './traffic-scene.js?v=2.9.7';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=2.9.6';
-import {createCaptureScene} from './capture-scene.js?v=2.9.6';
-import {loadChaserModel} from './chaser-model.js?v=2.9.6';
-import {loadRunnerModel} from './runner-model.js?v=2.9.6';
-import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.9.6';
+import {createSchoolEntrance} from './school-scene.js?v=2.9.7';
+import {createCaptureScene} from './capture-scene.js?v=2.9.7';
+import {loadChaserModel} from './chaser-model.js?v=2.9.7';
+import {loadRunnerModel} from './runner-model.js?v=2.9.7';
+import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.9.7';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});}
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
@@ -44,10 +44,9 @@ export function createRenderer(canvas, callbacks = {}){
  const updateGuard=createGuardEffect(runner);
  let pickups=null;
  const ensurePickups=()=>{if(!pickups)pickups=createPickupModels();return pickups;};
- setTimeout(ensurePickups, 1800);
  const activeKey=callbacks?.initialModelKey||'male';
  const heroModels={male:loadRunnerModel(runner,'male',activeKey==='male'?callbacks?.onBoyProgress:null,activeKey==='male'),female:loadRunnerModel(runner,'female',activeKey==='female'?callbacks?.onBoyProgress:null,activeKey==='female'),'college-male':loadRunnerModel(runner,'college-male',activeKey==='college-male'?callbacks?.onBoyProgress:null,activeKey==='college-male'),'college-woman':loadRunnerModel(runner,'college-woman',activeKey==='college-woman'?callbacks?.onBoyProgress:null,activeKey==='college-woman'),'college-man':loadRunnerModel(runner,'college-man',activeKey==='college-man'?callbacks?.onBoyProgress:null,activeKey==='college-man')};
- const updateChaserModel=loadChaserModel(scene, callbacks?.onChaserProgress);
+ const updateChaserModel=loadChaserModel(scene, callbacks?.onChaserProgress, true);
  let compiled = false;
  const capture=createCaptureScene(scene);
  const updateSchool=createSchoolEntrance(scene);

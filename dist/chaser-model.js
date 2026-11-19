@@ -3,7 +3,7 @@ import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { chasePose, isCapture, SCHOOL_VAN } from './engine.js';
 import {saveGestureBindPose} from './signature-gesture.js';
 
-export function loadChaserModel(scene, onProgress) {
+export function loadChaserModel(scene, onProgress, defer = false) {
   const chaser = new Group();
   chaser.position.y = .09;
   chaser.scale.setScalar(1.18);
@@ -37,12 +37,12 @@ export function loadChaserModel(scene, onProgress) {
       if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
     }, error => console.warn('Could not load the villain chaser.', error));
   }
-  setTimeout(ensureLoaded, 1600);
+  if (!defer) ensureLoaded();
 
   function render(state) {
     const capture = isCapture(state);
     const pose = chasePose(state);
-    if (capture || pose || state.mode === 'running') ensureLoaded();
+    if (capture || pose || state.mode === 'running' || state.mode === 'intro' || state.mode === 'starting') ensureLoaded();
     chaser.visible = Boolean((capture || pose) && run);
     if (!chaser.visible) return;
     if (capture) {

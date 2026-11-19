@@ -333,7 +333,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     else if (state.jump || state.drop || state.fallSpeed) name = 'Jump';
     else if (state.roll) name = 'Roll';
     else if (state.slide) name = 'Slide';
-    else if ((state.damage >= 1 || state.injured) && actions.InjuredRun) name = 'InjuredRun';
+    else if (state.injured && actions.InjuredRun) name = 'InjuredRun';
     if (state.styleAction > 0 && ['Idle','Run'].includes(name)) name = 'ShoulderSweep';
     if (state.mode === 'starting') name = 'Run';
     const next = actions[name];

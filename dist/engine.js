@@ -1,7 +1,7 @@
 import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase,routeSegment} from './traffic-rules.js';
 export {trafficPattern};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
-export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95;
+export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95, INJURED_DURATION = 10;
 export const MAGNET_RADIUS = 18, CAPTURE_GESTURE_START = 2.55;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
@@ -18,7 +18,7 @@ export function fresh(seed=newRunSeed()) {
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 28,
     jump: 0, slide: 0, roll: 0, drop: null, jumpBuffer: 0, motionId: 0, lastGroundDown: -Infinity,
     roofGrace: 0, floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
-    damage: 0, injured: false, hit: 0, fall: 0, capture: 0, items: [], next: segmentBase(seed,0),
+    damage: 0, injured: false, injuredUntil: 0, hit: 0, fall: 0, capture: 0, items: [], next: segmentBase(seed,0),
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
     magnet: 0, shield: false, books: 0, styleAction: 0, collectedPowerup: null, coinFlights: [],
@@ -288,6 +288,7 @@ function takeHit(s, type) {
     return;
   }
   s.injured = true;
+  s.injuredUntil = s.time + INJURED_DURATION;
   s.firstHitAt = s.time;
   s.chaseReentered = s.time >= OPENING_CHASE;
   if (s.chaseReentered) {
@@ -333,6 +334,9 @@ export function step(s, dt, random = Math.random) {
     s.firstHitAt = null;
     s.chaseReentered = false;
     s.damage = 0;
+  }
+  if (s.injured && s.time >= s.injuredUntil) {
+    s.injured = false;
   }
   const d = s.distance;
   if (d <= 180) s.speed = 28;

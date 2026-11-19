@@ -25,12 +25,8 @@ function getAudio(key) {
  return a;
 }
 
-if (typeof Audio !== 'undefined') {
- for (const key of Object.keys(SAMPLES)) getAudio(key);
-}
-
 export function createSound() {
- let context, master, enabled = true, jetNoise, jetVoice, bgm = null;
+ let context, master, enabled = true, jetNoise, jetVoice, bgm = null, audioUnlocked = false;
  const volumes={music:1,coins:1,powerups:1,movement:1,damage:1,villain:1,ambience:1};
  let currentCategory='movement';
  const level=category=>volumes[category]??1;
@@ -40,17 +36,24 @@ export function createSound() {
  function loadSamples() {
   if (loadingSamples || !context?.decodeAudioData || typeof fetch === 'undefined') return;
   loadingSamples = true;
-  for (const [key, path] of Object.entries(SAMPLES)) {
-   if (buffers.has(key)) continue;
-   try {
-    const url = new URL(path, import.meta.url).href;
-    fetch(url)
-     .then(r => r.arrayBuffer())
-     .then(b => context.decodeAudioData(b))
-     .then(decoded => { buffers.set(key, decoded); })
-     .catch(() => {});
-   } catch {}
-  }
+  const entries = Object.entries(SAMPLES);
+  let i = 0;
+  const next = () => {
+   if (i >= entries.length) return;
+   const [key, path] = entries[i++];
+   if (!buffers.has(key)) {
+    try {
+     const url = new URL(path, import.meta.url).href;
+     fetch(url)
+      .then(r => r.arrayBuffer())
+      .then(b => context.decodeAudioData(b))
+      .then(decoded => { buffers.set(key, decoded); })
+      .catch(() => {});
+    } catch {}
+   }
+   setTimeout(next, 140);
+  };
+  setTimeout(next, 900);
  }
 
  function playSample(key, volume = 0.8) {
@@ -110,7 +113,8 @@ export function createSound() {
  }
 
  function unlock() {
-  startBgm();
+  if (audioUnlocked && context && context.state === 'running') return;
+  audioUnlocked = true;
   try {
    context ??= new (window.AudioContext || window.webkitAudioContext)();
    if (!master) {
