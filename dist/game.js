@@ -418,9 +418,7 @@ function frame(t) {
     $('toast').textContent='Jump onto the moving bus · Follow the roof coins';
   }
   
-  if (s.firstHitAt !== null && s.firstHitAt !== firstHitBefore) {
-    effects.play('hit',s.cause);
-  } else if (firstHitBefore !== null && s.firstHitAt === null) {
+  if (firstHitBefore !== null && s.firstHitAt === null) {
     $('toast').textContent = 'You escaped the chaser!';
   }
   

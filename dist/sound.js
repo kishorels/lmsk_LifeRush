@@ -7,7 +7,7 @@ const SAMPLES = {
  magnet: './assets/magnectic_power_collect.mp3',
  swag: './assets/gesture_action_sound.mp3',
  evil_smile: './assets/evil_smile.mp3',
- damage: './assets/damage.wav',
+ damage: './assets/damage.mp3',
 };
 
 const audioCache = new Map();
@@ -173,9 +173,10 @@ export function createSound() {
    playSample('coin', 0.75);
   }
   else if (name === 'hit') {
-   playSample('damage', 0.95);
-   const impact = { bus: [97, 780], van: [125, 590], sideVehicle: [155, 890], block: [100, 200], jump: [180, 270], slide: [200, 1050] }[cause] || [140, 400];
-   tone(impact[0], 32, 0.14, 0.12, 'triangle');
+   playSample('damage', 1.0);
+   const impact = { bus: [180, 880], van: [160, 690], sideVehicle: [190, 920], block: [140, 320], jump: [220, 380], slide: [240, 1150] }[cause] || [180, 500];
+   tone(impact[0], 65, 0.16, 0.22, 'triangle');
+   tone(impact[1], impact[1] * 0.5, 0.12, 0.18, 'square');
   }
   else if (name === 'horn') {
    tone(185, 180, 0.30, 0.10, 'sawtooth');
