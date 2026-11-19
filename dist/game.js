@@ -184,7 +184,6 @@ function triggerSwag(){
 
 function select(c){
   character=c;
-  if($('start')) $('start').disabled=true;
   document.querySelectorAll('[data-character]').forEach(b=>{
     const match = b.dataset.character===c;
     b.classList.toggle('selected', match);
@@ -199,7 +198,6 @@ document.querySelectorAll('[data-character]').forEach(b=>b.onclick=()=>select(b.
 function selectMap(map){
   selectedMap=map==='college'?'college':'school';
   s.map=selectedMap;
-  if($('start'))$('start').disabled=true;
   document.querySelectorAll('[data-map]').forEach(button=>{
     const active=button.dataset.map===selectedMap;
     button.classList.toggle('selected',active);
@@ -387,7 +385,11 @@ function crash(){
   $('tip').textContent='Coins: '+s.coins+' | Grade: '+grade;
 }
 
-if($('start')) $('start').onclick=()=>$('start').dataset.loadError==='true'?location.reload():start();
+if($('start')) $('start').onclick=e=>{
+  e?.preventDefault?.();
+  if($('start').dataset.loadError==='true') location.reload();
+  else start();
+};
 if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   if(s.mode==='paused'){resume();return;}
   // After crash → go back to character select screen (LET'S RUN page)
@@ -426,6 +428,7 @@ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointe
 }));
 
 window.addEventListener('keydown',e=>{
+  if(e.target.closest('input, textarea, select')) return;
   if(s.mode!=='running'&&e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;
   const a={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump',ArrowDown:'slide',s:'slide'}[e.key];
   if(a){e.preventDefault();if(!e.repeat)input(a);}
@@ -581,11 +584,14 @@ function frame(t) {
   const status=draw(s, character, dt);
   if(status==='ready'&&!assetsReady){onAllAssetsReady();}
   if(s.mode==='ready'){
-    const startButton=$('start'),waiting=status==='loading',failed=status==='error';
+    const startButton=$('start'),failed=status==='error';
     if(startButton){
-      startButton.disabled=waiting;
-      const label=waiting?'Loading runner…':failed?'Retry loading runner':"LET’S RUN 🏃💨";
-      if(startButton.textContent!==label)startButton.innerHTML=`<span>${label}</span> <span class="start-arrow">➔</span>`;
+      startButton.disabled=false;
+      const label=failed?'Retry loading runner':"LET’S RUN 🏃💨";
+      if(startButton.dataset.currentLabel!==label){
+        startButton.dataset.currentLabel=label;
+        startButton.innerHTML=`<span>${label}</span> <span class="rush-arrow">🏃💨</span>`;
+      }
       startButton.dataset.loadError=String(failed);
     }
   }

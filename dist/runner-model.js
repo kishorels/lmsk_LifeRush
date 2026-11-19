@@ -172,10 +172,10 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     render.model = model;
     render.signatureClip = clips.get('ShoulderSweep');
     if (onProgress) onProgress(1.0);
-  }, error => { render.failed=true; console.warn('Could not load the runner character.', error); });
+  }).catch(error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 
   }
-  let requested = selected === 'male' || isInitiallyActive;
+  let requested = selected === 'male' || selected === 'female' || isInitiallyActive;
   if (requested) load();
   function render(state, character, dt) {
     if (!requested && character === selected) { requested = true; load(); }

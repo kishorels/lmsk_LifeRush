@@ -53,3 +53,11 @@ test('separate sound categories clamp their levels without muting the others',()
  assert.equal(sound.getVolumes().coins,.6);
  assert.equal(sound.getVolumes().music,.35);
 });
+
+test('typing inside text input is never blocked by game keydown controls',async()=>{
+ const gameSrc=await readFile(new URL('../dist/game.js',import.meta.url),'utf8');
+ assert.ok(gameSrc.includes("if(e.target.closest('input, textarea, select')) return;"),
+   'input elements bypass game control preventDefault so keys like s, a, d, w, and spaces type cleanly');
+ assert.ok(!gameSrc.includes("$('start').disabled=waiting;"),
+   'start button is not locked disabled by loading poll');
+});
