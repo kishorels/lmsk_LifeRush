@@ -1,4 +1,4 @@
-import { AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide } from './vendor/three.module.js';
+import { AnimationClip, AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide, VectorKeyframeTrack, QuaternionKeyframeTrack } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { SWEEP_SECONDS, JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 import {saveGestureBindPose} from './signature-gesture.js';
@@ -79,6 +79,18 @@ function createSchoolBadgeTexture(CanvasTextureClass) {
 }
 
 let sharedMaleClipsPromise = null;
+let sharedInjuredClipsPromise = null;
+
+function loadInjuredRunData() {
+  if (!sharedInjuredClipsPromise) {
+    sharedInjuredClipsPromise = typeof fetch === 'function'
+      ? fetch(new URL('./assets/injured-run.json', import.meta.url).href)
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null)
+      : Promise.resolve(null);
+  }
+  return sharedInjuredClipsPromise;
+}
 
 export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = false) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
@@ -98,7 +110,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     const schoolMotion = selected === 'college-male'
       ? (sharedMaleClipsPromise || (sharedMaleClipsPromise = loader.loadAsync(new URL(assets.male, import.meta.url).href)))
       : Promise.resolve(null);
-    Promise.all([main, schoolMotion]).then(([gltf, schoolGltf]) => {
+    Promise.all([main, schoolMotion, loadInjuredRunData()]).then(([gltf, schoolGltf, injuredData]) => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall', 'ShoulderSweep'];
     if (schoolGltf) for (const clip of schoolGltf.animations) if (!clips.has(clip.name)) clips.set(clip.name, clip);
@@ -165,6 +177,17 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     saveGestureBindPose(model);
     mixer = new AnimationMixer(model);
     actions = Object.fromEntries(names.map(name => [name, mixer.clipAction(clips.get(name))]));
+    if (injuredData) {
+      const trackKey = selected.includes('female') ? 'female' : 'male';
+      const rawTracks = injuredData[trackKey] || [];
+      if (rawTracks.length) {
+        const tracks = rawTracks.map(t => t.type === 'vector'
+          ? new VectorKeyframeTrack(t.name, t.times, t.values)
+          : new QuaternionKeyframeTrack(t.name, t.times, t.values));
+        const injuredClip = new AnimationClip('InjuredRun', injuredData.duration, tracks);
+        actions.InjuredRun = mixer.clipAction(injuredClip);
+      }
+    }
     const oneShots = {
       ShoulderSweep: SWEEP_SECONDS, Jump: JUMP_DURATION, Slide: SLIDE_DURATION, Roll: ROLL_DURATION,
       Stumble: HIT_DURATION, HeadHit: HIT_DURATION, Fall: FALL_DURATION,
@@ -227,6 +250,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     else if (state.jump || state.drop || state.fallSpeed) name = 'Jump';
     else if (state.roll) name = 'Roll';
     else if (state.slide) name = 'Slide';
+    else if ((state.damage >= 1 || state.injured) && actions.InjuredRun) name = 'InjuredRun';
     if (state.styleAction > 0 && ['Idle','Run'].includes(name)) name = 'ShoulderSweep';
     if (state.mode === 'starting') name = 'Run';
     const next = actions[name];
@@ -261,7 +285,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     currentRotationY += (targetRotY - currentRotationY) * turnBlend;
     model.rotation.y = currentRotationY - lean * .65;
     pace+=(Math.min(1.65,1+(state.speed-22)/40)-pace)*blend;
-    if (name === 'Run') next.setEffectiveTimeScale(pace);
+    if (name === 'Run' || name === 'InjuredRun') next.setEffectiveTimeScale(pace);
     mixer.update(frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0)));
     return true;
   }

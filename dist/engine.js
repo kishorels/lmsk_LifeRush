@@ -1,4 +1,4 @@
-import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase} from './traffic-rules.js';
+import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase,routeSegment} from './traffic-rules.js';
 export {trafficPattern};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95;
@@ -18,10 +18,11 @@ export function fresh(seed=newRunSeed()) {
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 28,
     jump: 0, slide: 0, roll: 0, drop: null, jumpBuffer: 0, motionId: 0, lastGroundDown: -Infinity,
     roofGrace: 0, floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
-    damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: segmentBase(seed,0),
+    damage: 0, injured: false, hit: 0, fall: 0, capture: 0, items: [], next: segmentBase(seed,0),
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
     magnet: 0, shield: false, books: 0, styleAction: 0, collectedPowerup: null, coinFlights: [],
+    nextMidObstacle: 2000,
     nextLaneObstacle: 5000,
   };
 }
@@ -286,6 +287,7 @@ function takeHit(s, type) {
     s.fall = FALL_DURATION;
     return;
   }
+  s.injured = true;
   s.firstHitAt = s.time;
   s.chaseReentered = s.time >= OPENING_CHASE;
   if (s.chaseReentered) {
@@ -332,9 +334,14 @@ export function step(s, dt, random = Math.random) {
     s.chaseReentered = false;
     s.damage = 0;
   }
-  const baseSpeed = Math.min(48, 28 + s.distance / 55);
-  const speedMultiplier = s.distance >= 8000 ? Math.min(2.0, 1.0 + (s.distance - 8000) / 250) : 1.0;
-  s.speed = baseSpeed * speedMultiplier;
+  const d = s.distance;
+  if (d <= 180) s.speed = 28;
+  else if (d <= 1000) s.speed = 28 + ((d - 180) / 820) * 6;
+  else if (d <= 2000) s.speed = 34 + ((d - 1000) / 1000) * 7;
+  else if (d <= 5000) s.speed = 41 + ((d - 2000) / 3000) * 7;
+  else if (d < 8000) s.speed = 48 + ((d - 5000) / 3000) * 24;
+  else if (d <= 10000) s.speed = 78 + ((d - 8000) / 2000) * 18;
+  else s.speed = 96 + (d - 10000) * 0.02;
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * (1-Math.exp(-18*dt));
   s.chaserX += (s.x - s.chaserX) * (1-Math.exp(-5*dt));
@@ -351,6 +358,41 @@ export function step(s, dt, random = Math.random) {
     if(!s.runSeed&&s.trafficIndex%4===1) newItems.push({z:s.next+52,lane:safeLane,type:'magnet',done:false});
     else if(!s.runSeed&&s.trafficIndex%4===3) newItems.push({z:s.next+52,lane:safeLane,type:'shield',done:false});
     s.items.push(...newItems);s.next=s.runSeed?segmentBase(s.runSeed,s.trafficIndex):s.next+160;
+  }
+  if (s.distance >= 2000 && s.distance < 5000 && s.next < 90000) {
+    if (!s.nextMidObstacle || s.nextMidObstacle < s.distance + 40) {
+      s.nextMidObstacle = Math.max(2000, s.distance + 40);
+    }
+    while (s.distance + 120 >= s.nextMidObstacle && s.nextMidObstacle < 5000) {
+      const targetZ = s.nextMidObstacle;
+      const unsafeSegLanes = new Set([s.lane, Math.round(s.x)]);
+      const baseIdx = Math.max(0, s.trafficIndex - 2);
+      let safeWindow = true;
+      for (let i = baseIdx; i <= s.trafficIndex + 2; i++) {
+        const seg = routeSegment(s.runSeed, i);
+        unsafeSegLanes.add(seg.safeLane);
+        if (targetZ >= seg.base - 45 && targetZ <= seg.base + 20) safeWindow = false;
+      }
+      if (safeWindow) {
+        const blockedLanes = new Set(
+          s.items
+            .filter(o => !['coin', 'magnet', 'shield'].includes(o.type) && Math.abs(o.z - targetZ) < 12)
+            .map(o => o.lane)
+        );
+        const candidates = [-1, 0, 1].filter(
+          l => !unsafeSegLanes.has(l) && !blockedLanes.has(l) && vanSurface(targetZ, l, s.runSeed) === 0
+        );
+        if (candidates.length > 0 && blockedLanes.size < 2) {
+          const seedHash = ((s.runSeed || 1) ^ Math.imul(Math.floor(targetZ), 0x9e3779b9)) >>> 0;
+          const lane = candidates[seedHash % candidates.length];
+          const roll = (seedHash % 100) / 100;
+          const type = roll < 0.38 ? 'jump' : roll < 0.74 ? 'slide' : 'block';
+          const variant = type === 'jump' ? (seedHash % 2 ? 'hurdle' : 'bench') : type === 'slide' ? 'scaffold' : undefined;
+          s.items.push({ z: targetZ, lane, type, variant, done: false });
+        }
+      }
+      s.nextMidObstacle += 75;
+    }
   }
   if (s.distance >= 5000) {
     if (!s.nextLaneObstacle || s.nextLaneObstacle < s.distance + 40) {
@@ -414,7 +456,11 @@ export function step(s, dt, random = Math.random) {
           }
         }
       }
-      const spawnGap = Math.max(18, 44 - (s.distance - 5000) / 180);
+      const spawnGap = s.distance >= 10000
+        ? Math.max(13, 22 - (s.distance - 10000) / 350)
+        : s.distance >= 8000
+          ? Math.max(22, 30 - (s.distance - 8000) / 250)
+          : Math.max(28, 44 - (s.distance - 5000) / 180);
       s.nextLaneObstacle += spawnGap;
     }
   }

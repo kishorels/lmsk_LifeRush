@@ -190,17 +190,30 @@ test('above 5k m obstacles target player lane and scale with distance', () => {
   assert.ok(leftTargeted.length >= 1, 'obstacle placed in player lane -1 after lane switch');
 });
 
-test('above 8k m speed doubles and reaches 96 m/s', () => {
-  const s = fresh(0);
-  s.mode = 'running';
-  s.distance = 7000;
-  s.next = 100000;
-  step(s, .01);
-  assert.equal(s.speed, 48); // Normal top speed before 8k
+test('continuous multi-tier speed climbs across 0, 1k, 2k, 5k, 8k, 10k and beyond', () => {
+  const checkpoints = [[0, 28], [1000, 34], [2000, 41], [5000, 48], [7000, 64], [8000, 78], [10000, 96], [12000, 136]];
+  let previous = 0;
+  for (const [distance, expected] of checkpoints) {
+    const s = fresh(0);
+    s.mode = 'running';
+    s.distance = distance;
+    s.next = 100000;
+    step(s, .01);
+    assert.equal(Math.round(s.speed), expected, `expected ~${expected} m/s at ${distance}m`);
+    assert.ok(s.speed > previous, `speed at ${distance}m must exceed previous tier`);
+    previous = s.speed;
+  }
+});
 
-  s.distance = 8500;
-  step(s, .01);
-  assert.equal(s.speed, 96); // 2x double speed above 8k
+test('first hit enables injured state for InjuredRun playback', () => {
+  const s = fresh(0);
+  assert.equal(s.injured, false);
+  s.mode = 'running';
+  s.next = 100000;
+  s.items = [{ z: 1, lane: 0, type: 'block' }];
+  step(s, .05);
+  assert.equal(s.damage, 1);
+  assert.equal(s.injured, true);
 });
 
 test('above 10k m one hit causes instant game over', () => {

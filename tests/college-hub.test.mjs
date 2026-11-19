@@ -57,7 +57,7 @@ test('separate sound categories clamp their levels without muting the others',()
 test('typing inside text input is never blocked by game keydown controls',async()=>{
  const gameSrc=await readFile(new URL('../dist/game.js',import.meta.url),'utf8');
  const htmlSrc=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
- assert.ok(gameSrc.includes("if(e.target.closest('input, textarea, select')) return;"),
+ assert.ok(gameSrc.includes("if(e.target?.closest?.('input, textarea, select')) return;"),
    'input elements bypass game control preventDefault so keys like s, a, d, w, and spaces type cleanly');
  assert.ok(!gameSrc.includes("$('start').disabled=waiting;"),
    'start button is not locked disabled by loading poll');
@@ -71,4 +71,9 @@ test('typing inside text input is never blocked by game keydown controls',async(
    'Enter LifeRush button wrapper centers via margin: 0 auto so modalPop scale animation never shifts it to the right corner');
  assert.ok(gameSrc.includes('switchToLiteRenderer')&&gameSrc.includes("status === 'context-lost'"),
    'game loop recovers automatically from WebGL context loss or render error by switching to a clean 2D canvas');
+ const injuredJson=JSON.parse(await readFile(new URL('../dist/assets/injured-run.json',import.meta.url),'utf8'));
+ assert.equal(injuredJson.name,'InjuredRun');
+ assert.ok(injuredJson.male.length>40&&injuredJson.female.length>40,'injured-run.json carries both male and female bone tracks');
+ assert.ok(htmlSrc.includes('id="report-records"')&&htmlSrc.includes('id="report-challenge-banner"')&&gameSrc.includes('ARE YOU A LOSER?!'),
+   'report card displays Highest Record comparison and challenge replay prompt');
 });

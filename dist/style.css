@@ -834,11 +834,11 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 
 /* Report Grade */
 .report-grade {
-  margin: 12px 0;
+  margin: 8px 0;
   background: #0d233be8;
   border: 2px solid #ffd54f;
   border-radius: 16px;
-  padding: 10px;
+  padding: 8px 10px;
 }
 .grade-label {
   font-size: 9px;
@@ -846,11 +846,109 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   color: #ffe082;
 }
 .grade-badge {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 900;
   color: #ffca28;
   text-shadow: 0 0 14px #ffb30099;
 }
+
+/* Highest Record Scoreboard & Challenge Hook */
+.report-records {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0;
+  text-align: center;
+}
+.record-box {
+  background: rgba(11, 27, 50, 0.88);
+  border: 1.5px solid rgba(123, 197, 248, 0.35);
+  border-radius: 12px;
+  padding: 7px 8px;
+}
+.record-box.best-box {
+  border-color: rgba(255, 213, 79, 0.65);
+  background: rgba(20, 38, 66, 0.92);
+}
+.record-box small {
+  display: block;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #9ecdf8;
+}
+.record-box.best-box small {
+  color: #ffd754;
+}
+.record-box strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffffff;
+  margin-top: 2px;
+}
+.record-box.best-box strong {
+  color: #ffdd65;
+}
+.record-progress-wrap {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.record-progress-track {
+  flex: 1;
+  height: 7px;
+  background: rgba(7, 16, 32, 0.9);
+  border: 1px solid rgba(123, 197, 248, 0.25);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.record-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ff9d1b, #ffd754);
+  border-radius: 99px;
+  transition: width 0.35s ease-out;
+}
+.record-progress-pct {
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffd754;
+  white-space: nowrap;
+}
+.report-challenge-banner {
+  margin: 6px 0 8px;
+  padding: 8px 11px;
+  border-radius: 13px;
+  font-size: 11.5px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-align: center;
+}
+.report-challenge-banner.is-loser-taunt {
+  background: linear-gradient(135deg, rgba(165, 24, 42, 0.92), rgba(112, 16, 30, 0.96));
+  border: 1.5px solid #ff7b7b;
+  color: #fff2cc;
+  box-shadow: 0 0 18px rgba(255, 75, 75, 0.38);
+  animation: challengePulse 1.4s infinite alternate ease-in-out;
+}
+.report-challenge-banner.is-new-record {
+  background: linear-gradient(135deg, rgba(22, 92, 58, 0.92), rgba(13, 62, 42, 0.96));
+  border: 1.5px solid #ffd54f;
+  color: #fff8d6;
+  box-shadow: 0 0 18px rgba(255, 213, 79, 0.4);
+}
+@keyframes challengePulse {
+  0% { box-shadow: 0 0 10px rgba(255, 82, 82, 0.35); transform: scale(1); }
+  100% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.55); transform: scale(1.015); }
+}
+.game.capture .report-grade { margin: 5px 0; padding: 5px 8px; }
+.game.capture .grade-badge { font-size: 22px; }
+.game.capture .report-records { margin: 5px 0; gap: 6px; }
+.game.capture .record-box { padding: 4px 6px; }
+.game.capture .record-box strong { font-size: 14px; }
+.game.capture .report-challenge-banner { margin: 4px 0 6px; padding: 6px 9px; font-size: 10.5px; }
 
 .coin-mark {
   display: inline-grid;

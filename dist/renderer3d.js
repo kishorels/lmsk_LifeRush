@@ -1,19 +1,19 @@
-import {createMagnetCoins} from './magnet-coins.js?v=2.8.7';
-import {createPickupModels} from './pickup-models.js?v=2.8.7';
-import {createGuardEffect} from './guard-effect.js?v=2.8.7';
-import {streetSurfaces} from './street-materials.js?v=2.8.7';
-import {createSideTraffic} from './side-vehicles.js?v=2.8.7';
-import {createCaptureStage} from './capture-stage.js?v=2.8.7';
-import {createSky} from './sky-scene.js?v=2.8.7';
-import {createCampus} from './campus-scene.js?v=2.8.7';
-import {createCollegeCampus} from './college-scene.js?v=2.8.7';
-import {createTraffic} from './traffic-scene.js?v=2.8.7';
+import {createMagnetCoins} from './magnet-coins.js?v=2.8.8';
+import {createPickupModels} from './pickup-models.js?v=2.8.8';
+import {createGuardEffect} from './guard-effect.js?v=2.8.8';
+import {streetSurfaces} from './street-materials.js?v=2.8.8';
+import {createSideTraffic} from './side-vehicles.js?v=2.8.8';
+import {createCaptureStage} from './capture-stage.js?v=2.8.8';
+import {createSky} from './sky-scene.js?v=2.8.8';
+import {createCampus} from './campus-scene.js?v=2.8.8';
+import {createCollegeCampus} from './college-scene.js?v=2.8.8';
+import {createTraffic} from './traffic-scene.js?v=2.8.8';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=2.8.7';
-import {createCaptureScene} from './capture-scene.js?v=2.8.7';
-import {loadChaserModel} from './chaser-model.js?v=2.8.7';
-import {loadRunnerModel} from './runner-model.js?v=2.8.7';
-import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.8.7';
+import {createSchoolEntrance} from './school-scene.js?v=2.8.8';
+import {createCaptureScene} from './capture-scene.js?v=2.8.8';
+import {loadChaserModel} from './chaser-model.js?v=2.8.8';
+import {loadRunnerModel} from './runner-model.js?v=2.8.8';
+import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.8.8';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});}
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');

@@ -1,7 +1,7 @@
-import {createSound} from './sound.js?v=2.8.7';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.7';
-import {createRenderer} from './renderer3d.js?v=2.8.7';
-import {createLiteRenderer} from './renderer-lite.js?v=2.8.7';
+import {createSound} from './sound.js?v=2.8.8';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.8';
+import {createRenderer} from './renderer3d.js?v=2.8.8';
+import {createLiteRenderer} from './renderer-lite.js?v=2.8.8';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
@@ -346,6 +346,9 @@ function pause(){
   if(!['running','countdown'].includes(s.mode))return;
   s.mode='paused';
   $('countdown').hidden=true;
+  if($('report-grade')) $('report-grade').hidden = true;
+  if($('report-records')) $('report-records').hidden = true;
+  if($('report-challenge-banner')) $('report-challenge-banner').hidden = true;
   setScreenMode('gameover');
   show('Take a breath.','Your school run will be right here.','RESUME RUN','PAUSED');
 }
@@ -371,7 +374,9 @@ function show(title,message,button,tag){
 }
 
 function crash(){
-  best=Math.max(best,Math.floor(s.distance));
+  const previousBest = best;
+  const runDist = Math.floor(s.distance);
+  best=Math.max(best, runDist);
   save();
   effects.play('over');
   setScreenMode('gameover');
@@ -384,14 +389,39 @@ function crash(){
     slide:'Slide under the teal overhead beams.'
   }[s.cause]||'Keep practicing!';
   
-  const totalScore = Math.floor(s.distance) + s.coins * 10;
+  const totalScore = runDist + s.coins * 10;
   const grade = totalScore >= 450 ? 'A+ 🌟' : totalScore >= 220 ? 'A 🥇' : 'B 🥈';
   if($('grade-badge')) $('grade-badge').textContent = grade;
   if($('report-grade')) $('report-grade').hidden = false;
+
+  if($('report-current-score')) $('report-current-score').textContent = `${runDist} m`;
+  if($('report-best-score')) $('report-best-score').textContent = `${best} m`;
+  const pct = best > 0 ? Math.min(100, Math.round((runDist / best) * 100)) : (runDist > 0 ? 100 : 0);
+  if($('report-record-fill')) $('report-record-fill').style.width = `${pct}%`;
+  if($('report-record-pct')) $('report-record-pct').textContent = `${pct}% of Record`;
+  if($('report-records')) $('report-records').hidden = false;
+
+  const challengeBanner = $('report-challenge-banner');
+  if (challengeBanner) {
+    challengeBanner.hidden = false;
+    challengeBanner.classList.remove('is-loser-taunt', 'is-new-record');
+    if (previousBest > 0 && runDist < previousBest) {
+      const gap = previousBest - runDist;
+      challengeBanner.classList.add('is-loser-taunt');
+      challengeBanner.textContent = `😤 ARE YOU A LOSER?! You stopped ${gap}m short of your ${previousBest}m Highest Record (${pct}%) — try quick to achieve it!`;
+    } else if (runDist > 0) {
+      const nextTarget = Math.ceil((runDist + 250) / 100) * 100;
+      challengeBanner.classList.add('is-new-record');
+      challengeBanner.textContent = `🏆 NEW HIGHEST RECORD: ${runDist}m! You smashed the record — try quick to reach ${nextTarget}m next!`;
+    } else {
+      challengeBanner.classList.add('is-loser-taunt');
+      challengeBanner.textContent = `😤 ARE YOU A LOSER?! 0m doesn't count — try quick to set a Highest Record!`;
+    }
+  }
   
   show(
     'ACADEMIC REPORT CARD',
-    Math.floor(s.distance)+' m | '+s.coins+' coins. '+hint,
+    runDist+' m | '+s.coins+' coins. '+hint,
     'RUN AGAIN',
     'REPORT CARD'
   );
@@ -411,6 +441,8 @@ if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   s.mode='ready';
   $('overlay').hidden=true;
   if($('report-grade')) $('report-grade').hidden=true;
+  if($('report-records')) $('report-records').hidden=true;
+  if($('report-challenge-banner')) $('report-challenge-banner').hidden=true;
   if($('selection')) $('selection').hidden=false;
   setScreenMode('select');
   showHub('home');
@@ -422,6 +454,8 @@ if($('btn-change-char')) $('btn-change-char').onclick=()=>{
   s.mode='ready';
   $('overlay').hidden=true;
   if($('report-grade')) $('report-grade').hidden=true;
+  if($('report-records')) $('report-records').hidden=true;
+  if($('report-challenge-banner')) $('report-challenge-banner').hidden=true;
   if($('selection')) $('selection').hidden=false;
   setScreenMode('select');
   showHub('characters');
@@ -441,8 +475,8 @@ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointe
 }));
 
 window.addEventListener('keydown',e=>{
-  if(e.target.closest('input, textarea, select')) return;
-  if(s.mode!=='running'&&e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;
+  if(e.target?.closest?.('input, textarea, select')) return;
+  if(s.mode!=='running'&&e.target?.closest?.('button')&&(e.key===' '||e.key==='Enter'))return;
   const a={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump',ArrowDown:'slide',s:'slide'}[e.key];
   if(a){e.preventDefault();if(!e.repeat)input(a);}
   if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}
@@ -536,24 +570,32 @@ function tick(t) {
     s.shieldAbsorbed = false;
   }
 
-  // School Bell Milestones & High-Intensity Zones
-  for (const m of [100, 250, 500, 1000]) {
+  // School Bell Milestones & Continuous Speed Tiers
+  for (const m of [100, 250, 500]) {
     if (distanceBefore < m && s.distance >= m) {
       effects.play('bell');
       $('toast').textContent = `🔔 School Bell Rang at ${m}m! Keep Rushing!`;
     }
   }
+  if (distanceBefore < 1000 && s.distance >= 1000) {
+    effects.play('bell');
+    $('toast').textContent = '🏃 1,000m · NORMAL FAST SPEED!';
+  }
+  if (distanceBefore < 2000 && s.distance >= 2000) {
+    effects.play('bell');
+    $('toast').textContent = '🔥 2,000m · HIGH SPEED & MORE OBSTACLES!';
+  }
   if (distanceBefore < 5000 && s.distance >= 5000) {
     effects.play('bell');
-    $('toast').textContent = '⚠️ 5,000m REACHED! Heavy targeted obstacles incoming!';
+    $('toast').textContent = '⚡ 5,000m · EXTRA SPEED & HEAVY OBSTACLES!';
   }
   if (distanceBefore < 8000 && s.distance >= 8000) {
     effects.play('bell');
-    $('toast').textContent = '⚡ 8,000m REACHED! 2X HYPER SPEED ACTIVATED! 🚀';
+    $('toast').textContent = '🚀 8,000m · MORE MORE SPEED! 2X HYPER MODE!';
   }
   if (distanceBefore < 10000 && s.distance >= 10000) {
     effects.play('bell');
-    $('toast').textContent = '💀 10,000m SUDDEN DEATH! 1 Hit = Game Over! 🔥';
+    $('toast').textContent = '💀 10,000m · VERY VERY FAST & 1-HIT SUDDEN DEATH!';
   }
 
   if (s.mode === 'running' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
