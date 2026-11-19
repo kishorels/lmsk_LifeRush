@@ -184,6 +184,7 @@ function start(){
   effects.setEnabled(sound);
   effects.unlock();
   effects.play('bell');
+  effects.play('swag');
   effects.play('start');
 }
 
