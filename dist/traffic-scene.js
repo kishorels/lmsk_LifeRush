@@ -3,6 +3,7 @@ import {buildBus} from './bus-model.js';
 import {BoxGeometry,Group,Mesh,MeshStandardMaterial} from './vendor/three.module.js';
 import {repeatedVans} from './traffic-rules.js';
 export function createTraffic(scene) {
+ let lastSeed;
  const cube=new BoxGeometry(),mats=new Map(),parked=new Map(),moving=new Map();
  function part(g,color,x,y,z,w,h,d,geo=cube) {
   if(!mats.has(color))mats.set(color,new MeshStandardMaterial({color,roughness:.62}));
@@ -11,6 +12,7 @@ export function createTraffic(scene) {
  function vehicle(length,roof,oncoming){const g=buildBus(length,roof,oncoming);scene.add(g);return g;}
  function vanModel(v) {
   const g=vehicle(v.front-v.rear,v.roof,false),run=v.rear-v.ramp;
+  g.userData.routeVanId=v.id;
   if(run>0) {
    const ramp=part(g,0x2c9088,0,v.roof/2,run/2,1.94,.12,Math.hypot(run,v.roof));ramp.rotation.x=Math.atan2(v.roof,run);
    for(let i=1;i<8;i++){const t=i/8,m=part(g,0xffe389,0,v.roof*(1-t)+.08,run*t,1.78,.025,.11);m.rotation.x=ramp.rotation.x;}
@@ -20,8 +22,9 @@ export function createTraffic(scene) {
   return g;
  }
  return s=>{
+  if(s.runSeed!==lastSeed){for(const g of parked.values())scene.remove(g);for(const g of moving.values())scene.remove(g);parked.clear();moving.clear();lastSeed=s.runSeed;}
   const visible=new Set();
-  for(const v of repeatedVans(s.distance)) {
+  for(const v of repeatedVans(s.distance,s.runSeed)) {
    if(v.ramp>s.distance+135||v.front<s.distance-15)continue;
    visible.add(v.id);if(!parked.has(v.id))parked.set(v.id,vanModel(v));
    const g=parked.get(v.id);g.position.set(v.lane*2.2,.09,s.distance-v.rear);

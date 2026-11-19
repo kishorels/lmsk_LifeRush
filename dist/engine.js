@@ -1,4 +1,4 @@
-import {repeatedVans,trafficPattern,sideVehicleX} from './traffic-rules.js';
+import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase} from './traffic-rules.js';
 export {trafficPattern};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95;
@@ -7,19 +7,22 @@ const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
 export const SCHOOL_GATE = 11;
 export const SCHOOL_VAN = Object.freeze({ lane: 1, ramp: 22, rear: 32, front: 54, roof: 1.72, width: 1.94 });
-export function routeVans(distance) { return [{...SCHOOL_VAN,id:'entry'},...repeatedVans(distance)]; }
+export function routeVans(distance,seed=0) { return [entryVan(seed),...repeatedVans(distance,seed)]; }
 export const ROOF_COINS = Object.freeze([35, 41, 47, 53]);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-export function fresh() {
+export function fresh(seed=newRunSeed()) {
+  seed=seed>>>0;
   return {
+    runSeed:seed,entryVan:entryVan(seed),entryCoins:entryCoins(seed),
     mode: 'ready', lane: 0, x: 0, time: 0, distance: 0, speed: 28,
     jump: 0, slide: 0, roll: 0, drop: null, jumpBuffer: 0, motionId: 0, lastGroundDown: -Infinity,
     roofGrace: 0, floor: 0, fallSpeed: 0, roofCoins: 0, coins: 0, vanHit: false, vanHits: [], collected: [], trafficIndex: 0,
-    damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 100,
+    damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: segmentBase(seed,0),
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
     magnet: 0, shield: false, books: 0, styleAction: 0, collectedPowerup: null, coinFlights: [],
+    nextLaneObstacle: 5000,
   };
 }
 
@@ -77,12 +80,12 @@ function collectMagnetCoins(s) {
   for(const item of s.items)if(item.type==='coin'&&!item.done&&inMagnetRange(s,item.lane,item.z)){
     item.done=true;pullCoin(s,item.lane,item.z,1.1);
   }
-  ROOF_COINS.forEach((z,i)=>{
-    if(!(s.roofCoins&(1<<i))&&inMagnetRange(s,SCHOOL_VAN.lane,z)){
-      s.roofCoins|=1<<i;pullCoin(s,SCHOOL_VAN.lane,z,SCHOOL_VAN.roof+.67);
+  s.entryCoins.forEach((z,i)=>{
+    if(!(s.roofCoins&(1<<i))&&inMagnetRange(s,s.entryVan.lane,z)){
+      s.roofCoins|=1<<i;pullCoin(s,s.entryVan.lane,z,s.entryVan.roof+.67);
     }
   });
-  for(const van of routeVans(s.distance)){
+  for(const van of routeVans(s.distance,s.runSeed)){
     if(van.id==='entry')continue;
     for(let i=0;i<4;i++){
       const z=van.rear+2+i*4,id=van.id+':'+i;
@@ -110,9 +113,9 @@ function advanceCoinFlights(s,dt) {
   });
 }
 
-export function vanSurface(distance, lanePosition) {
+export function vanSurface(distance, lanePosition,seed=0) {
   let surface=0;
-  for(const van of routeVans(distance)) {
+  for(const van of routeVans(distance,seed)) {
     if(Math.abs(lanePosition-van.lane)*2.2>van.width/2 || distance<van.ramp || distance>=van.front) continue;
     surface=Math.max(surface,van.roof*(van.rear===van.ramp?1:clamp((distance-van.ramp)/(van.rear-van.ramp),0,1)));
   }
@@ -135,7 +138,7 @@ function updateElevation(s, dt) {
   const dropped = s.drop !== null;
   s.jump = Math.max(0, s.jump-dt);
   if (dropped) s.drop.remaining = Math.max(0, s.drop.remaining-dt);
-  const surface = Math.max(vanSurface(s.distance, s.x),busSurface(s));
+  const surface = Math.max(vanSurface(s.distance, s.x,s.runSeed),busSurface(s));
   const wasFalling = s.fallSpeed > 0;
   if (wasFalling) {
     s.fallSpeed += 18*dt;
@@ -163,7 +166,7 @@ function updateElevation(s, dt) {
 
   s.roofGrace = surface>0 && Math.abs(height(s)-surface)<.02 && !s.jump && !s.drop && !s.fallSpeed
     ? .12 : Math.max(0,s.roofGrace-dt);
-  for(const van of routeVans(s.distance)) {
+  for(const van of routeVans(s.distance,s.runSeed)) {
     if(van.id==='entry')continue;
     for(let n=0;n<4;n++) {
       const z=van.rear+2+n*4,id=van.id+':'+n;
@@ -177,11 +180,11 @@ function updateElevation(s, dt) {
     if(!s.collected.includes(id)&&Math.abs(s.distance-z)<1.2&&Math.abs(s.x-bus.lane)<.34&&height(s)>=bus.roof-.12&&height(s)<bus.roof+1.1){s.collected.push(id);s.coins++;}
    }
   }
-  ROOF_COINS.forEach((distance,index) => {
+  s.entryCoins.forEach((distance,index) => {
     if ((s.roofCoins & (1<<index)) || Math.abs(s.distance-distance) > .60 ||
-        Math.abs(s.x-SCHOOL_VAN.lane) > .34) return;
+        Math.abs(s.x-s.entryVan.lane) > .34) return;
     const elevation = height(s);
-    if (elevation < SCHOOL_VAN.roof-.12 || elevation > SCHOOL_VAN.roof+.84) return;
+    if (elevation < s.entryVan.roof-.12 || elevation > s.entryVan.roof+.84) return;
     s.roofCoins |= 1<<index;
     s.coins++;
   });
@@ -253,7 +256,7 @@ function advanceDrop(s, dt) {
 
 export function recoverFromBus(s) {
   const horizon=s.speed*1.15;
-  const vans=routeVans(s.distance);
+  const vans=routeVans(s.distance,s.runSeed);
   const candidates=[-1,0,1].filter(lane=>!vans.some(v=>v.lane===lane && v.front>s.distance && v.ramp<s.distance+horizon));
   const blocked=(lane)=>s.items.filter(o=>!['coin','magnet','shield'].includes(o.type) && o.lane===lane && o.z+(o.length||0)>s.distance-1 && o.z<s.distance+horizon+(o.velocity||0)*1.15);
   candidates.sort((a,b)=>blocked(a).length-blocked(b).length || Math.abs(a-s.x)-Math.abs(b-s.x));
@@ -277,7 +280,8 @@ function takeHit(s, type) {
   s.jump = s.slide = s.roll = s.floor = s.fallSpeed = 0;
   s.drop = airborne > 0 ? { start: airborne, duration: .16, remaining: .16, jumpRemaining: .24 } : null;
   s.lastGroundDown = -Infinity;
-  if (s.damage === 2) {
+  if (s.damage === 2 || s.distance >= 10000) {
+    s.damage = 2;
     s.mode = 'falling';
     s.fall = FALL_DURATION;
     return;
@@ -328,7 +332,9 @@ export function step(s, dt, random = Math.random) {
     s.chaseReentered = false;
     s.damage = 0;
   }
-  s.speed = Math.min(48, 28 + s.distance / 55);
+  const baseSpeed = Math.min(48, 28 + s.distance / 55);
+  const speedMultiplier = s.distance >= 8000 ? Math.min(2.0, 1.0 + (s.distance - 8000) / 250) : 1.0;
+  s.speed = baseSpeed * speedMultiplier;
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * (1-Math.exp(-18*dt));
   s.chaserX += (s.x - s.chaserX) * (1-Math.exp(-5*dt));
@@ -338,12 +344,79 @@ export function step(s, dt, random = Math.random) {
   s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
   s.magnet=Math.max(0,s.magnet-dt);
   if(s.distance+120>s.next) {
-    const newItems=trafficPattern(s.next,s.trafficIndex++);
+    const index=s.trafficIndex++;
+    const newItems=trafficPattern(s.next,index,s.runSeed);
     const safeLane=newItems.find(o=>o.type==='coin')?.lane??0;
-    for(let i=0;i<3;i++)newItems.push({z:s.next+28+i*4,lane:safeLane,type:'coin',done:false});
-    if(s.trafficIndex%4===1) newItems.push({z:s.next+52,lane:safeLane,type:'magnet',done:false});
-    else if(s.trafficIndex%4===3) newItems.push({z:s.next+52,lane:safeLane,type:'shield',done:false});
-    s.items.push(...newItems);s.next+=160;
+    if(!s.runSeed)for(let i=0;i<3;i++)newItems.push({z:s.next+28+i*4,lane:safeLane,type:'coin',done:false});
+    if(!s.runSeed&&s.trafficIndex%4===1) newItems.push({z:s.next+52,lane:safeLane,type:'magnet',done:false});
+    else if(!s.runSeed&&s.trafficIndex%4===3) newItems.push({z:s.next+52,lane:safeLane,type:'shield',done:false});
+    s.items.push(...newItems);s.next=s.runSeed?segmentBase(s.runSeed,s.trafficIndex):s.next+160;
+  }
+  if (s.distance >= 5000) {
+    if (!s.nextLaneObstacle || s.nextLaneObstacle < s.distance + 40) {
+      s.nextLaneObstacle = Math.max(5000, s.distance + 40);
+    }
+    while (s.distance + 120 >= s.nextLaneObstacle) {
+      const targetZ = s.nextLaneObstacle;
+      const targetLane = s.lane;
+      const vanHitCheck = vanSurface(targetZ, targetLane, s.runSeed) > 0;
+      if (!vanHitCheck) {
+        const blockedLanes = new Set(
+          s.items
+            .filter(o => !['coin','magnet','shield'].includes(o.type) && Math.abs(o.z - targetZ) < 8)
+            .map(o => o.lane)
+        );
+        if (!blockedLanes.has(targetLane)) {
+          const freeLanes = [-1, 0, 1].filter(l => l !== targetLane && !blockedLanes.has(l));
+          if (freeLanes.length > 0) {
+            const seedHash = ((s.runSeed || 1) ^ Math.imul(Math.floor(targetZ), 0x9e3779b9)) >>> 0;
+            const roll = (seedHash % 100) / 100;
+            let type, variant;
+            if (roll < 0.38) {
+              type = 'jump';
+              variant = (seedHash % 2) ? 'hurdle' : 'bench';
+            } else if (roll < 0.74) {
+              type = 'slide';
+              variant = 'scaffold';
+            } else if (roll < 0.90) {
+              type = 'block';
+            } else {
+              type = 'bus';
+            }
+            if (type === 'bus') {
+              s.items.push({
+                z: targetZ + 15,
+                lane: targetLane,
+                type: 'bus',
+                velocity: 18,
+                activate: targetZ - 30,
+                length: 10,
+                done: false,
+              });
+            } else {
+              s.items.push({
+                z: targetZ,
+                lane: targetLane,
+                type,
+                variant,
+                done: false,
+              });
+            }
+            if (roll < 0.6) {
+              const rewardLane = freeLanes[seedHash % freeLanes.length];
+              s.items.push({
+                z: targetZ,
+                lane: rewardLane,
+                type: 'coin',
+                done: false,
+              });
+            }
+          }
+        }
+      }
+      const spawnGap = Math.max(18, 44 - (s.distance - 5000) / 180);
+      s.nextLaneObstacle += spawnGap;
+    }
   }
   for(const item of s.items){
     if(item.roofRide&&!item.started&&s.distance>=item.activate){item.started=true;item.velocity=-s.speed*.35;}
@@ -358,7 +431,7 @@ export function step(s, dt, random = Math.random) {
   collectMagnetCoins(s);
   updateElevation(s, dt);
   if(s.jumpBuffer>0 && !s.jump && !s.drop && !s.fallSpeed && !s.hit)action(s,'jump');
-  for(const van of routeVans(s.distance)) {
+  for(const van of routeVans(s.distance,s.runSeed)) {
     if(s.distance>=van.rear && s.distance<van.front && Math.abs(s.x-van.lane)*2.2<=van.width/2 && height(s)<van.roof-.18) {
       s.lane=van.lane===0?-1:0;s.x=van.lane+(s.lane-van.lane)*.55;
       if(!s.vanHits.includes(van.id) && !s.hit)takeHit(s,'van');

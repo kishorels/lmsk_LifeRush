@@ -329,55 +329,6 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   z-index: 25;
 }
 
-.btn-swag-action {
-  width: 100%;
-  background: linear-gradient(135deg, #e63946, #c1121f 55%, #780000);
-  color: #fff;
-  border: 2px solid #ffd700;
-  border-radius: 16px;
-  padding: 12px 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  box-shadow: 0 5px 0 #540000, 0 10px 25px #d9042955;
-  transition: transform .12s, box-shadow .12s;
-}
-.btn-swag-action:hover {
-  transform: scale(1.02);
-  box-shadow: 0 7px 0 #540000, 0 14px 30px #d9042977;
-}
-.btn-swag-action:active {
-  transform: translateY(3px);
-  box-shadow: 0 2px 0 #540000;
-}
-.swag-fire {
-  font-size: 22px;
-  animation: flamePulse .75s infinite alternate;
-}
-@keyframes flamePulse {
-  0% { transform: scale(1); }
-  100% { transform: scale(1.22) rotate(-6deg); }
-}
-.swag-text-block {
-  text-align: left;
-}
-.swag-text-block strong {
-  display: block;
-  font-size: 13px;
-  letter-spacing: 1.5px;
-  color: #ffea75;
-  text-shadow: 0 1px 4px #0008;
-}
-.swag-text-block small {
-  display: block;
-  font-size: 9px;
-  color: #ffe3e3;
-}
-.swag-sparkle {
-  font-size: 17px;
-}
-
 .btn-start-rush {
   width: 100%;
   background: linear-gradient(135deg, #2ec4b6, #00b4d8);
@@ -621,3 +572,6 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 @keyframes shield-shine { 0%,100% { filter: drop-shadow(0 1px 2px #0006); } 50% { filter: brightness(1.15) drop-shadow(0 0 5px #ffc45a88); } }
 @keyframes coin-shine { 0%,100% { transform: perspective(120px) rotateY(-18deg); } 50% { transform: perspective(120px) rotateY(18deg); filter: brightness(1.2) drop-shadow(0 0 4px #ffc34a99); } }
 @media (prefers-reduced-motion: reduce) { .pickup-icon { animation: none !important; } }
+
+/* Keep the start screen and playfield free of gesture controls and hint text. */
+#btn-swag,.btn-swag-action,.select-guide-text,#toast { display:none !important; }

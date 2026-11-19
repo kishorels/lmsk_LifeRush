@@ -1,9 +1,11 @@
 import {createSound} from './sound.js';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE,SCHOOL_VAN} from './engine.js';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js';
 import {createRenderer} from './renderer3d.js';
 import {createLiteRenderer} from './renderer-lite.js';
 
 const $=id=>document.getElementById(id),canvas=$('world');
+// Remove controls from a cached older HTML shell as well.
+document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
 let assetsReady = false;
 let realDownloadPct = 0;
 let virtualPct = 1;
@@ -178,7 +180,7 @@ function start(){
   s.styleAction = SWEEP_SECONDS;
   s.speed = 0;
   setScreenMode('running');
-  $('toast').textContent='🔔 School Bell Rang! Sprint to class · Ramp in right lane';
+  $('toast').textContent='🔔 School Bell Rang! Sprint to class · Find the next roof ramp';
   effects.setEnabled(sound);
   effects.unlock();
   effects.play('bell');
@@ -218,7 +220,7 @@ function crash(){
   effects.play('over');
   setScreenMode('gameover');
   const hint={
-    sideVehicle:'Watch the side entrance. Use the opposite outside lane.',
+    sideVehicle:'Watch the side entrance. Move into the clear lane.',
     bus:'Dodge the oncoming bus. Change lanes before headlights reach you.',
     van:'Take a striped ramp, or use the clear ground lane.',
     block:'Change lanes to dodge the tall crates.',
@@ -353,18 +355,30 @@ function frame(t) {
     s.shieldAbsorbed = false;
   }
 
-  // School Bell Milestones
+  // School Bell Milestones & High-Intensity Zones
   for (const m of [100, 250, 500, 1000]) {
     if (distanceBefore < m && s.distance >= m) {
       effects.play('bell');
       $('toast').textContent = `🔔 School Bell Rang at ${m}m! Keep Rushing!`;
     }
   }
+  if (distanceBefore < 5000 && s.distance >= 5000) {
+    effects.play('bell');
+    $('toast').textContent = '⚠️ 5,000m REACHED! Heavy targeted obstacles incoming!';
+  }
+  if (distanceBefore < 8000 && s.distance >= 8000) {
+    effects.play('bell');
+    $('toast').textContent = '⚡ 8,000m REACHED! 2X HYPER SPEED ACTIVATED! 🚀';
+  }
+  if (distanceBefore < 10000 && s.distance >= 10000) {
+    effects.play('bell');
+    $('toast').textContent = '💀 10,000m SUDDEN DEATH! 1 Hit = Game Over! 🔥';
+  }
 
   if (s.mode === 'running' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
-    $('toast').textContent = 'Campus pickup zone · Keep right to climb the ramp';
+    $('toast').textContent = 'Campus pickup zone · Look for the next roof ramp';
   }
-  if (s.mode === 'running' && distanceBefore < SCHOOL_VAN.rear && s.distance >= SCHOOL_VAN.rear && s.floor > 1) {
+  if (s.mode === 'running' && distanceBefore < s.entryVan.rear && s.distance >= s.entryVan.rear && s.floor > 1) {
     $('toast').textContent = 'Roof route · Follow the coins and run off the far end';
   }
   if(s.mode==='running'&&s.items.some(o=>o.roofRide&&o.started&&o.lane===s.lane&&o.z-s.distance<20&&o.z+o.length>s.distance)){

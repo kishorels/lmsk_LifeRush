@@ -1,5 +1,6 @@
 import { AnimationMixer, DirectionalLight, LoopOnce, Quaternion, Vector3 } from './vendor/three.module.js';
 import { CAPTURE_GESTURE_START, capturePose, ease } from './engine.js';
+import {gestureBodyFrame,mirroredGestureRotation} from './signature-gesture.js';
 
 // Preserve the underlying animation poses before applying contact and acting.
 export function createCaptureScene(scene) {
@@ -79,8 +80,8 @@ export function createCaptureScene(scene) {
     }
   }
 
-  // Mirror the actual opening clip's hand/elbow path onto the free arm.
-  // IK adapts to the villain's proportions while its other hand holds the hero.
+  // Retarget the opening clip's complete upper-arm, elbow and wrist rotations.
+  // The other arm retains its grip on the hero throughout the gesture.
   function shoulderGesture(source, clip, targetModel, weight, time) {
     if (!source || !clip || !targetModel || weight<=0) return;
     let sample=gestures.get(source);
@@ -93,21 +94,15 @@ export function createCaptureScene(scene) {
     }
     sample.action.time=Math.max(0,Math.min(clip.duration-.0001,time));
     sample.mixer.update(0);sample.model.updateWorldMatrix(true,true);
-    const sourceUpper=bone(sample.model,'RightArm'),sourceElbow=bone(sample.model,'RightForeArm'),sourceHand=bone(sample.model,'RightHand');
-    const upper=bone(targetModel,'LeftArm'),elbow=bone(targetModel,'LeftForeArm'),hand=bone(targetModel,'LeftHand');
-    if(!sourceUpper||!sourceElbow||!sourceHand||!upper||!elbow||!hand)return;
-    const sourceOrigin=point(sourceUpper),sourceWrist=point(sourceHand),sourceBend=point(sourceElbow);
-    const sourceLength=sourceOrigin.distanceTo(sourceBend)+sourceBend.distanceTo(sourceWrist);
-    const scale=(point(upper).distanceTo(point(elbow))+point(elbow).distanceTo(point(hand)))/sourceLength;
-    const orientation=targetModel.getWorldQuaternion(new Quaternion());
-    const offset=sourceWrist.sub(sourceOrigin);offset.x*=-1;offset.multiplyScalar(scale).applyQuaternion(orientation);
-    const pole=sourceBend.sub(sourceOrigin);pole.x*=-1;pole.applyQuaternion(orientation).normalize();
-    const target=point(upper).add(offset);
-    reach(upper,elbow,hand,point(hand).lerp(target,weight),pole);
-    const wrist=sourceHand.getWorldQuaternion(new Quaternion());
-    wrist.set(wrist.x,-wrist.y,-wrist.z,wrist.w).premultiply(orientation);
-    const delta=wrist.multiply(hand.getWorldQuaternion(new Quaternion()).invert());
-    rotate(hand,new Quaternion().slerp(delta,weight));
+    const sourceFrame=gestureBodyFrame(sample.model),targetFrame=gestureBodyFrame(targetModel);
+    if(!sourceFrame||!targetFrame)return;
+    for(const part of ['Arm','ForeArm','Hand']){
+      const joint=bone(targetModel,'Left'+part);
+      const desired=mirroredGestureRotation(sample.model,source,targetModel,part,sourceFrame,targetFrame);
+      if(!joint||!desired)continue;
+      const delta=desired.multiply(joint.getWorldQuaternion(new Quaternion()).invert());
+      rotate(joint,new Quaternion().slerp(delta,weight));
+    }
   }
 
   function frame(camera, s, player, playerModel, fallback, monster, monsterModel, signatureClip) {

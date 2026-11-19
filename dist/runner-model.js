@@ -1,6 +1,7 @@
 import { AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { SWEEP_SECONDS, JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
+import {saveGestureBindPose} from './signature-gesture.js';
 
 function createSchoolBadgeTexture(CanvasTextureClass) {
   if (typeof document === 'undefined') return null;
@@ -144,6 +145,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress) {
         }
       }
     });
+    saveGestureBindPose(model);
     mixer = new AnimationMixer(model);
     actions = Object.fromEntries(names.map(name => [name, mixer.clipAction(clips.get(name))]));
     const oneShots = {

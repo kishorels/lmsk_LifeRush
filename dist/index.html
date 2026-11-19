@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH — School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2.2.1">
 </head>
 <body>
 <header>
@@ -142,8 +142,6 @@
           <span class="rush-arrow">🏃💨</span>
         </button>
 
-        <p class="select-guide-text">Swipe or WASD · Space: Jump · Down: Slide/Roll</p>
-        <a class="asset-credits-link" href="credits.html">Asset credits</a>
       </div>
     </div>
 
@@ -161,11 +159,12 @@
         <button id="restart" class="secondary" hidden>Restart from start</button>
         <button id="btn-change-char" class="secondary">Change Character <span>👤</span></button>
         <p class="tip" id="tip">Each new run starts from zero.</p>
+        <a class="asset-credits-link" href="credits.html">Asset credits</a>
       </div>
     </div>
 
     <div id="countdown" class="countdown" hidden>3</div>
-    <div id="toast" class="toast">Find your rhythm. Your story begins now.</div>
+    <div id="toast" class="toast" hidden aria-hidden="true"></div>
 
     <!-- Touch Controls -->
     <div class="controls" id="touch-controls">
@@ -182,6 +181,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=2.2"></script>
+<script type="module" src="boot.js?v=2.2.1"></script>
 </body>
 </html>

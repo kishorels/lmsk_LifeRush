@@ -33,3 +33,7 @@ The third-person camera is now closer and lower. The game occupies the portrait 
 
 ## Male rig study 01
 `character.html` shows the actual original rigged male draft and five animation clips. `dist/assets/runverse-male.glb` is downloadable. The Blender source and repeatable generation script are in `art/`. This draft does NOT match the approved concept's face, hair or fabric fidelity; it is deliberately not installed as the finished gameplay hero. The preview honestly distinguishes still-render fallback from live 3D on WebGL-capable devices. Character likeness and mesh quality remain unfinished.
+
+## Run layouts
+
+Normal starts create a new run seed. The entry ramp, section order and spacing, traffic lanes and counts, obstacle types, coin trails and magnet/shield order vary between runs. Physics and both renderers use the same segment plan, which stays fixed during pause/resume. `fresh(seed)` replays a layout for debugging; `fresh(0)` preserves the original route for regression fixtures.

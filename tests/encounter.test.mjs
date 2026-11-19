@@ -4,7 +4,7 @@ import {trafficPattern,sideVehicleX} from '../dist/traffic-rules.js';
 import {createCaptureStage} from '../dist/capture-stage.js';
 import {buildSideVehicle} from '../dist/side-vehicles.js';
 import {Scene,Group,DirectionalLight,Mesh,BoxGeometry,MeshBasicMaterial,PerspectiveCamera} from '../dist/vendor/three.module.js';
-function setup(index){const base=100+index*160,s=fresh();s.mode='running';s.distance=base+44;s.next=100000;s.items=trafficPattern(base,index);return s;}
+function setup(index){const base=100+index*160,s=fresh(0);s.mode='running';s.distance=base+44;s.next=100000;s.items=trafficPattern(base,index);return s;}
 test('side encounters give a one-second escape after entry on both sides and at maximum speed',()=>{
  for(const index of [1,3,5,7,11,19]){const s=setup(index),o=s.items.find(o=>o.type==='sideVehicle'),b=s.items.find(o=>o.type==='bus');s.x=s.lane=o.lane;
  while(!o.started)step(s,.01);assert.equal(o.startedAt,b.startedAt);assert.ok(Math.abs(sideVehicleX(o,s.time))>5);
@@ -25,6 +25,7 @@ test('capture keeps the original campus and hides only nearby camera-blocking tr
 test('all side vehicle variants have finite geometry',()=>{for(const type of ['cycle','bike','car']){const g=buildSideVehicle(type);g.updateMatrixWorld(true);g.traverse(m=>{assert.ok(m.matrixWorld.elements.every(Number.isFinite));});assert.ok(g.userData.wheels.length>=2);}});
 
 test('faster run is capped and side challenges occur every other section',()=>{
- const s=fresh();assert.equal(s.speed,28);s.mode='running';s.distance=10000;s.lane=s.x=0;s.next=100000;step(s,.01);assert.equal(s.speed,48);
+ const s=fresh(0);assert.equal(s.speed,28);s.mode='running';s.distance=5000;s.lane=s.x=0;s.next=100000;step(s,.01);assert.equal(s.speed,48);
+ s.distance=10000;step(s,.01);assert.equal(s.speed,96);
  for(let i=0;i<12;i++){const row=trafficPattern(100+i*160,i);assert.equal(row.some(o=>o.type==='sideVehicle'),i%2===1);}
 });

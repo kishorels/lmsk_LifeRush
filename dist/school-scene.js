@@ -99,22 +99,23 @@ export function createSchoolEntrance(scene) {
       part(campus,0x418967,side*4.40,.52,z,.65,.30,1.32);
     }
   }
-  sign(campus,'PICKUP ZONE','RAMP  ·  RIGHT LANE',4.54,2.72,-33,2.36,.74);
+  sign(campus,'PICKUP ZONE','FIND THE ROOF RAMP',4.54,2.72,-33,2.36,.74);
   part(campus,0x315763,4.54,1.29,-33,.10,2.58,.10);
+  const vehicle=new Group();vehicle.name='entry-vehicle';vehicle.userData.captureObstacle=true;campus.add(vehicle);
   for(const mark of [16,18,20]){
     for(const side of [-1,1]){
-      part(campus,0xffd663,2.2+side*.23,.111,-mark,.13,.022,.68).rotation.y=side*.65;
+      part(vehicle,0xffd663,2.2+side*.23,.111,-mark,.13,.022,.68).rotation.y=side*.65;
     }
   }
 
-  const vehicle=new Group();vehicle.userData.captureObstacle=true;campus.add(vehicle);
   const van = SCHOOL_VAN, x = van.lane*2.2, length = van.front-van.rear;
   const mid=-(van.front+van.rear)/2, rear=-van.rear;
   const road=.09, roof=road+van.roof;
-  const body=buildBus(length,van.roof,false);body.position.set(x,road,rear);vehicle.add(body);
+  const body=buildBus(length,van.roof,false);body.name='entry-bus';body.position.set(x,road,rear);vehicle.add(body);
 
   const run=van.rear-van.ramp, slope=Math.atan2(van.roof,run);
   const ramp=part(vehicle,0x327a75,x,road+van.roof/2-.06,-(van.ramp+van.rear)/2,van.width,.12,Math.hypot(run,van.roof));
+  ramp.name='entry-ramp';
   ramp.rotation.x=slope;
   for(let j=1;j<=7;j++){
     const t=j/8;
@@ -124,7 +125,9 @@ export function createSchoolEntrance(scene) {
   const coins=ROOF_COINS.map(distance=>makeCoin(vehicle,x,roof+.58,-distance));
   return state=>{
     campus.position.z=state.distance;
-    campus.visible=state.distance<82;
+    const entry=state.entryVan??SCHOOL_VAN;
+    vehicle.position.set((entry.lane-SCHOOL_VAN.lane)*2.2,0,SCHOOL_VAN.rear-entry.rear);
+    campus.visible=state.distance<entry.front+28;
     coins.forEach((coin,i)=>{
       coin.visible=!(state.roofCoins & (1<<i));
       spinCoin(coin,state.time,i,roof+.58);

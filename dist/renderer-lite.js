@@ -5,7 +5,7 @@ import {weatherAt,weatherColor} from './weather.js';
 import {campusAnchor,campusKind,CAMPUS_SLOTS} from './campus-layout.js';
 import {drawAirliner,flightPhase} from './airliner.js';
 import {repeatedVans,sideVehicleX} from './traffic-rules.js';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,height,chasePose,capturePose,isCapture,SCHOOL_GATE,SCHOOL_VAN,ROOF_COINS,ROLL_DURATION,FALL_DURATION,HIT_DURATION} from './engine.js';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,height,chasePose,capturePose,isCapture,SCHOOL_GATE,ROLL_DURATION,FALL_DURATION,HIT_DURATION} from './engine.js';
 export function createLiteRenderer(canvas){let s,character,w=600,h=700;const ctx=canvas.getContext('2d');
 function resize(){const r=canvas.getBoundingClientRect();w=r.width;h=r.height;const d=Math.min(devicePixelRatio||1,2);canvas.width=w*d;canvas.height=h*d;ctx.setTransform(d,0,0,d,0,0);}new ResizeObserver(resize).observe(canvas);
 const poly=(points,color)=>{ctx.fillStyle=color;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();};
@@ -121,7 +121,7 @@ function school(scenery) {
     ctx.fillStyle='#fff3db';ctx.textAlign='center';ctx.font='900 '+p.k*.31+'px system-ui';
     ctx.fillText('RUNVERSE SCHOOL',p.x,p.y);
   }});
-  const van=SCHOOL_VAN,x=van.lane*2.2,ramp=relative(van.ramp),rear=relative(van.rear),front=relative(van.front);
+  const van=s.entryVan,x=van.lane*2.2,ramp=relative(van.ramp),rear=relative(van.rear),front=relative(van.front);
   for (const side of [-1,1]) {
     const z=Math.max(-1,relative(15));
     if(relative(35)>-1) scenery.push({z,draw:()=>campusBuilding(side*8.2,z,Math.max(1,relative(35)-z),side<0?4.75:3.8,side<0?0:2)});
@@ -144,7 +144,7 @@ function school(scenery) {
       ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
     }
   }});
-  ROOF_COINS.forEach((at,i)=>{
+  s.entryCoins.forEach((at,i)=>{
     const z=relative(at);
     if(z<-.9||(s.roofCoins&(1<<i)))return;
     scenery.push({z:Math.max(-1,rear)-.03,draw:()=>{
@@ -154,7 +154,7 @@ function school(scenery) {
   });
 }
 function traffic(scenery) {
- for(const v of repeatedVans(s.distance)) {
+ for(const v of repeatedVans(s.distance,s.runSeed)) {
   const rear=3+v.rear-s.distance,front=3+v.front-s.distance,ramp=3+v.ramp-s.distance,x=v.lane*2.2;
   if(front<0||ramp>145)continue;
   const near=Math.max(-1,rear);

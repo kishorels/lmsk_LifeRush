@@ -9,7 +9,7 @@ test('generated routes use coin trails and only magnet/shield powerups',()=>{
     const items=trafficPattern(100+index*160,index);
     assert.ok(items.filter(o=>o.type==='coin').length>=4);
     assert.ok(items.every(o=>!['book','skill'].includes(o.type)));
-    const s=fresh();s.mode='running';s.distance=1000;s.next=1000;s.trafficIndex=index;
+    const s=fresh(0);s.mode='running';s.distance=1000;s.next=1000;s.trafficIndex=index;
     step(s,.01);
     assert.ok(s.items.every(o=>!['book','skill'].includes(o.type)));
     assert.ok(s.items.some(o=>o.type==='coin'));
@@ -17,7 +17,7 @@ test('generated routes use coin trails and only magnet/shield powerups',()=>{
 });
 
 test('magnet attracts coins only, freezes on pause and shield absorbs a hit',()=>{
-  const s=fresh();s.mode='running';s.distance=1000;s.next=100000;s.magnet=12;
+  const s=fresh(0);s.mode='running';s.distance=1000;s.next=100000;s.magnet=12;
   const coin={type:'coin',lane:1,z:1012},magnet={type:'magnet',lane:-1,z:1016},shield={type:'shield',lane:-1,z:1018};
   s.items=[coin,magnet,shield];step(s,.025);
   assert.equal(coin.done,true);assert.equal(s.coinFlights.length,1);assert.equal(magnet.lane,-1);assert.equal(shield.lane,-1);
@@ -45,7 +45,7 @@ test('metallic powerup models animate deterministically and share geometry',()=>
 });
 
 test('magnet pulls road, parked-roof and moving-roof coins across lanes and heights exactly once',()=>{
-  const s=fresh();s.mode='running';s.distance=125;s.next=100000;s.magnet=12;
+  const s=fresh(0);s.mode='running';s.distance=125;s.next=100000;s.magnet=12;
   const far={type:'coin',lane:0,z:200};
   s.items=[{type:'coin',lane:-1,z:130},{type:'coin',lane:1,z:113},far,
     {id:'magnet-bus',type:'bus',roofRide:true,started:true,lane:1,z:127,length:22,roof:2.8,velocity:0}];
@@ -65,7 +65,7 @@ test('magnet pulls road, parked-roof and moving-roof coins across lanes and heig
 });
 
 test('magnet also retrieves the four entry-bus coins from the opposite ground lane',()=>{
-  const s=fresh();s.mode='running';s.distance=40;s.next=100000;s.lane=s.x=-1;s.magnet=12;
+  const s=fresh(0);s.mode='running';s.distance=40;s.next=100000;s.lane=s.x=-1;s.magnet=12;
   step(s,.01);assert.equal(s.roofCoins,15);assert.equal(s.coinFlights.length,4);
   s.magnet=0;for(let i=0;i<12;i++)step(s,.05);
   assert.equal(s.coins,4);assert.equal(s.floor,0);

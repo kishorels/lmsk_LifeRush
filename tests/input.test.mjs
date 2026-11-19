@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {fresh,action,step,height,JUMP_DURATION,ROLL_DURATION,SLIDE_DURATION} from '../dist/engine.js';
-const run=()=>{const s=fresh();s.mode='running';s.next=10000;return s;};
+const run=()=>{const s=fresh(0);s.mode='running';s.next=10000;return s;};
 test('jump interrupts slide and roll immediately',()=>{
  for(const state of ['slide','roll']){const s=run();s[state]=.4;action(s,'jump');assert.equal(s.jump,JUMP_DURATION);assert.equal(s.slide,0);assert.equal(s.roll,0);step(s,.025);assert.ok(height(s)>0);}
 });

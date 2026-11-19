@@ -1,6 +1,7 @@
 import { AnimationMixer, Group } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { chasePose, isCapture, SCHOOL_VAN } from './engine.js';
+import {saveGestureBindPose} from './signature-gesture.js';
 
 export function loadChaserModel(scene, onProgress) {
   const chaser = new Group();
@@ -24,6 +25,7 @@ export function loadChaserModel(scene, onProgress) {
     model.rotation.y = Math.PI;
     chaser.add(model);
     render.model = model;
+    saveGestureBindPose(model);
     mixer = new AnimationMixer(model);
     run = mixer.clipAction(clip).play();
     idle = mixer.clipAction(rest).play();
@@ -46,10 +48,12 @@ export function loadChaserModel(scene, onProgress) {
     }
     chaser.position.y = .09;
     const behind = state.distance-pose.z;
-    const van = SCHOOL_VAN;
+    const van = state.entryVan??SCHOOL_VAN;
     const avoidVan = Math.min(1, Math.max(0, (behind-van.ramp+2)/2),
       Math.max(0,(van.front+2-behind)/2));
-    chaser.position.x = pose.x - Math.max(0,pose.x-.52)*avoidVan;
+    const vanX=van.lane*2.2,gap=pose.x-vanX;
+    chaser.position.x=pose.x;
+    if(Math.abs(gap)<1.75)chaser.position.x+=(vanX+(gap<0?-1:1)*1.75-pose.x)*avoidVan;
     chaser.position.z = pose.z;
     chaser.rotation.y = (pose.x - state.x * 2.2) * .15;
     run.time = (pose.stride * 1.08) % run.getClip().duration;

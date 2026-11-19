@@ -1,12 +1,12 @@
 import test from 'node:test';import assert from 'node:assert/strict';import{fresh,action,step,hits,pattern,career,height,chaseRemaining,chasePose,capturePose,CAPTURE_DURATION}from'../dist/engine.js';
-test('lane boundaries and pause input',()=>{const s=fresh();s.mode='running';for(let i=0;i<10;i++)action(s,'right');assert.equal(s.lane,1);for(let i=0;i<10;i++)action(s,'left');assert.equal(s.lane,-1);s.mode='paused';action(s,'right');assert.equal(s.lane,-1);});
-test('jump, slide and collision outcomes',()=>{const s=fresh();s.mode='running';assert.ok(hits(s,{lane:0,type:'jump'}));action(s,'jump');s.jump=.475;assert.equal(hits(s,{lane:0,type:'jump'}),false);assert.ok(hits(s,{lane:0,type:'block'}));s.jump=0;action(s,'slide');assert.equal(hits(s,{lane:0,type:'slide'}),false);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.slide,0);assert.ok(hits(s,{lane:0,type:'slide'}));});
-test('safe generated rows and reset',()=>{for(let i=0;i<1000;i++){const row=pattern(50);assert.equal(row.filter(x=>x.type!=='coin').length,1);assert.notEqual(row[0].lane,row[1].lane);}const s=fresh();s.skills[0]=100;s.distance=300;s.items.push({});const reset=fresh();assert.deepEqual(reset.skills,[0,0,0]);assert.equal(reset.distance,0);assert.equal(reset.items.length,0);});
-test('collection, crash, frozen pause, and countdown',()=>{const s=fresh();s.mode='running';s.next=1000;s.items=[{z:1,lane:0,type:'coin'}];step(s,.05);assert.equal(s.coins,1);s.mode='paused';const d=s.distance;step(s,.05);assert.equal(s.distance,d);s.mode='countdown';s.countdown=.02;step(s,.05);assert.equal(s.mode,'running');s.items=[{z:1,lane:0,type:'block'}];step(s,.05);assert.equal(s.mode,'running');assert.equal(s.damage,1);assert.ok(s.hit);for(let i=0;i<15;i++)step(s,.05);assert.equal(s.damage,1);s.items=[{z:s.distance+1,lane:0,type:'slide'}];step(s,.05);assert.equal(s.mode,'falling');assert.equal(s.damage,2);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.mode,'captured');for(let i=0;i<Math.ceil(CAPTURE_DURATION/.05)+1;i++)step(s,.05);assert.equal(s.mode,'crashed');});
+test('lane boundaries and pause input',()=>{const s=fresh(0);s.mode='running';for(let i=0;i<10;i++)action(s,'right');assert.equal(s.lane,1);for(let i=0;i<10;i++)action(s,'left');assert.equal(s.lane,-1);s.mode='paused';action(s,'right');assert.equal(s.lane,-1);});
+test('jump, slide and collision outcomes',()=>{const s=fresh(0);s.mode='running';assert.ok(hits(s,{lane:0,type:'jump'}));action(s,'jump');s.jump=.475;assert.equal(hits(s,{lane:0,type:'jump'}),false);assert.ok(hits(s,{lane:0,type:'block'}));s.jump=0;action(s,'slide');assert.equal(hits(s,{lane:0,type:'slide'}),false);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.slide,0);assert.ok(hits(s,{lane:0,type:'slide'}));});
+test('safe generated rows and reset',()=>{for(let i=0;i<1000;i++){const row=pattern(50);assert.equal(row.filter(x=>x.type!=='coin').length,1);assert.notEqual(row[0].lane,row[1].lane);}const s=fresh(0);s.skills[0]=100;s.distance=300;s.items.push({});const reset=fresh(0);assert.deepEqual(reset.skills,[0,0,0]);assert.equal(reset.distance,0);assert.equal(reset.items.length,0);});
+test('collection, crash, frozen pause, and countdown',()=>{const s=fresh(0);s.mode='running';s.next=1000;s.items=[{z:1,lane:0,type:'coin'}];step(s,.05);assert.equal(s.coins,1);s.mode='paused';const d=s.distance;step(s,.05);assert.equal(s.distance,d);s.mode='countdown';s.countdown=.02;step(s,.05);assert.equal(s.mode,'running');s.items=[{z:1,lane:0,type:'block'}];step(s,.05);assert.equal(s.mode,'running');assert.equal(s.damage,1);assert.ok(s.hit);for(let i=0;i<15;i++)step(s,.05);assert.equal(s.damage,1);s.items=[{z:s.distance+1,lane:0,type:'slide'}];step(s,.05);assert.equal(s.mode,'falling');assert.equal(s.damage,2);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.mode,'captured');for(let i=0;i<Math.ceil(CAPTURE_DURATION/.05)+1;i++)step(s,.05);assert.equal(s.mode,'crashed');});
 test('career ties are explicit',()=>{assert.equal(career([2,2,0]),'Engineer / Doctor');assert.equal(career([0,0,0]),'Your story is still unwritten');});
 
 test('airborne down input drops from the current height and ground double down rolls', () => {
-  const s = fresh();
+  const s = fresh(0);
   s.mode = 'running';
   s.next = 1000;
   action(s, 'jump');
@@ -30,7 +30,7 @@ test('airborne down input drops from the current height and ground double down r
 });
 
 test('escaping the chaser restores both hearts and starts a fresh chase on the next hit', () => {
-  const s = fresh();
+  const s = fresh(0);
   const advance = frames => { for (let i = 0; i < frames; i++) step(s,.05); };
   const hit = () => {
     s.items.push({z:s.distance+1,lane:0,type:'block'});
@@ -69,11 +69,11 @@ test('escaping the chaser restores both hearts and starts a fresh chase on the n
   hit();
   assert.equal(s.mode, 'falling');
   assert.equal(s.damage, 2);
-  assert.equal(chaseRemaining(fresh()), 0);
+  assert.equal(chaseRemaining(fresh(0)), 0);
 });
 
 test('a second hit during pursuit lets the chaser catch up during the fall', () => {
-  const s = fresh();
+  const s = fresh(0);
   s.mode = 'running';
   s.next = 10000;
   s.items = [{z:1,lane:0,type:'block'}];
@@ -97,7 +97,7 @@ test('a second hit during pursuit lets the chaser catch up during the fall', () 
 });
 
 test('a collision exactly when the chase expires opens a new chase', () => {
-  const s = fresh();
+  const s = fresh(0);
   s.mode = 'running';
   s.next = 10000;
   s.firstHitAt = 1;
@@ -113,7 +113,7 @@ test('a collision exactly when the chase expires opens a new chase', () => {
 });
 
 test('the right ramp leads onto the van roof and back to the road', () => {
-  const s = fresh();
+  const s = fresh(0);
   s.mode = 'running';
   s.next = 10000;
   action(s, 'right');
@@ -135,7 +135,7 @@ test('the right ramp leads onto the van roof and back to the road', () => {
 });
 
 test('the middle lane stays clear and a late lane change cannot climb the van side', () => {
-  const s = fresh();
+  const s = fresh(0);
   s.mode = 'running';
   s.next = 10000;
   while (s.distance < 44) step(s,.05);
@@ -150,7 +150,7 @@ test('the middle lane stays clear and a late lane change cannot climb the van si
 });
 
 test('quick drop during a roof jump snaps to the roof and leaving the lane drops to ground', () => {
-  const s = fresh();
+  const s = fresh(0);
   s.mode = 'running';
   s.next = 10000;
   action(s,'right');
@@ -166,4 +166,50 @@ test('quick drop during a roof jump snaps to the roof and leaving the lane drops
   for(let i=0;i<30;i++) step(s,.025);
   assert.equal(height(s), 0);
   assert.equal(s.damage, 0);
+});
+
+test('above 5k m obstacles target player lane and scale with distance', () => {
+  const s = fresh(0);
+  s.mode = 'running';
+  s.distance = 5000;
+  s.lane = s.x = 1; // player is in lane 1
+  s.next = 100000;
+  step(s, .05);
+  // An obstacle must be generated in lane 1
+  const targeted = s.items.filter(o => !['coin','magnet','shield'].includes(o.type) && o.lane === 1);
+  assert.ok(targeted.length >= 1, 'obstacle placed in player lane 1');
+
+  // Change lane to -1
+  action(s, 'left');
+  action(s, 'left');
+  assert.equal(s.lane, -1);
+  // Advance distance
+  s.distance = 5200;
+  step(s, .05);
+  const leftTargeted = s.items.filter(o => !['coin','magnet','shield'].includes(o.type) && o.lane === -1 && o.z > 5200);
+  assert.ok(leftTargeted.length >= 1, 'obstacle placed in player lane -1 after lane switch');
+});
+
+test('above 8k m speed doubles and reaches 96 m/s', () => {
+  const s = fresh(0);
+  s.mode = 'running';
+  s.distance = 7000;
+  s.next = 100000;
+  step(s, .01);
+  assert.equal(s.speed, 48); // Normal top speed before 8k
+
+  s.distance = 8500;
+  step(s, .01);
+  assert.equal(s.speed, 96); // 2x double speed above 8k
+});
+
+test('above 10k m one hit causes instant game over', () => {
+  const s = fresh(0);
+  s.mode = 'running';
+  s.distance = 10050;
+  s.next = 100000;
+  s.items = [{ z: s.distance + 1, lane: 0, type: 'block' }];
+  step(s, .05);
+  assert.equal(s.damage, 2, 'damage immediately set to 2');
+  assert.equal(s.mode, 'falling', 'one hit directly triggers falling/out');
 });
