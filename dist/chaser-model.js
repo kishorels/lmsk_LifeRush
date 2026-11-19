@@ -11,10 +11,10 @@ export function loadChaserModel(scene, onProgress) {
   scene.add(chaser);
 
   let mixer, run, idle;
-  const url = new URL('./assets/runverse-mutant.glb', import.meta.url).href;
+  const url = new URL('./assets/villain.glb', import.meta.url).href;
   new GLTFLoader().load(url, ({scene: model, animations}) => {
-    const clip = animations.find(animation => animation.name === 'Run');
-    const rest = animations.find(animation => animation.name === 'Idle');
+    const clip = animations.find(animation => animation.name === 'Run') || animations[0];
+    const rest = animations.find(animation => animation.name === 'Idle') || clip;
     if (!clip || !rest) return;
     model.traverse(object => {
       if (object.isMesh) {
@@ -32,7 +32,7 @@ export function loadChaserModel(scene, onProgress) {
     if (onProgress) onProgress(1.0);
   }, xhr => {
     if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
-  }, error => console.warn('Could not load the Mutant chaser.', error));
+  }, error => console.warn('Could not load the villain chaser.', error));
 
   function render(state) {
     const capture = isCapture(state);
