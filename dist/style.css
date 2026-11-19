@@ -3,7 +3,7 @@
 :root{background:#10283e}.game{background:#75d5ed;border:1px solid #ffffff30;box-shadow:0 20px 80px #00142866}.panel{background:linear-gradient(145deg,#143b64f5,#293369ed);border-color:#a9e5ff80;box-shadow:0 24px 60px #13255666}.primary{background:linear-gradient(100deg,#ffe16b,#ffc64b);color:#3c3153;box-shadow:0 4px 0 #b9882a}.selection button.selected{border-color:#ffe16b;background:#ffd85624;color:#fff4c0}.game-top .icon{background:#183862b3;color:white}.location{background:#ffffffe3;border-radius:30px;padding:9px 12px;color:#1d4970;box-shadow:0 3px 12px #37789120}.hud{color:white;text-shadow:0 2px 3px #203f6eaa}.hud strong{font-size:38px}.hud .best strong{font-size:19px}.counters>span{background:#18365fe8;border-color:#ffffff65}.controls button{background:linear-gradient(#345c90eb,#283b66ed);border-color:#9fcbf399;box-shadow:0 4px 0 #16294a88}.toast{background:#18365fa8;padding:8px 12px;width:auto;left:50%;transform:translateX(-50%);border-radius:12px;max-width:95%;white-space:nowrap;font-size:9px}.brandmark{background:#ffe16b}h1 em{color:#ffe16b}.eyebrow{color:#8edbff}.mode-icon{color:#ffe16b}.skill-guide b.care{color:#73ffb3}.overlay{background:linear-gradient(#12233e00,#142e5022,#142e5060)}.tag{color:#ffe393}@media(max-width:760px){.game{border-radius:16px}.toast{font-size:8px;white-space:normal;text-align:center;width:90%}.hud{top:70px}.counters{top:132px}}
 /* Immersive portrait chase-camera layout */
 html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justify-content:center}body>header,aside,.bottom{display:none}main{display:block;width:min(100%,600px);height:100dvh;max-width:none;padding:0;margin:0}.game{width:100%;height:100dvh;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:0 0 100px #0008}.game-top{top:max(16px,env(safe-area-inset-top));left:16px;right:16px;flex-direction:row-reverse}.location{font-size:9px;letter-spacing:1px;padding:9px 13px;position:absolute;left:50%;top:0;transform:translateX(-50%);white-space:nowrap;background:#122a51bb;color:#e4f7ff;border:1px solid #ffffff40}.game-top .icon{width:54px;height:54px;border-radius:15px;background:linear-gradient(#82e4fa,#348cb8);color:white;font-size:28px;border:3px solid #e7fbff;box-shadow:0 4px 0 #163b63,0 0 0 2px #17416a}.hud{top:max(17px,env(safe-area-inset-top));right:14px;left:auto;display:flex;flex-direction:column;gap:8px;text-align:right;pointer-events:none}.hud>div{background:#152441ed;padding:7px 12px;border-radius:12px;min-width:100px;box-shadow:0 3px 0 #0002}.hud small{font-size:7px;letter-spacing:1.3px;color:#b7cde8}.hud strong{font-size:29px;letter-spacing:.5px;line-height:1.05}.hud .best{padding:6px 12px;min-width:80px;align-self:flex-end}.hud .best strong{font-size:14px;line-height:1.1}.counters{left:15px;top:90px;gap:5px;flex-direction:column}.counters>span{padding:5px 9px;font-size:13px;min-width:54px;background:#152441ed;border:0;box-shadow:0 2px 0 #0002}.controls{bottom:max(12px,env(safe-area-inset-bottom));gap:9px;opacity:.7}.controls button{width:49px;height:45px;font-size:22px;border-radius:12px}.toast{bottom:72px;font-size:9px;max-width:90%;white-space:normal;width:max-content}.panel{max-width:350px;background:linear-gradient(150deg,#122f5cf2,#39265df2);padding:27px 24px}.panel h2{font-size:29px}.overlay{background:linear-gradient(#14264800 20%,#14264830 60%,#14264866)}.tag{letter-spacing:1.2px}.selection{margin:22px 0}.primary{font-size:13px;padding:18px}.tip{font-size:10px!important}@media(max-width:400px){.location{top:67px;font-size:7px;max-width:150px}.hud{right:12px}.panel{max-width:300px}.game-top{left:13px}}@media(min-width:601px){main{border-left:1px solid #ffffff20;border-right:1px solid #ffffff20}.game{border-radius:0}}@media(max-height:540px){main{width:100%;max-width:850px}.panel{padding:15px}.panel h2{font-size:23px;margin:8px}.selection{margin:10px}.game .controls{left:15%;}.toast{display:none}}
-.game-top{flex-direction:row}#sound{position:absolute;bottom:max(18px,env(safe-area-inset-bottom));right:9px;z-index:2;min-width:36px;width:36px;height:34px;font-size:8px;background:#152441b3}.game-top #pause{z-index:2}
+.game-top{flex-direction:row}
 
 #health { color: #ff8ca8; white-space: nowrap; }
 
@@ -23,8 +23,10 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   pointer-events: none;
 }
 
-.game.capture :is(.game-top,.hud,.counters,.controls,.toast,#sound) {
-  visibility: hidden;
+.game.capture :is(.game-top,.hud,.hud-top-bar,.hud-sub-bar,.counters,.controls,.toast,#sound,#pause) {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .counters .coins { color:#ffd665; }
@@ -371,6 +373,7 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   top: max(12px, env(safe-area-inset-top));
   left: 14px;
   right: 14px;
+  height: 42px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -378,10 +381,12 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   pointer-events: none;
 }
 .hud-brand-wrap {
+  display: flex;
+  align-items: center;
   pointer-events: auto;
 }
 .hud-logo-mini {
-  height: 42px;
+  height: 38px;
   width: auto;
   border-radius: 10px;
   border: 1.5px solid #ffd54f90;
@@ -389,34 +394,86 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   object-fit: contain;
   display: block;
 }
+.hud-top-bar .location,
 .location {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
   background: #142d54e6;
-  border: 1px solid #7bc5f860;
+  border: 1.5px solid #7bc5f860;
   border-radius: 20px;
-  padding: 7px 14px;
+  padding: 6px 14px;
   font-size: 10px;
   font-weight: 800;
+  letter-spacing: 1px;
   color: #eaf6ff;
   white-space: nowrap;
   box-shadow: 0 3px 10px #0004;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  z-index: 2;
 }
 .hud-top-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   pointer-events: auto;
 }
-.hud-top-actions .icon {
-  width: 44px;
-  height: 44px;
+.hud-top-actions button,
+.hud-top-actions .icon,
+#sound,
+#pause {
+  position: static !important;
+  top: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  margin: 0;
+  height: 38px;
   border-radius: 12px;
-  display: grid;
-  place-items: center;
+  background: #142d54e6;
+  border: 1.5px solid #7bc5f860;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px #0006;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#sound {
+  min-width: 48px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+#pause {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 900;
+}
+.hud-top-actions button:active,
+#sound:active,
+#pause:active {
+  transform: scale(0.92);
+  background: #1e4277e6;
+  border-color: #ffd54f;
 }
 
 /* IN-GAME HUD SUB BAR */
 .hud-sub-bar {
   position: absolute;
-  top: 68px;
+  top: max(58px, calc(env(safe-area-inset-top) + 48px));
   left: 14px;
   right: 14px;
   display: flex;
@@ -425,11 +482,18 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   z-index: 10;
   pointer-events: none;
 }
+.hud-sub-bar .counters,
 .counters {
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   align-items: flex-start;
+  pointer-events: auto;
 }
 .counters-row-1, .counters-row-2, .counters-row-3 {
   display: flex;
@@ -437,12 +501,28 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   align-items: center;
 }
 .counters span {
-  background: #152441ed;
-  border: 1px solid #ffffff30;
+  background: #142d54e6;
+  border: 1.5px solid #7bc5f850;
   border-radius: 16px;
-  padding: 4px 10px;
+  padding: 5px 11px;
   font-size: 12px;
-  box-shadow: 0 2px 6px #0004;
+  font-weight: 700;
+  box-shadow: 0 3px 10px #0004;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.counters .coins {
+  border-color: #ffd54f80;
+  background: #193156e6;
+}
+.counters .coins b {
+  color: #ffd54f;
+  font-size: 13px;
+  font-weight: 800;
+  margin-left: 2px;
 }
 .counters .books-pill {
   background: #1565c0e8;
@@ -450,50 +530,62 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   border-color: #90caf9;
 }
 .counters .power-pill.magnet {
-  background: #6a1b9ae8;
-  color: #e1bee7;
-  border-color: #ce93d8;
-  box-shadow: 0 0 10px #ab47bc77;
+  background: #5c1888e8;
+  color: #f3e5f5;
+  border-color: #ba68c8;
+  box-shadow: 0 0 12px #ab47bc66;
 }
 .counters .power-pill.shield {
-  background: #263d37ed;
-  color: #ffe4af;
-  border-color: #d5ab59;
-  box-shadow: 0 0 10px #d5ab5933;
+  background: #1b4d3ee8;
+  color: #ffe082;
+  border-color: #ffd54f;
+  box-shadow: 0 0 12px #ffc10744;
 }
 
 .hud-distance-box {
-  background: #14284ced;
-  border: 1px solid #5aa7e650;
+  position: static !important;
+  background: #142d54e6;
+  border: 1.5px solid #7bc5f860;
   border-radius: 14px;
   padding: 6px 12px;
   text-align: right;
-  box-shadow: 0 4px 14px #0004;
+  min-width: 95px;
+  box-shadow: 0 4px 14px #0005;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: auto;
 }
 .dist-main small, .best small {
-  font-size: 7px;
+  font-size: 7.5px;
   letter-spacing: 1.2px;
-  color: #b7cde8;
+  font-weight: 700;
+  color: #90caf9;
   display: block;
 }
 .dist-main strong {
-  font-size: 26px;
+  font-size: 24px;
+  font-weight: 900;
   color: #fff;
-  line-height: 1;
+  line-height: 1.05;
   display: block;
+  letter-spacing: -0.5px;
 }
 .dist-main strong span {
   font-size: 11px;
+  font-weight: 700;
+  color: #90caf9;
 }
 .best {
   margin-top: 4px;
-  border-top: 1px solid #ffffff20;
+  border-top: 1px solid #ffffff25;
   padding-top: 3px;
 }
 .best strong {
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 700;
   color: #ffd54f;
-  line-height: 1;
+  line-height: 1.1;
+  display: block;
 }
 
 /* Toast Message */
