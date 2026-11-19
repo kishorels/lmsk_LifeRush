@@ -37,3 +37,9 @@ The third-person camera is now closer and lower. The game occupies the portrait 
 ## Run layouts
 
 Normal starts create a new run seed. The entry ramp, section order and spacing, traffic lanes and counts, obstacle types, coin trails and magnet/shield order vary between runs. Physics and both renderers use the same segment plan, which stays fixed during pause/resume. `fresh(seed)` replays a layout for debugging; `fresh(0)` preserves the original route for regression fixtures.
+
+## Reference school uniform
+
+The schoolgirl GLB includes a fitted charcoal jacket, folded red bow, silver buttons, red cuffs and a pleated skirt with two red hem bands. The outfit shares the existing skeleton; secondary cloth morphs blend through all nine original animation clips. Rebuild it with `python art/dress_schoolgirl.py` (numpy, scipy and Pillow). The GLB stores its original source document/data so repeated builds do not accumulate geometry or remove original character assets.
+
+The same builder also fits a dark-brown swept scalp to the actual head surface, removes the intersecting temple hair cards and raised loops, and creates a narrower skinned school braid with a red tie. Hair fibre colour/normal textures stay opaque to avoid transparency artefacts.

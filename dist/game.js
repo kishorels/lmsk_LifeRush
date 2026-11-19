@@ -57,8 +57,13 @@ function activateEnterButton() {
 }
 
 function startProgressTicker() {
+  const safetyTimeout = setTimeout(() => {
+    onAllAssetsReady();
+  }, 2800);
+
   function tick() {
     if (assetsReady) {
+      clearTimeout(safetyTimeout);
       if (currentDisplayPct < 100) {
         const step = Math.max(1, Math.ceil((100 - currentDisplayPct) * 0.35));
         currentDisplayPct = Math.min(100, currentDisplayPct + step);
@@ -72,9 +77,9 @@ function startProgressTicker() {
     }
 
     // While downloading: smoothly climb 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20...
-    if (virtualPct < 92) {
-      const inc = virtualPct < 12 ? 0.9 : virtualPct < 35 ? 0.7 : virtualPct < 70 ? 0.4 : 0.2;
-      virtualPct = Math.min(92, virtualPct + inc);
+    if (virtualPct < 96) {
+      const inc = virtualPct < 15 ? 1.2 : virtualPct < 40 ? 0.9 : virtualPct < 75 ? 0.5 : 0.25;
+      virtualPct = Math.min(96, virtualPct + inc);
     }
     const target = Math.max(virtualPct, realDownloadPct);
 
@@ -84,7 +89,7 @@ function startProgressTicker() {
       renderProgress(currentDisplayPct);
     }
 
-    setTimeout(tick, 60);
+    setTimeout(tick, 50);
   }
   tick();
 }
@@ -95,9 +100,22 @@ function onAllAssetsReady() {
   assetsReady = true;
 }
 
+const game = canvas.closest('.game');
+let s=fresh(),best=0,character='male',selectedMap='school',sound=true,prev=0,w=600,h=700;
+
+try{
+  best=Number(localStorage.getItem('runverse-best'))||0;
+  character=localStorage.getItem('runverse-character')==='female'?'female':'male';
+  selectedMap=localStorage.getItem('runverse-map')==='college'?'college':'school';
+}catch{}
+s.map=selectedMap;
+
+const initialModelKey = selectedMap === 'college' ? ('college-' + character) : character;
+
 let draw;
 try{
   draw=createRenderer(canvas, {
+    initialModelKey,
     onBoyProgress: f => updateAssetProgress('boy', f),
     onChaserProgress: f => updateAssetProgress('chaser', f)
   });
@@ -107,23 +125,39 @@ try{
   document.querySelector('.edition').textContent='COAST EDITION · LITE';
   onAllAssetsReady();
 }
-const game = canvas.closest('.game');
-let s=fresh(),best=0,character='male',sound=true,prev=0,w=600,h=700;
-
-try{
-  best=Number(localStorage.getItem('runverse-best'))||0;
-  character=localStorage.getItem('runverse-character')==='female'?'female':'male';
-}catch{}
 
 const save=()=>{
   try{
     localStorage.setItem('runverse-best',best);
     localStorage.setItem('runverse-character',character);
+    localStorage.setItem('runverse-map',selectedMap);
   }catch{}
 };
 
 const effects=createSound();
 try{sound=localStorage.getItem('runverse-sound')!=='off';}catch{}
+try{effects.setVolumes(JSON.parse(localStorage.getItem('runverse-volumes')||'{}'));}catch{}
+function showVolumeValues(){
+  const values=effects.getVolumes();
+  document.querySelectorAll('[data-volume]').forEach(slider=>{
+    const key=slider.dataset.volume;
+    slider.value=Math.round(values[key]*100);
+    const label=$(`volume-${key}-value`);
+    if(label)label.textContent=`${slider.value}%`;
+  });
+}
+showVolumeValues();
+document.querySelectorAll('[data-volume]').forEach(slider=>{
+  slider.addEventListener('input',()=>{
+    effects.setVolumes({[slider.dataset.volume]:Number(slider.value)/100});
+    $(`volume-${slider.dataset.volume}-value`).textContent=`${slider.value}%`;
+    try{localStorage.setItem('runverse-volumes',JSON.stringify(effects.getVolumes()));}catch{}
+  });
+  slider.addEventListener('change',()=>{
+    const sample={coins:'coin',powerups:'shield',movement:'jump',damage:'hit',villain:'swag',ambience:'bell'}[slider.dataset.volume];
+    if(sample){effects.unlock();effects.play(sample,null,character);}
+  });
+});
 function soundButton(){
   effects.setEnabled(sound);
   $('sound').textContent=sound?'♪ ON':'♪ OFF';
@@ -161,6 +195,40 @@ function select(c){
 }
 select(character);
 document.querySelectorAll('[data-character]').forEach(b=>b.onclick=()=>select(b.dataset.character));
+
+function selectMap(map){
+  selectedMap=map==='college'?'college':'school';
+  s.map=selectedMap;
+  if($('start'))$('start').disabled=true;
+  document.querySelectorAll('[data-map]').forEach(button=>{
+    const active=button.dataset.map===selectedMap;
+    button.classList.toggle('selected',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+  const school=selectedMap==='school';
+  $('hub-map-name').textContent=school?'SCHOOL CAMPUS':'COLLEGE CAMPUS';
+  $('hub-outfit-name').textContent=school?'School uniform':'Casual outfit';
+  $('boy-outfit').textContent=school?'School uniform':'Original casual look';
+  $('girl-outfit').textContent=school?'School uniform':'Original casual look';
+  document.querySelector('.hud-top-bar .location').textContent=school?'🏫 RUNVERSE SCHOOL':'🎓 RUNVERSE COLLEGE';
+  save();
+}
+selectMap(selectedMap);
+document.querySelectorAll('[data-map]').forEach(button=>button.onclick=()=>{selectMap(button.dataset.map);triggerSwag();});
+
+function showHub(page='home'){
+  const next=['home','characters','maps','settings'].includes(page)?page:'home';
+  game.classList.remove('hub-home','hub-characters','hub-maps','hub-settings');
+  game.classList.add(`hub-${next}`);
+  document.querySelectorAll('[data-hub]').forEach(button=>{
+    const active=button.dataset.hub===next;
+    button.classList.toggle('selected',active);
+    if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+  });
+  if(next==='home'||next==='characters')triggerSwag();
+}
+document.querySelectorAll('[data-hub]').forEach(button=>button.onclick=()=>showHub(button.dataset.hub));
+showHub('home');
 
 function setScreenMode(mode) {
   game.classList.remove('mode-splash', 'mode-select', 'mode-running', 'mode-gameover');
@@ -217,7 +285,7 @@ function submitPlayerName() {
   updatePlayerNameDisplays(playerName);
   hideNameModal();
   setScreenMode('select');
-  triggerSwag();
+  showHub('home');
 }
 
 if ($('btn-save-name')) {
@@ -234,7 +302,7 @@ if ($('btn-edit-player-name')) {
 
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
-    if (!assetsReady) return;
+    assetsReady = true;
     effects.setEnabled(sound);
     effects.unlock();
     if(sound) effects.startBgm?.();
@@ -242,19 +310,20 @@ if($('btn-enter')){
       showNameModal();
     } else {
       setScreenMode('select');
-      triggerSwag();
+      showHub('home');
     }
   };
 }
 
 function start(){
   s=fresh();
+  s.map=selectedMap;
   s.turnTime = 0.65;
   s.mode = 'intro';
   s.styleAction = SWEEP_SECONDS;
   s.speed = 0;
   setScreenMode('running');
-  $('toast').textContent='🔔 School Bell Rang! Sprint to class · Find the next roof ramp';
+  $('toast').textContent=selectedMap==='college'?'College rush · Find the next roof ramp':'School rush · Find the next roof ramp';
   effects.setEnabled(sound);
   effects.unlock();
   if(sound) effects.startBgm?.();
@@ -323,22 +392,24 @@ if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   if(s.mode==='paused'){resume();return;}
   // After crash → go back to character select screen (LET'S RUN page)
   s=fresh();
+  s.map=selectedMap;
   s.mode='ready';
   $('overlay').hidden=true;
   if($('report-grade')) $('report-grade').hidden=true;
   if($('selection')) $('selection').hidden=false;
   setScreenMode('select');
-  triggerSwag();
+  showHub('home');
 };
 if($('restart')) $('restart').onclick=start;
 if($('btn-change-char')) $('btn-change-char').onclick=()=>{
   s=fresh();
+  s.map=selectedMap;
   s.mode='ready';
   $('overlay').hidden=true;
   if($('report-grade')) $('report-grade').hidden=true;
   if($('selection')) $('selection').hidden=false;
   setScreenMode('select');
-  triggerSwag();
+  showHub('characters');
 };
 $('pause').onclick=()=>s.mode==='paused'?resume():pause();
 

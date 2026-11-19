@@ -852,6 +852,22 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 /* Keep the start screen and playfield free of gesture controls and hint text. */
 #btn-swag,.btn-swag-action,.select-guide-text,#toast { display:none !important; }
 
+/* Four-screen menu shown after Enter Game. The live hero stays behind the menu. */
+.game.mode-select #selection{display:none !important}
+.hub-heading{position:absolute;top:max(78px,calc(env(safe-area-inset-top) + 64px));left:50%;transform:translateX(-50%);z-index:22;text-align:center;background:#10294ecb;border:1px solid #9ddcf27a;border-radius:16px;padding:8px 18px;white-space:nowrap;box-shadow:0 6px 20px #0006}
+.hub-heading span,.hub-heading small{display:block}.hub-heading span{font-size:13px;letter-spacing:1.4px;font-weight:900;color:#fff}.hub-heading small{font-size:10px;color:#ffdc73;margin-top:3px}
+.hub-page{display:none;position:absolute;z-index:24;left:5%;right:5%;background:linear-gradient(155deg,#0e284af2,#162f51ec);border:1px solid #7bc5f88a;border-radius:21px;box-shadow:0 14px 36px #0009;padding:18px;color:#fff;pointer-events:auto}
+.hub-page h2{font-size:19px;margin:0 0 5px;letter-spacing:0}.hub-page p{font-size:11px;color:#bdd8ec;line-height:1.4;margin:0 0 13px}
+.game.hub-characters .hub-page-characters,.game.hub-maps .hub-page-maps,.game.hub-settings .hub-page-settings{display:block}
+.hub-page-characters{top:max(142px,calc(env(safe-area-inset-top) + 125px));text-align:center;padding:13px 15px}
+.hub-character-options{display:flex;gap:10px}.hub-character-options button{width:50%;border:1px solid #8cc8eb70;border-radius:13px;background:#203b60;color:#fff;padding:9px 6px;min-height:54px;cursor:pointer;transition:all .15s}.hub-character-options button:active{transform:scale(0.96)}.hub-character-options button.selected{background:linear-gradient(135deg,#ffd754,#ffac2d);color:#17253c;border-color:#fff2aa;box-shadow:0 3px 12px #ffb30070}.hub-character-options .char-opt-icon{font-size:22px;display:block;margin-bottom:2px}.hub-character-options strong,.hub-character-options small{display:block}.hub-character-options strong{font-size:13px;font-weight:900}.hub-character-options small{font-size:10px;margin-top:3px}
+.hub-page-maps{top:26%;max-height:58%;overflow:auto}.hub-map-card{width:100%;display:flex;align-items:center;gap:11px;text-align:left;color:#eaf5ff;background:#213c60;border:1px solid #7bc5f84d;border-radius:15px;padding:10px;margin-top:9px}.hub-map-card.selected{background:linear-gradient(120deg,#284f78,#3e4f6a);border-color:#ffda65;box-shadow:0 0 0 1px #ffda6577}.hub-map-card span:nth-child(2){flex:1}.hub-map-card strong,.hub-map-card small{display:block}.hub-map-card strong{font-size:13px}.hub-map-card small{font-size:10px;color:#c3d4e1;line-height:1.35;margin-top:3px}.hub-map-card b{font-size:18px;color:#ffe27e;opacity:0}.hub-map-card.selected b{opacity:1}.map-art{width:50px;height:48px;flex:none;border-radius:11px;display:grid;place-items:center;font-size:25px}.school-art{background:linear-gradient(150deg,#ffdc84,#9a692f)}.college-art{background:linear-gradient(150deg,#6bdeea,#326b9c)}
+.hub-page-settings{top:max(78px,calc(env(safe-area-inset-top) + 64px));bottom:max(92px,calc(env(safe-area-inset-bottom) + 79px));overflow-y:auto;scrollbar-width:thin}.game.hub-settings .hub-heading{display:none}.sound-sliders{display:grid;gap:7px}.sound-sliders label{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:11px;font-weight:800;color:#e7f5ff}.sound-sliders label span{color:#ffdc73}.sound-sliders input{grid-column:1 / -1;width:100%;height:19px;accent-color:#ffc94b;touch-action:auto}
+.hub-nav{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;background:#0b203dec;border:1px solid #7bc5f860;border-radius:16px;padding:4px;box-shadow:0 6px 18px #0009}.hub-nav button{border:0;background:transparent;color:#b8d1e9;border-radius:12px;font-size:10px;font-weight:800;padding:6px 1px;min-width:0}.hub-nav button span{display:block;font-size:20px;line-height:22px;margin-bottom:2px}.hub-nav button.selected{background:#ffd754;color:#162744;box-shadow:0 2px 9px #f6b94166}
+.game.hub-characters .select-player-badge,.game.hub-maps .select-player-badge,.game.hub-settings .select-player-badge,.game.hub-characters #start,.game.hub-maps #start,.game.hub-settings #start{display:none}
+.game.mode-select .select-bottom-panel{width:min(360px,94%)}
+@media(max-height:650px){.hub-page-characters{top:112px}.hub-page-maps{top:19%;max-height:60%}.hub-page-settings{top:65px}}
+
 .impact-flash::after {
   content: '';
   position: absolute;

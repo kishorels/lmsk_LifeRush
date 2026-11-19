@@ -78,13 +78,24 @@ function createSchoolBadgeTexture(CanvasTextureClass) {
   return tex;
 }
 
-export function loadRunnerModel(parent, selected = 'male', onProgress) {
+export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = false) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   function load() {
-    const asset = selected === 'female' ? './assets/schoolgirl.glb' : './assets/runverse-schoolboy.glb?v=2.1';
-    new GLTFLoader().load(new URL(asset, import.meta.url).href, gltf => {
+    const assets = {
+      male: './assets/runverse-schoolboy.glb?v=2.1',
+      female: './assets/schoolgirl.glb?v=uniform-2-hair',
+      'college-male': './assets/runverse-runner-v6.glb',
+      'college-female': './assets/casual-schoolgirl.glb'
+    };
+    const loader = new GLTFLoader();
+    const progress = xhr => { if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total); };
+    const main = loader.loadAsync(new URL(assets[selected], import.meta.url).href, progress);
+    const schoolMotion = selected === 'college-male'
+      ? loader.loadAsync(new URL(assets.male, import.meta.url).href) : Promise.resolve(null);
+    Promise.all([main, schoolMotion]).then(([gltf, schoolGltf]) => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall', 'ShoulderSweep'];
+    if (schoolGltf) for (const clip of schoolGltf.animations) if (!clips.has(clip.name)) clips.set(clip.name, clip);
     if (names.some(name => !clips.has(name))) { render.failed=true; return; }
 
     clips.set('HeadHit', AnimationUtils.subclip(clips.get('HeadHit'), 'HeadHit', 1, 20, 30));
@@ -161,12 +172,10 @@ export function loadRunnerModel(parent, selected = 'male', onProgress) {
     render.model = model;
     render.signatureClip = clips.get('ShoulderSweep');
     if (onProgress) onProgress(1.0);
-  }, xhr => {
-    if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
   }, error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 
   }
-  let requested = selected === 'male';
+  let requested = selected === 'male' || isInitiallyActive;
   if (requested) load();
   function render(state, character, dt) {
     if (!requested && character === selected) { requested = true; load(); }

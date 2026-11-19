@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH — School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=2.7.9">
+  <link rel="stylesheet" href="style.css?v=2.8.1">
 </head>
 <body>
 <header>
@@ -113,7 +113,7 @@
         <div class="name-modal-tag">★ LMSK LIFE RUSH ★</div>
         <div class="name-modal-icon">🎒🏃</div>
         <h2>WELCOME, STUDENT!</h2>
-        <p class="name-modal-desc">Enter your name to register your school ID and start your endless rush.</p>
+        <p class="name-modal-desc">Set the name shown on your runner profile.</p>
         <div class="name-input-group">
           <input type="text" id="player-name-input" class="player-name-input" maxlength="15" placeholder="Enter your name..." autocomplete="off" spellcheck="false" aria-label="Student Name">
           <div id="name-error" class="name-error-msg" hidden>Please enter your name</div>
@@ -150,6 +150,41 @@
         </div>
       </div>
 
+      <div class="hub-heading" id="hub-heading">
+        <span id="hub-map-name">SCHOOL CAMPUS</span>
+        <small id="hub-outfit-name">School uniform</small>
+      </div>
+
+      <section class="hub-page hub-page-characters" aria-label="Choose character">
+        <h2>Choose your hero</h2>
+        <p>Pick the boy or girl. Your outfit follows the map.</p>
+        <div class="hub-character-options">
+          <button type="button" data-character="male" aria-pressed="true"><span class="char-opt-icon">👦</span><strong>BOY</strong><small id="boy-outfit">School uniform</small></button>
+          <button type="button" data-character="female" aria-pressed="false"><span class="char-opt-icon">👧</span><strong>GIRL</strong><small id="girl-outfit">School uniform</small></button>
+        </div>
+      </section>
+
+      <section class="hub-page hub-page-maps" aria-label="Choose map">
+        <h2>Choose your map</h2>
+        <p>Each location has its own look and outfits.</p>
+        <button type="button" class="hub-map-card" data-map="school" aria-pressed="true"><span class="map-art school-art" aria-hidden="true">🏫</span><span><strong>School Campus</strong><small>School uniforms · buses · campus road</small></span><b>✓</b></button>
+        <button type="button" class="hub-map-card" data-map="college" aria-pressed="false"><span class="map-art college-art" aria-hidden="true">🎓</span><span><strong>College Campus</strong><small>Casual outfits · modern college blocks</small></span><b>✓</b></button>
+      </section>
+
+      <section class="hub-page hub-page-settings" aria-label="Sound settings">
+        <h2>Sound settings</h2>
+        <p>Set each sound to the level you like.</p>
+        <div class="sound-sliders">
+          <label>Music <span id="volume-music-value">100%</span><input type="range" data-volume="music" min="0" max="100" value="100"></label>
+          <label>Coins <span id="volume-coins-value">100%</span><input type="range" data-volume="coins" min="0" max="100" value="100"></label>
+          <label>Magnet &amp; shield <span id="volume-powerups-value">100%</span><input type="range" data-volume="powerups" min="0" max="100" value="100"></label>
+          <label>Jump &amp; slide <span id="volume-movement-value">100%</span><input type="range" data-volume="movement" min="0" max="100" value="100"></label>
+          <label>Hits <span id="volume-damage-value">100%</span><input type="range" data-volume="damage" min="0" max="100" value="100"></label>
+          <label>Villain &amp; gesture <span id="volume-villain-value">100%</span><input type="range" data-volume="villain" min="0" max="100" value="100"></label>
+          <label>Bells, horns &amp; jet <span id="volume-ambience-value">100%</span><input type="range" data-volume="ambience" min="0" max="100" value="100"></label>
+        </div>
+      </section>
+
       <!-- Bottom Actions Container (Vertical Stack, Zero Overlap) -->
       <div class="select-bottom-panel">
 
@@ -165,6 +200,13 @@
           <span>LET'S RUN</span>
           <span class="rush-arrow">🏃💨</span>
         </button>
+
+        <nav class="hub-nav" aria-label="Game menu">
+          <button type="button" data-hub="home" aria-current="page"><span>⌂</span>Home</button>
+          <button type="button" data-hub="characters"><span>♟</span>Characters</button>
+          <button type="button" data-hub="maps"><span>▧</span>Maps</button>
+          <button type="button" data-hub="settings"><span>⚙</span>Settings</button>
+        </nav>
 
       </div>
     </div>
@@ -208,6 +250,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=2.7.9"></script>
+<script type="module" src="boot.js?v=2.8.1"></script>
 </body>
 </html>

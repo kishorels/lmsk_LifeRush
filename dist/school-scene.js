@@ -56,6 +56,8 @@ export function createSchoolEntrance(scene) {
     roadsideTree(campus, side*16, -30, 10, false, -side*.35);
   }
   const gate = -SCHOOL_GATE;
+  const schoolSigns=new Group(),collegeSigns=new Group();
+  campus.add(schoolSigns,collegeSigns);
   for (const side of [-1,1]) {
     const x=side*4.04;
     part(campus,0xffedc7,x,2.36,gate,.66,4.72,.86);
@@ -68,7 +70,8 @@ export function createSchoolEntrance(scene) {
     }
     part(campus,0x28545b,side*6.98,2.11,gate,5.18,.08,.10);
   }
-  sign(campus,'LMSK HIGHER SECONDARY SCHOOL','MAIN ENTRANCE · LIFE RUSH',0,4.45,gate,8.05,1.24);
+  sign(schoolSigns,'LMSK HIGHER SECONDARY SCHOOL','MAIN ENTRANCE · LIFE RUSH',0,4.45,gate,8.05,1.24);
+  sign(collegeSigns,'LMSK COLLEGE CAMPUS','MAIN ENTRANCE · LIFE RUSH',0,4.45,gate,8.05,1.24);
   part(campus,0xfff2c8,0,5.14,gate,8.98,.20,1.14);
   for(let i=0;i<9;i++) part(campus,0xfff0cc,-2.97+i*.74,.103,gate+1.85,.37,.022,1.05);
 
@@ -84,7 +87,7 @@ export function createSchoolEntrance(scene) {
       part(campus,0x537f91,x+offset,y,front+.063,.86,.83,.045);
       part(campus,0xe0ece2,x+offset,y,front+.091,.06,.83,.02);
     }
-    if(side===-1) sign(campus,'SCHOOL OFFICE','CAMPUS ENTRY',x,3.30,front,3.22,.73);
+    if(side===-1){sign(schoolSigns,'SCHOOL OFFICE','CAMPUS ENTRY',x,3.30,front,3.22,.73);sign(collegeSigns,'COLLEGE OFFICE','CAMPUS ENTRY',x,3.30,front,3.22,.73);}
     const inner=x-side*4.09;
     for(let j=0;j<7;j++){
       const z=-16-j*2.76;
@@ -125,6 +128,7 @@ export function createSchoolEntrance(scene) {
   const coins=ROOF_COINS.map(distance=>makeCoin(vehicle,x,roof+.58,-distance));
   return state=>{
     campus.position.z=state.distance;
+    schoolSigns.visible=state.map!=='college';collegeSigns.visible=state.map==='college';
     const entry=state.entryVan??SCHOOL_VAN;
     vehicle.position.set((entry.lane-SCHOOL_VAN.lane)*2.2,0,SCHOOL_VAN.rear-entry.rear);
     campus.visible=state.distance<entry.front+28;

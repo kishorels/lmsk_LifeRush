@@ -31,6 +31,9 @@ if (typeof Audio !== 'undefined') {
 
 export function createSound() {
  let context, master, enabled = true, jetNoise, jetVoice, bgm = null;
+ const volumes={music:1,coins:1,powerups:1,movement:1,damage:1,villain:1,ambience:1};
+ let currentCategory='movement';
+ const level=category=>volumes[category]??1;
  const buffers = new Map();
  let loadingSamples = false;
 
@@ -52,6 +55,8 @@ export function createSound() {
 
  function playSample(key, volume = 0.8) {
   if (!enabled) return true;
+  volume*=level(currentCategory);
+  if(volume<=0)return true;
   if (context && buffers.has(key)) {
    try {
     if (context.state === 'suspended') context.resume().catch(() => {});
@@ -84,7 +89,7 @@ export function createSound() {
     bgm = (typeof document !== 'undefined' && document.getElementById('bgm-player'))
       || new Audio(new URL('./assets/bgm.mp3', import.meta.url).href);
     bgm.loop = true;
-    bgm.volume = 0.45;
+    bgm.volume = 0.45*level('music');
    } catch (e) {
     console.warn('Init BGM error:', e);
    }
@@ -120,6 +125,8 @@ export function createSound() {
 
  function tone(from, to, duration = 0.12, volume = 0.1, type = 'sine', delay = 0) {
   if (!enabled || !context || context.state !== 'running') return;
+  volume*=level(currentCategory);
+  if(volume<=0)return;
   const t = context.currentTime + delay, o = context.createOscillator(), g = context.createGain();
   o.type = type;
   o.frequency.setValueAtTime(from, t);
@@ -137,6 +144,7 @@ export function createSound() {
   const phase = flightPhase(s.time);
   if (!enabled || !context?.createBuffer || context.state !== 'running' || s.mode !== 'running' || phase >= 1) {
    if (jetVoice) { jetVoice.source.stop(); jetVoice = null; }
+   if(bgm)bgm.volume=.45*level('music');
    return;
   }
   if (!jetVoice) {
@@ -157,15 +165,16 @@ export function createSound() {
    jetVoice = { source, filter, gain };
   }
   const level = Math.exp(-Math.abs(phase - 0.83) * (phase < 0.83 ? 6 : 19)), now = context.currentTime;
-  jetVoice.gain.gain.setTargetAtTime(1.35 * level, now, 0.05);
+  jetVoice.gain.gain.setTargetAtTime(1.35 * level * volumes.ambience, now, 0.05);
   jetVoice.filter.frequency.setTargetAtTime(320 + 2800 * level, now, 0.06);
   jetVoice.source.playbackRate.setTargetAtTime(phase < 0.83 ? 1.13 : 0.76, now, 0.18);
   if (bgm && enabled) {
-   bgm.volume = Math.max(0.18, 0.45 * (1 - 0.55 * level));
+   bgm.volume = 0.45 * volumes.music * (1 - 0.55 * level);
   }
  }
 
  function play(name, cause, character = 'male') {
+  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement'})[name]||'movement';
   if (name === 'jump') tone(240, 730, 0.19, 0.10, 'triangle');
   else if (name === 'slide') tone(410, 65, 0.20, 0.10, 'sawtooth');
   else if (name === 'roofCoin') {
@@ -224,6 +233,11 @@ export function createSound() {
   play,
   startBgm,
   pauseBgm,
+  setVolumes(next){
+   for(const key of Object.keys(volumes))if(Number.isFinite(Number(next?.[key])))volumes[key]=Math.max(0,Math.min(1,Number(next[key])));
+   if(bgm)bgm.volume=.45*volumes.music;
+  },
+  getVolumes(){return {...volumes};},
   setEnabled(value) {
    enabled = value;
    if (master) master.gain.value = enabled ? 0.65 : 0;
