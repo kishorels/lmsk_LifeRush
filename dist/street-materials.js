@@ -1,6 +1,6 @@
 import {
   Color, TextureLoader, RepeatWrapping, SRGBColorSpace, EquirectangularReflectionMapping,
-  Mesh, MeshStandardMaterial, PlaneGeometry, DoubleSide, Group
+  Mesh, MeshStandardMaterial, PlaneGeometry, DoubleSide, Group, InstancedMesh, Object3D, DynamicDrawUsage
 } from './vendor/three.module.js';
 import { roadCurveX, roadCurveY, roadCurveSlope, curveRelX, curveRelY } from './campus-layout.js';
 export { roadCurveX, roadCurveY, roadCurveSlope, curveRelX, curveRelY };
@@ -68,14 +68,18 @@ export function streetSurfaces(scene, box) {
     collegeRibbons.push({ geom, pos, base });
     return mesh;
   }
-  const turfMat = new MeshStandardMaterial({ color: 0x6f9468, map: texture('turf'), roughness: .98 });
-  const gravelMat = new MeshStandardMaterial({ color: 0x525d69, roughness: .95 });
-  const railMat = new MeshStandardMaterial({ color: 0xf4b942, roughness: .55, metalness: .25 });
-  const curbMat = new MeshStandardMaterial({ color: 0xe3e8ef, roughness: .75 });
-  const paversMat = new MeshStandardMaterial({ color: 0xe6edf5, map: texture('pavers'), roughness: .9 });
+  const turfMat = new MeshStandardMaterial({ color: 0x77966c, map: texture('turf'), roughness: .98 });
+  const gravelMat = new MeshStandardMaterial({ color: 0x5c635f, roughness: .95 });
+  const railMat = new MeshStandardMaterial({ color: 0x627578, roughness: .48, metalness: .38 });
+  const curbMat = new MeshStandardMaterial({ color: 0xc1c7c2, roughness: .75 });
+  const paversMat = new MeshStandardMaterial({ color: 0xd0cfc5, map: texture('pavers'), roughness: .9 });
+  const collegeRoadMat = new MeshStandardMaterial({color:0x969b9c,map:road.map,roughness:.95,roughnessMap:patches,bumpMap:road.map,bumpScale:.018});
+  const paintMat = new MeshStandardMaterial({color:0xe8e7d8,roughness:.89,emissive:0x11120e,emissiveIntensity:.08});
   curvedStrip(turfMat, 0, -.20, 240, 36, 4);
   curvedStrip(gravelMat, 0, -.04, 13.6, 54, 1);
-  curvedStrip(road, 0, .09, 7.1, 54, 1);
+  curvedStrip(collegeRoadMat, 0, .09, 7.1, 54, 1);
+  curvedStrip(paintMat, -3.36, .104, .075, 54, 1);
+  curvedStrip(paintMat, 3.36, .104, .075, 54, 1);
   curvedStrip(paversMat, -4.4, .14, 1.65, 54, 1);
   curvedStrip(paversMat, 4.4, .14, 1.65, 54, 1);
   // Mountain ghat guardrails & concrete curbs along both edges of the College road
@@ -83,6 +87,15 @@ export function streetSurfaces(scene, box) {
   curvedStrip(curbMat, 5.28, .22, .28, 54, 1);
   curvedStrip(railMat, -5.32, .48, .18, 54, 1);
   curvedStrip(railMat, 5.32, .48, .18, 54, 1);
+
+  // Two staggered lane dividers follow the same curve as the road.
+  const dashGeometry = new PlaneGeometry(.075, 2.45);
+  dashGeometry.rotateX(-Math.PI / 2);
+  const dashes = new InstancedMesh(dashGeometry, paintMat, 56);
+  dashes.instanceMatrix.setUsage(DynamicDrawUsage);
+  dashes.frustumCulled = false;
+  collegeGroup.add(dashes);
+  const dashTransform = new Object3D();
 
   const dry = new Color(0xffffff), wet = new Color(0x9099a1);
   return (distance, weather, map = 'school') => {
@@ -93,6 +106,17 @@ export function streetSurfaces(scene, box) {
     if (isCollege) {
       const originX = roadCurveX(distance, 'college');
       const originY = roadCurveY(distance, 'college');
+      const first = Math.floor((distance - 32) / 7) * 7;
+      for(let n=0;n<28;n++){
+        const worldDist=first+n*7,curveX=roadCurveX(worldDist,'college')-originX;
+        const curveY=roadCurveY(worldDist,'college')-originY;
+        dashTransform.rotation.y=-Math.atan(roadCurveSlope(worldDist,'college'));
+        for(let lane=0;lane<2;lane++){
+          dashTransform.position.set(curveX+(lane?1.1:-1.1),curveY+.116,distance-worldDist);
+          dashTransform.updateMatrix();dashes.setMatrixAt(n*2+lane,dashTransform.matrix);
+        }
+      }
+      dashes.instanceMatrix.needsUpdate=true;
       for (const { geom, pos, base } of collegeRibbons) {
         const arr = pos.array;
         for (let i = 0; i < arr.length; i += 3) {
@@ -108,6 +132,8 @@ export function streetSurfaces(scene, box) {
     road.color.copy(dry).lerp(wet, weather.rain);
     road.roughness = 1 - .69 * weather.rain;
     road.envMapIntensity = .35 + weather.rain * 1.95;
+    collegeRoadMat.color.set(0x969b9c).lerp(wet,weather.rain);
+    collegeRoadMat.roughness = 1 - .69 * weather.rain;
     scene.environmentIntensity = .52 - weather.night * .39;
   };
 }

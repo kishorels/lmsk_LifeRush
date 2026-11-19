@@ -1,6 +1,6 @@
 import {createSound} from './sound.js?v=2.9.2';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.2';
-import {createRenderer} from './renderer3d.js?v=2.9.2';
+import {createRenderer} from './renderer3d.js?v=2.9.3';
 import {createLiteRenderer} from './renderer-lite.js?v=2.9.2';
 
 const $=id=>document.getElementById(id);
@@ -112,7 +112,7 @@ try{
     } else {
       equippedCharId = savedChar === 'female'
         ? (selectedMap === 'college' ? 'college-woman' : 'female')
-        : (selectedMap === 'college' ? 'college-male' : 'male');
+        : (selectedMap === 'college' ? 'college-man' : 'male');
     }
   }
   character = (equippedCharId.includes('female') || equippedCharId.includes('woman')) ? 'female' : 'male';
@@ -410,7 +410,7 @@ function selectMap(map, fromUser = false){
   s.map=selectedMap;
   if (selectedMap === 'college') {
     if (!equippedCharId.startsWith('college-')) {
-      equippedCharId = character === 'female' ? 'college-woman' : 'college-male';
+      equippedCharId = character === 'female' ? 'college-woman' : 'college-man';
     }
   } else {
     if (equippedCharId.startsWith('college-')) {

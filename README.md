@@ -1,6 +1,6 @@
 # LMSK RUNVERSE — prototype 0.2
 
-A Three.js 3D endless runner with a Canvas 2D fallback when WebGL is unavailable. This is a browser gameplay prototype, not an Android APK or the finished game.
+A Three.js 3D endless runner with a Canvas 2D fallback when WebGL is unavailable. A Capacitor Android project packages the browser game; device performance still needs testing.
 
 ## Play locally
 Install Python 3, then run `python -m http.server 3000 --directory dist` from this folder and open http://localhost:3000. Node users can also run `npm start` when Python 3 is on PATH.
@@ -23,7 +23,7 @@ Three lanes, jump/slide/crate obstacles, procedural safe rows, increasing capped
 - tests/engine.test.mjs: gameplay verification.
 
 ## Still to build
-Native Android packaging/device testing; production character assets; separate endless modes and progression; branching narrative; the final baby-to-old-age life run. The career tendency is a small prototype mechanic, not the finished branching career system.
+Android device testing; production character assets; separate endless modes and progression; branching narrative; the final baby-to-old-age life run. The career tendency is a small prototype mechanic, not the finished branching career system.
 
 ## Graphics validation limits
 The test browser has WebGL disabled. The fallback can be visually checked here; real-device 3D appearance and performance still require testing. Scene-graph smoke checks use a stub GPU renderer and do not prove WebGL rendering.
@@ -41,5 +41,9 @@ Normal starts create a new run seed. The entry ramp, section order and spacing, 
 ## Reference school uniform
 
 The schoolgirl GLB includes a fitted charcoal jacket, folded red bow, silver buttons, red cuffs and a pleated skirt with two red hem bands. The outfit shares the existing skeleton; secondary cloth morphs blend through all nine original animation clips. Rebuild it with `python art/dress_schoolgirl.py` (numpy, scipy and Pillow). The GLB stores its original source document/data so repeated builds do not accumulate geometry or remove original character assets.
+
+## Offline Android assets
+
+`dist` is the Capacitor `webDir`. Run `npx cap copy android` after changing web files to copy the intro video, models, textures, music and effects into `android/app/src/main/assets/public`. Startup uses this installed bundle; JavaScript update downloads and native automatic updates are disabled. The local asset server still reads and decodes these files when the game opens; offline packaging removes network downloads, not 3D parsing or video decode cost. Rebuild the APK after copying assets for changes to reach an installed phone.
 
 The same builder also fits a dark-brown swept scalp to the actual head surface, removes the intersecting temple hair cards and raised loops, and creates a narrower skinned school braid with a red tie. Hair fibre colour/normal textures stay opaque to avoid transparency artefacts.

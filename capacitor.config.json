@@ -9,5 +9,12 @@
   "android": {
     "allowMixedContent": true,
     "backgroundColor": "#0a0e17"
+  },
+  "plugins": {
+    "CapacitorUpdater": {
+      "autoUpdate": "off",
+      "statsUrl": "",
+      "resetWhenUpdate": true
+    }
   }
 }
