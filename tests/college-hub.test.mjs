@@ -65,4 +65,10 @@ test('typing inside text input is never blocked by game keydown controls',async(
    'splash screen plays intro_video.mp4 on launch');
  assert.ok(htmlSrc.includes('>Enter LifeRush<')&&gameSrc.includes("'Enter LifeRush'"),
    'frozen end frame reveals Enter LifeRush button');
+ const cssSrc=await readFile(new URL('../dist/style.css',import.meta.url),'utf8');
+ const enterWrapBlock=cssSrc.match(/\.splash-enter-wrap\s*\{[^}]+\}/)?.[0]||'';
+ assert.ok(enterWrapBlock.includes('left: 0')&&enterWrapBlock.includes('right: 0')&&enterWrapBlock.includes('margin: 0 auto')&&!enterWrapBlock.includes('translateX(-50%)'),
+   'Enter LifeRush button wrapper centers via margin: 0 auto so modalPop scale animation never shifts it to the right corner');
+ assert.ok(gameSrc.includes('switchToLiteRenderer')&&gameSrc.includes("status === 'context-lost'"),
+   'game loop recovers automatically from WebGL context loss or render error by switching to a clean 2D canvas');
 });

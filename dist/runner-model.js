@@ -181,8 +181,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
   }).catch(error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 
   }
-  let requested = true;
-  load();
+  let requested = Boolean(isInitiallyActive || selected === 'male');
+  if (requested) load();
   function render(state, character, dt) {
     if (!requested && character === selected) { requested = true; load(); }
     if (!model) return false;

@@ -1,9 +1,10 @@
-import {createSound} from './sound.js?v=2.8.4';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.4';
-import {createRenderer} from './renderer3d.js?v=2.8.4';
-import {createLiteRenderer} from './renderer-lite.js?v=2.8.4';
+import {createSound} from './sound.js?v=2.8.5';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.5';
+import {createRenderer} from './renderer3d.js?v=2.8.5';
+import {createLiteRenderer} from './renderer-lite.js?v=2.8.5';
 
-const $=id=>document.getElementById(id),canvas=$('world');
+const $=id=>document.getElementById(id);
+let canvas=$('world');
 // Remove controls from a cached older HTML shell as well.
 document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
 let assetsReady = false;
@@ -87,6 +88,43 @@ s.map=selectedMap;
 const initialModelKey = selectedMap === 'college' ? ('college-' + character) : character;
 
 let draw;
+let usingLiteRenderer = false;
+let touch;
+function bindCanvasPointer(target) {
+  if (!target) return;
+  target.addEventListener('pointerdown',e=>{
+    touch={x:e.clientX,y:e.clientY};
+    try{target.setPointerCapture(e.pointerId);}catch{}
+    if(s.mode==='ready'||s.mode==='select') triggerSwag();
+  });
+  target.addEventListener('pointerup',e=>{
+    if(!touch)return;
+    const x=e.clientX-touch.x,y=e.clientY-touch.y;
+    if(Math.max(Math.abs(x),Math.abs(y))>20)input(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'slide':'jump');
+    touch=null;
+  });
+  target.addEventListener('pointercancel',()=>touch=null);
+}
+bindCanvasPointer(canvas);
+
+function switchToLiteRenderer(reason) {
+  if (usingLiteRenderer) return;
+  usingLiteRenderer = true;
+  console.warn('Using lightweight graphics:', reason);
+  let ctx2d = null;
+  try { ctx2d = canvas.getContext('2d'); } catch {}
+  if (!ctx2d && canvas?.parentNode) {
+    const freshCanvas = canvas.cloneNode(false);
+    canvas.replaceWith(freshCanvas);
+    canvas = freshCanvas;
+    bindCanvasPointer(canvas);
+  }
+  draw = createLiteRenderer(canvas);
+  const ed = document.querySelector('.edition');
+  if (ed) ed.textContent = 'COAST EDITION · LITE';
+  onAllAssetsReady();
+}
+
 try{
   draw=createRenderer(canvas, {
     initialModelKey,
@@ -94,10 +132,7 @@ try{
     onChaserProgress: f => updateAssetProgress('chaser', f)
   });
 }catch(error){
-  console.warn('Using lightweight graphics:',error.message);
-  draw=createLiteRenderer(canvas);
-  document.querySelector('.edition').textContent='COAST EDITION · LITE';
-  onAllAssetsReady();
+  switchToLiteRenderer(error?.message || error);
 }
 
 const save=()=>{
@@ -413,19 +448,6 @@ window.addEventListener('keydown',e=>{
   if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}
 });
 
-let touch;
-canvas.addEventListener('pointerdown',e=>{
-  touch={x:e.clientX,y:e.clientY};
-  canvas.setPointerCapture(e.pointerId);
-  if(s.mode==='ready'||s.mode==='select') triggerSwag();
-});
-canvas.addEventListener('pointerup',e=>{
-  if(!touch)return;
-  const x=e.clientX-touch.x,y=e.clientY-touch.y;
-  if(Math.max(Math.abs(x),Math.abs(y))>20)input(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'slide':'jump');
-  touch=null;
-});
-canvas.addEventListener('pointercancel',()=>touch=null);
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     pause();
@@ -564,13 +586,23 @@ function frame(t) {
   $('countdown').hidden = s.mode !== 'countdown';
   if (s.mode === 'countdown') $('countdown').textContent = Math.ceil(s.countdown);
   
-  const status=draw(s, character, dt);
+  let status = 'ready';
+  try {
+    status = draw(s, character, dt);
+    if (status === 'context-lost') {
+      switchToLiteRenderer('WebGL context lost');
+      status = draw(s, character, dt);
+    }
+  } catch (err) {
+    switchToLiteRenderer(err?.message || err);
+    try { status = draw(s, character, dt); } catch {}
+  }
   if(status==='ready'&&!assetsReady){onAllAssetsReady();}
   if(s.mode==='ready'){
     const startButton=$('start'),failed=status==='error';
     if(startButton){
       startButton.disabled=false;
-      const label=failed?'Retry loading runner':"LET’S RUN 🏃💨";
+      const label=failed?'Retry loading runner':"LET'S RUN";
       if(startButton.dataset.currentLabel!==label){
         startButton.dataset.currentLabel=label;
         startButton.innerHTML=`<span>${label}</span> <span class="rush-arrow">🏃💨</span>`;
