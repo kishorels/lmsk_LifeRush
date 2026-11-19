@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH — School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=2.8.2">
+  <link rel="stylesheet" href="style.css?v=2.8.3">
 </head>
 <body>
 <header>
@@ -167,8 +167,10 @@
       <section class="hub-page hub-page-maps" aria-label="Choose map">
         <h2>Choose your map</h2>
         <p>Each location has its own look and outfits.</p>
-        <button type="button" class="hub-map-card" data-map="school" aria-pressed="true"><span class="map-art school-art" aria-hidden="true">🏫</span><span><strong>School Campus</strong><small>School uniforms · buses · campus road</small></span><b>✓</b></button>
-        <button type="button" class="hub-map-card" data-map="college" aria-pressed="false"><span class="map-art college-art" aria-hidden="true">🎓</span><span><strong>College Campus</strong><small>Casual outfits · modern college blocks</small></span><b>✓</b></button>
+        <div class="hub-map-options">
+          <button type="button" class="hub-map-card" data-map="school" aria-pressed="true"><span class="map-art school-art" aria-hidden="true">🏫</span><span><strong>School Campus</strong><small>School uniforms · buses</small></span><b>✓</b></button>
+          <button type="button" class="hub-map-card" data-map="college" aria-pressed="false"><span class="map-art college-art" aria-hidden="true">🎓</span><span><strong>College Campus</strong><small>Casual outfits · blocks</small></span><b>✓</b></button>
+        </div>
       </section>
 
       <section class="hub-page hub-page-settings" aria-label="Sound settings">
@@ -250,6 +252,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=2.8.2"></script>
+<script type="module" src="boot.js?v=2.8.3"></script>
 </body>
 </html>

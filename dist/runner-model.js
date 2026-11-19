@@ -78,6 +78,8 @@ function createSchoolBadgeTexture(CanvasTextureClass) {
   return tex;
 }
 
+let sharedMaleClipsPromise = null;
+
 export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = false) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   function load() {
@@ -90,8 +92,12 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     const loader = new GLTFLoader();
     const progress = xhr => { if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total); };
     const main = loader.loadAsync(new URL(assets[selected], import.meta.url).href, progress);
+    if (selected === 'male' && !sharedMaleClipsPromise) {
+      sharedMaleClipsPromise = main;
+    }
     const schoolMotion = selected === 'college-male'
-      ? loader.loadAsync(new URL(assets.male, import.meta.url).href) : Promise.resolve(null);
+      ? (sharedMaleClipsPromise || (sharedMaleClipsPromise = loader.loadAsync(new URL(assets.male, import.meta.url).href)))
+      : Promise.resolve(null);
     Promise.all([main, schoolMotion]).then(([gltf, schoolGltf]) => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall', 'ShoulderSweep'];
@@ -175,8 +181,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
   }).catch(error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 
   }
-  let requested = selected === 'male' || selected === 'female' || isInitiallyActive;
-  if (requested) load();
+  let requested = true;
+  load();
   function render(state, character, dt) {
     if (!requested && character === selected) { requested = true; load(); }
     if (!model) return false;

@@ -1,7 +1,7 @@
-import {createSound} from './sound.js';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js';
-import {createRenderer} from './renderer3d.js';
-import {createLiteRenderer} from './renderer-lite.js';
+import {createSound} from './sound.js?v=2.8.3';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.3';
+import {createRenderer} from './renderer3d.js?v=2.8.3';
+import {createLiteRenderer} from './renderer-lite.js?v=2.8.3';
 
 const $=id=>document.getElementById(id),canvas=$('world');
 // Remove controls from a cached older HTML shell as well.
@@ -136,12 +136,12 @@ const save=()=>{
 
 const effects=createSound();
 try{sound=localStorage.getItem('runverse-sound')!=='off';}catch{}
-try{effects.setVolumes(JSON.parse(localStorage.getItem('runverse-volumes')||'{}'));}catch{}
+try{effects.setVolumes?.(JSON.parse(localStorage.getItem('runverse-volumes')||'{}'));}catch{}
 function showVolumeValues(){
-  const values=effects.getVolumes();
+  const values=effects.getVolumes?.()||{music:1,coins:1,powerups:1,movement:1,damage:1,villain:1,ambience:1};
   document.querySelectorAll('[data-volume]').forEach(slider=>{
     const key=slider.dataset.volume;
-    slider.value=Math.round(values[key]*100);
+    slider.value=Math.round((values[key]??1)*100);
     const label=$(`volume-${key}-value`);
     if(label)label.textContent=`${slider.value}%`;
   });
@@ -149,9 +149,10 @@ function showVolumeValues(){
 showVolumeValues();
 document.querySelectorAll('[data-volume]').forEach(slider=>{
   slider.addEventListener('input',()=>{
-    effects.setVolumes({[slider.dataset.volume]:Number(slider.value)/100});
-    $(`volume-${slider.dataset.volume}-value`).textContent=`${slider.value}%`;
-    try{localStorage.setItem('runverse-volumes',JSON.stringify(effects.getVolumes()));}catch{}
+    effects.setVolumes?.({[slider.dataset.volume]:Number(slider.value)/100});
+    const label=$(`volume-${slider.dataset.volume}-value`);
+    if(label)label.textContent=`${slider.value}%`;
+    try{if(effects.getVolumes)localStorage.setItem('runverse-volumes',JSON.stringify(effects.getVolumes()));}catch{}
   });
   slider.addEventListener('change',()=>{
     const sample={coins:'coin',powerups:'shield',movement:'jump',damage:'hit',villain:'swag',ambience:'bell'}[slider.dataset.volume];
@@ -231,6 +232,8 @@ showHub('home');
 function setScreenMode(mode) {
   game.classList.remove('mode-splash', 'mode-select', 'mode-running', 'mode-gameover');
   game.classList.add('mode-' + mode);
+  if ($('splash-screen')) $('splash-screen').hidden = mode !== 'splash';
+  if ($('select-screen')) $('select-screen').hidden = mode !== 'select';
 }
 setScreenMode('splash');
 
