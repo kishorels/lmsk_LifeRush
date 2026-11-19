@@ -8,6 +8,8 @@ const SAMPLES = {
  swag: './assets/gesture_action_sound.mp3',
  evil_smile: './assets/evil_smile.mp3',
  damage: './assets/damage.mp3',
+ male_hurt: './assets/male_hurt.mp3',
+ female_hurt: './assets/female_hurt.mp3',
 };
 
 const audioCache = new Map();
@@ -163,7 +165,7 @@ export function createSound() {
   }
  }
 
- function play(name, cause) {
+ function play(name, cause, character = 'male') {
   if (name === 'jump') tone(240, 730, 0.19, 0.10, 'triangle');
   else if (name === 'slide') tone(410, 65, 0.20, 0.10, 'sawtooth');
   else if (name === 'roofCoin') {
@@ -173,7 +175,12 @@ export function createSound() {
    playSample('coin', 0.75);
   }
   else if (name === 'hit') {
-   playSample('damage', 1.0);
+   playSample('damage', 0.95);
+   if (character === 'female') {
+    playSample('female_hurt', 1.0);
+   } else {
+    playSample('male_hurt', 1.0);
+   }
   }
   else if (name === 'horn') {
    tone(185, 180, 0.30, 0.10, 'sawtooth');
