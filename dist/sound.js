@@ -164,12 +164,12 @@ export function createSound() {
    source.start();
    jetVoice = { source, filter, gain };
   }
-  const level = Math.exp(-Math.abs(phase - 0.83) * (phase < 0.83 ? 6 : 19)), now = context.currentTime;
-  jetVoice.gain.gain.setTargetAtTime(1.35 * level * volumes.ambience, now, 0.05);
-  jetVoice.filter.frequency.setTargetAtTime(320 + 2800 * level, now, 0.06);
+  const jetLevel = Math.exp(-Math.abs(phase - 0.83) * (phase < 0.83 ? 6 : 19)), now = context.currentTime;
+  jetVoice.gain.gain.setTargetAtTime(1.35 * jetLevel * volumes.ambience, now, 0.05);
+  jetVoice.filter.frequency.setTargetAtTime(320 + 2800 * jetLevel, now, 0.06);
   jetVoice.source.playbackRate.setTargetAtTime(phase < 0.83 ? 1.13 : 0.76, now, 0.18);
   if (bgm && enabled) {
-   bgm.volume = 0.45 * volumes.music * (1 - 0.55 * level);
+   bgm.volume = 0.45 * volumes.music * (1 - 0.55 * jetLevel);
   }
  }
 

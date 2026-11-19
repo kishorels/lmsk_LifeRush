@@ -1,7 +1,7 @@
-import {createSound} from './sound.js?v=2.8.5';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.5';
-import {createRenderer} from './renderer3d.js?v=2.8.5';
-import {createLiteRenderer} from './renderer-lite.js?v=2.8.5';
+import {createSound} from './sound.js?v=2.8.7';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.7';
+import {createRenderer} from './renderer3d.js?v=2.8.7';
+import {createLiteRenderer} from './renderer-lite.js?v=2.8.7';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
@@ -468,8 +468,8 @@ document.addEventListener('visibilitychange',()=>{
   },{passive:true});
 });
 
-function frame(t) {
-  const dt = prev ? (t-prev)/1000 : 0;
+function tick(t) {
+  const dt = prev ? Math.min(0.1, (t-prev)/1000) : 0;
   prev = t;
   const old = s.mode, firstHitBefore = s.firstHitAt, captureBefore = s.capture, hitBefore = s.hit;
   const distanceBefore = s.distance, coinsBefore = s.coins;
@@ -487,7 +487,7 @@ function frame(t) {
   }
 
   step(s, dt);
-  effects.update(s);
+  try { effects.update(s); } catch (err) { if (!loopErrorLogged) { loopErrorLogged = true; console.error('Sound update error:', err); } }
   
   if(old==='running' && s.mode==='falling') {
     effects.play('hit', s.cause, character);
@@ -610,6 +610,14 @@ function frame(t) {
       startButton.dataset.loadError=String(failed);
     }
   }
+}
+let loopErrorLogged = false;
+function frame(t) {
   requestAnimationFrame(frame);
+  try {
+    tick(t);
+  } catch (err) {
+    if (!loopErrorLogged) { loopErrorLogged = true; console.error('Frame error:', err); }
+  }
 }
 requestAnimationFrame(frame);
