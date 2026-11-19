@@ -92,12 +92,12 @@ function podiumHero(){
  const breath=Math.sin((s.time||0)*3.2)*k*.018;
  const swag=s.styleAction>0?Math.sin(Math.PI*(1-s.styleAction/SWEEP_SECONDS)):0;
  ctx.save();ctx.translate(cx,cy);
- // Podium cylinder & golden ring
- ctx.fillStyle='rgba(7,22,34,0.42)';ctx.beginPath();ctx.ellipse(0,k*.14,k*1.18,k*.30,0,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='#14363a';ctx.beginPath();ctx.ellipse(0,k*.08,k*1.04,k*.24,0,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='#1b4347';ctx.fillRect(-k*1.04,-k*.03,k*2.08,k*.11);
- ctx.fillStyle='#24575c';ctx.beginPath();ctx.ellipse(0,-k*.03,k*1.04,k*.23,0,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle='#f4d03f';ctx.lineWidth=Math.max(2.5,k*.045);ctx.beginPath();ctx.ellipse(0,-k*.03,k*.92,k*.19,0,0,Math.PI*2);ctx.stroke();
+ // Podium cylinder & glowing neon blue ring
+ ctx.fillStyle='rgba(0,180,255,0.28)';ctx.beginPath();ctx.ellipse(0,k*.14,k*1.18,k*.30,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#091c3a';ctx.beginPath();ctx.ellipse(0,k*.08,k*1.04,k*.24,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#0e2b57';ctx.fillRect(-k*1.04,-k*.03,k*2.08,k*.11);
+ ctx.fillStyle='#123970';ctx.beginPath();ctx.ellipse(0,-k*.03,k*1.04,k*.23,0,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='#00e5ff';ctx.lineWidth=Math.max(2.5,k*.045);ctx.beginPath();ctx.ellipse(0,-k*.03,k*.92,k*.19,0,0,Math.PI*2);ctx.stroke();
  ctx.fillStyle='rgba(10,25,35,0.32)';ctx.beginPath();ctx.ellipse(0,-k*.02,k*.52,k*.11,0,0,Math.PI*2);ctx.fill();
  // Legs, socks & shoes
  for(const side of [-1,1]){

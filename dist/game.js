@@ -1,7 +1,7 @@
-import {createSound} from './sound.js?v=2.9.0';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.0';
-import {createRenderer} from './renderer3d.js?v=2.9.0';
-import {createLiteRenderer} from './renderer-lite.js?v=2.9.0';
+import {createSound} from './sound.js?v=2.9.1';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.1';
+import {createRenderer} from './renderer3d.js?v=2.9.1';
+import {createLiteRenderer} from './renderer-lite.js?v=2.9.1';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
@@ -325,14 +325,24 @@ function updateCarouselUI() {
     equipBtn.classList.remove('is-selected', 'is-locked');
     if (!unlocked) {
       equipBtn.classList.add('is-locked');
-      equipBtn.textContent = '🔒 COMPLETE BOTH GOALS TO UNLOCK';
+      equipBtn.textContent = '🔒 LOCKED';
     } else if (equipped) {
       equipBtn.classList.add('is-selected');
       equipBtn.textContent = '✓ SELECTED';
     } else {
-      equipBtn.textContent = 'SELECT CHARACTER';
+      equipBtn.textContent = 'SELECT';
     }
   }
+  const prevIdx = (carouselIndex - 1 + CHARACTER_ROSTER.length) % CHARACTER_ROSTER.length;
+  const nextIdx = (carouselIndex + 1) % CHARACTER_ROSTER.length;
+  const prevEntry = CHARACTER_ROSTER[prevIdx];
+  const nextEntry = CHARACTER_ROSTER[nextIdx];
+  if ($('char-side-prev-img')) $('char-side-prev-img').src = `assets/portraits/${prevEntry.id}.png`;
+  if ($('char-side-next-img')) $('char-side-next-img').src = `assets/portraits/${nextEntry.id}.png`;
+  if ($('char-side-prev')) $('char-side-prev').classList.toggle('is-locked', !isCharUnlocked(prevEntry));
+  if ($('char-side-next')) $('char-side-next').classList.toggle('is-locked', !isCharUnlocked(nextEntry));
+  if ($('char-side-prev-lock')) $('char-side-prev-lock').hidden = isCharUnlocked(prevEntry);
+  if ($('char-side-next-lock')) $('char-side-next-lock').hidden = isCharUnlocked(nextEntry);
   const checklist = $('char-unlock-checklist');
   if (checklist) checklist.hidden = !entry.lockedByCollege;
   updateUnlockUI();
@@ -361,6 +371,14 @@ function moveCarousel(delta) {
 
 if ($('char-prev')) $('char-prev').onclick = () => moveCarousel(-1);
 if ($('char-next')) $('char-next').onclick = () => moveCarousel(1);
+if ($('char-side-prev')) $('char-side-prev').onclick = () => moveCarousel(-1);
+if ($('char-side-next')) $('char-side-next').onclick = () => moveCarousel(1);
+if ($('btn-quick-settings')) $('btn-quick-settings').onclick = () => showHub('settings');
+if ($('char-loading-veil')) {
+  $('char-loading-veil').onclick = () => {
+    if (game.classList.contains('is-char-error')) location.reload();
+  };
+}
 document.querySelectorAll('#char-carousel-dots .char-dot').forEach((dot, idx) => {
   dot.onclick = () => {
     carouselIndex = idx;
@@ -873,6 +891,17 @@ function tick(t) {
     try { status = draw(s, renderCharId, dt); } catch {}
   }
   if(status==='ready'&&!assetsReady){onAllAssetsReady();}
+  const showCharBlur = (s.mode === 'ready' && !usingLiteRenderer && status !== 'ready');
+  game.classList.toggle('is-char-loading', showCharBlur);
+  game.classList.toggle('is-char-error', showCharBlur && status === 'error');
+  if ($('char-loading-veil')) {
+    $('char-loading-veil').hidden = !showCharBlur;
+    if (showCharBlur && $('char-loading-label')) {
+      $('char-loading-label').textContent = status === 'error'
+        ? "Character didn't load — Tap Retry"
+        : 'Loading 3D Hero...';
+    }
+  }
   if(s.mode==='ready'){
     const startButton=$('start'),failed=status==='error';
     if(startButton){

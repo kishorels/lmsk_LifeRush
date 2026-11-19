@@ -118,4 +118,9 @@ assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&
  assert.ok(injuredAll['college-man']?.length>40&&injuredAll['college-woman']?.length>40,'injured-run.json carries CC_Base tracks for college-man and college-woman');
  const collegeIdleJson=JSON.parse(await readFile(new URL('../dist/assets/college-idle.json',import.meta.url),'utf8'));
  assert.ok(collegeIdleJson['college-male']?.length>40,'college-idle.json carries Neutral Idle tracks for college-male');
+ const cssSrc=await readFile(new URL('../dist/style.css',import.meta.url),'utf8');
+ assert.ok(htmlSrc.includes('id="char-side-prev"')&&htmlSrc.includes('id="char-side-next"')&&htmlSrc.includes('id="char-loading-veil"'),
+   'Characters page includes Left/Right holographic preview cards and character loading blur veil');
+ assert.ok(cssSrc.includes('.game.is-char-loading #world')&&cssSrc.includes('blur('),
+   'Canvas blurs cleanly with blue hologram veil whenever a character is still loading or failed to load');
 });
