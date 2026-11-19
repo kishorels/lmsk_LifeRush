@@ -90,18 +90,36 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   display: flex !important;
 }
 
-/* SCREEN 1: SPLASH SCREEN */
+/* SCREEN 1: INTRO VIDEO SPLASH SCREEN */
 .splash-screen {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 35%, #183e6ff5 0%, #0c1a30fa 60%, #07101dfc 100%);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: #000000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 0;
   z-index: 40;
+  overflow: hidden;
+}
+.intro-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #000000;
+}
+.splash-enter-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: max(38px, calc(env(safe-area-inset-bottom) + 28px));
+  transform: translateX(-50%);
+  width: min(310px, 84%);
+  z-index: 45;
+  animation: modalPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.splash-enter-wrap[hidden] {
+  display: none !important;
 }
 .splash-card {
   width: min(390px, 94%);

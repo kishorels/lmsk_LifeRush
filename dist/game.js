@@ -1,99 +1,73 @@
-import {createSound} from './sound.js?v=2.8.3';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.3';
-import {createRenderer} from './renderer3d.js?v=2.8.3';
-import {createLiteRenderer} from './renderer-lite.js?v=2.8.3';
+import {createSound} from './sound.js?v=2.8.4';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.4';
+import {createRenderer} from './renderer3d.js?v=2.8.4';
+import {createLiteRenderer} from './renderer-lite.js?v=2.8.4';
 
 const $=id=>document.getElementById(id),canvas=$('world');
 // Remove controls from a cached older HTML shell as well.
 document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
 let assetsReady = false;
-let realDownloadPct = 0;
-let virtualPct = 1;
-let currentDisplayPct = 1;
+let introFinished = false;
 let boyFraction = 0, chaserFraction = 0;
 
 function updateAssetProgress(type, fraction) {
   if (type === 'boy') boyFraction = Math.max(boyFraction, fraction);
   if (type === 'chaser') chaserFraction = Math.max(chaserFraction, fraction);
-  const total = Math.min(1, boyFraction * 0.85 + chaserFraction * 0.15);
-  realDownloadPct = Math.max(realDownloadPct, Math.floor(total * 100));
-}
-
-function renderProgress(pct) {
-  const bar = $('splash-progress-bar');
-  const txt = $('splash-status-text');
-  const btnTxt = $('btn-enter-text');
-
-  if (bar) bar.style.width = pct + '%';
-  if (txt) {
-    if (pct < 30) txt.textContent = `⏳ Downloading 3D Hero... ${pct}%`;
-    else if (pct < 70) txt.textContent = `⚡ Downloading Campus & Mutant... ${pct}%`;
-    else if (pct < 100) txt.textContent = `✨ Preparing GPU Shaders... ${pct}%`;
-    else txt.textContent = `✅ 3D Assets Ready! (100%)`;
-  }
-  if (btnTxt && !assetsReady) {
-    btnTxt.textContent = `DOWNLOADING ASSETS... ${pct}%`;
-  }
 }
 
 function activateEnterButton() {
-  const bar = $('splash-progress-bar');
-  const txt = $('splash-status-text');
+  if (introFinished) return;
+  introFinished = true;
+  const wrap = $('splash-enter-wrap');
   const btn = $('btn-enter');
   const btnTxt = $('btn-enter-text');
   const arrow = $('btn-enter-arrow');
-  const tip = $('splash-tip');
 
-  if (bar) bar.style.width = '100%';
-  if (txt) txt.textContent = '✅ 3D Assets Ready! (100%)';
+  if (wrap) wrap.hidden = false;
   if (btn) {
     btn.disabled = false;
     btn.classList.remove('loading');
     btn.classList.add('ready');
   }
-  if (btnTxt) btnTxt.textContent = 'ENTER GAME';
+  if (btnTxt) btnTxt.textContent = 'Enter LifeRush';
   if (arrow) arrow.hidden = false;
-  if (tip) tip.textContent = '★ All 3D Assets Loaded! Click to Enter ★';
 }
 
-function startProgressTicker() {
-  const safetyTimeout = setTimeout(() => {
-    onAllAssetsReady();
-  }, 2800);
-
-  function tick() {
-    if (assetsReady) {
-      clearTimeout(safetyTimeout);
-      if (currentDisplayPct < 100) {
-        const step = Math.max(1, Math.ceil((100 - currentDisplayPct) * 0.35));
-        currentDisplayPct = Math.min(100, currentDisplayPct + step);
-        renderProgress(currentDisplayPct);
-        setTimeout(tick, 20);
-      } else {
-        renderProgress(100);
-        activateEnterButton();
-      }
-      return;
-    }
-
-    // While downloading: smoothly climb 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20...
-    if (virtualPct < 96) {
-      const inc = virtualPct < 15 ? 1.2 : virtualPct < 40 ? 0.9 : virtualPct < 75 ? 0.5 : 0.25;
-      virtualPct = Math.min(96, virtualPct + inc);
-    }
-    const target = Math.max(virtualPct, realDownloadPct);
-
-    if (currentDisplayPct < target) {
-      const step = Math.max(1, Math.floor((target - currentDisplayPct) * 0.35));
-      currentDisplayPct = Math.min(Math.floor(target), currentDisplayPct + step);
-      renderProgress(currentDisplayPct);
-    }
-
-    setTimeout(tick, 50);
+function setupIntroVideo() {
+  const video = $('intro-video');
+  if (!video) {
+    activateEnterButton();
+    return;
   }
-  tick();
+
+  function freezeAtEnd() {
+    if (introFinished) return;
+    try {
+      if (Number.isFinite(video.duration) && video.duration > 0.2) {
+        video.currentTime = Math.max(0, video.duration - 0.05);
+      }
+      video.pause();
+    } catch {}
+    activateEnterButton();
+  }
+
+  video.addEventListener('timeupdate', () => {
+    if (Number.isFinite(video.duration) && video.duration > 0.5 && video.currentTime >= video.duration - 0.08) {
+      freezeAtEnd();
+    }
+  });
+  video.addEventListener('ended', freezeAtEnd);
+  video.addEventListener('error', () => activateEnterButton());
+
+  const playPromise = video.play();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(() => {
+      video.muted = true;
+      video.play().catch(() => activateEnterButton());
+    });
+  }
 }
-startProgressTicker();
+setupIntroVideo();
 
 function onAllAssetsReady() {
   if (assetsReady) return;
@@ -304,6 +278,7 @@ if ($('btn-edit-player-name')) {
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
     assetsReady = true;
+    try { $('intro-video')?.pause(); } catch {}
     effects.setEnabled(sound);
     effects.unlock();
     if(sound) effects.startBgm?.();
@@ -455,13 +430,18 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     pause();
     effects.pauseBgm?.();
-  } else if(sound) {
+  } else if(sound && !game.classList.contains('mode-splash')) {
     effects.startBgm?.();
   }
 });
 ['pointerdown','click','keydown','touchstart'].forEach(type=>{
   window.addEventListener(type,()=>{
     effects.unlock();
+    if(game.classList.contains('mode-splash')){
+      const v=$('intro-video');
+      if(v && sound){ v.muted=false; }
+      return;
+    }
     if(sound) effects.startBgm?.();
   },{passive:true});
 });

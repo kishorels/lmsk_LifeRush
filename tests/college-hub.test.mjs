@@ -56,8 +56,13 @@ test('separate sound categories clamp their levels without muting the others',()
 
 test('typing inside text input is never blocked by game keydown controls',async()=>{
  const gameSrc=await readFile(new URL('../dist/game.js',import.meta.url),'utf8');
+ const htmlSrc=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
  assert.ok(gameSrc.includes("if(e.target.closest('input, textarea, select')) return;"),
    'input elements bypass game control preventDefault so keys like s, a, d, w, and spaces type cleanly');
  assert.ok(!gameSrc.includes("$('start').disabled=waiting;"),
    'start button is not locked disabled by loading poll');
+ assert.ok(htmlSrc.includes('src="assets/videos/intro_video.mp4"'),
+   'splash screen plays intro_video.mp4 on launch');
+ assert.ok(htmlSrc.includes('>Enter LifeRush<')&&gameSrc.includes("'Enter LifeRush'"),
+   'frozen end frame reveals Enter LifeRush button');
 });

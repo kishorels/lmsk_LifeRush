@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH — School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=2.8.3">
+  <link rel="stylesheet" href="style.css?v=2.8.4">
 </head>
 <body>
 <header>
@@ -79,31 +79,14 @@
       </div>
     </div>
 
-    <!-- SCREEN 1: SPLASH SCREEN (Title + Logo + Enter) -->
+    <!-- SCREEN 1: INTRO VIDEO SPLASH SCREEN -->
     <div id="splash-screen" class="splash-screen">
-      <div class="splash-card">
-        <div class="splash-tag">★ LMSK STUDIOS PRESENTS ★</div>
-        <div class="splash-logo-container">
-          <img src="assets/lmsk-logo.jpg" alt="LMSK LifeRush Logo" class="splash-logo-image">
-        </div>
-        <div class="splash-features">
-          <span>🏫 School Rush</span>
-          <span>🧲 Power-ups</span>
-        </div>
-
-        <!-- Asset Download Progress Bar -->
-        <div class="splash-loader-wrap" id="splash-loader-wrap">
-          <div class="splash-progress-track">
-            <div id="splash-progress-bar" class="splash-progress-bar" style="width: 1%;"></div>
-          </div>
-          <div id="splash-status-text" class="splash-status-text">⏳ Downloading 3D Assets... 1%</div>
-        </div>
-
-        <button id="btn-enter" class="enter-btn loading" disabled>
-          <span id="btn-enter-text">DOWNLOADING ASSETS... 1%</span>
-          <span class="btn-arrow" id="btn-enter-arrow" hidden>➔</span>
+      <video id="intro-video" class="intro-video" src="assets/videos/intro_video.mp4" autoplay playsinline preload="auto"></video>
+      <div id="splash-enter-wrap" class="splash-enter-wrap" hidden>
+        <button id="btn-enter" class="enter-btn ready" type="button" disabled>
+          <span id="btn-enter-text">Enter LifeRush</span>
+          <span class="btn-arrow" id="btn-enter-arrow">➔</span>
         </button>
-        <p class="splash-tip" id="splash-tip">Loading 3D Campus, Hero & Audio...</p>
       </div>
     </div>
 
@@ -252,6 +235,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=2.8.3"></script>
+<script type="module" src="boot.js?v=2.8.4"></script>
 </body>
 </html>
