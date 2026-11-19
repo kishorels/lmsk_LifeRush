@@ -300,6 +300,83 @@ function takeHit(s, type) {
 
 export const SWEEP_SECONDS = 27 / 24;
 
+function predictedBlockedLanesAt(s, targetZ, reactionSec = 0.95) {
+  const blocked = new Set();
+  const speed = Math.max(24, s.speed || 28);
+  const tArrive = Math.max(0, (targetZ - s.distance) / speed);
+  const padZ = Math.max(11, speed * reactionSec * 0.55);
+  for (const van of routeVans(targetZ, s.runSeed)) {
+    if (targetZ >= van.ramp - padZ && targetZ <= van.front + padZ * 0.6) {
+      blocked.add(van.lane);
+    }
+  }
+  for (const o of s.items) {
+    if (o.done || o.type === 'coin' || o.type === 'magnet' || o.type === 'shield') continue;
+    let predZ = o.z;
+    if (o.velocity) {
+      if (o.encounter && !o.started) {
+        const tTrigger = Math.max(0, (o.trigger - s.distance) / speed);
+        const encZ = o.trigger + (speed + o.velocity) * 1.45;
+        predZ = encZ - o.velocity * Math.max(0, tArrive - tTrigger);
+      } else if (o.roofRide && !o.started) {
+        const tAct = Math.max(0, (o.activate - s.distance) / speed);
+        predZ = o.z + (speed * 0.35) * Math.max(0, tArrive - tAct);
+      } else if (o.activate !== undefined && s.distance < o.activate) {
+        const tAct = Math.max(0, (o.activate - s.distance) / speed);
+        predZ = o.z - o.velocity * Math.max(0, tArrive - tAct);
+      } else {
+        predZ = o.z - o.velocity * tArrive;
+      }
+    }
+    const len = o.length || 2.5;
+    if (targetZ >= predZ - padZ && targetZ <= predZ + len + padZ * 0.65) {
+      blocked.add(o.lane);
+    }
+  }
+  return blocked;
+}
+
+function enforceOpenEscapeLane(s) {
+  if (s.next >= 90000) return;
+  const speed = Math.max(24, s.speed || 28);
+  for (const t of [0.55, 0.85, 1.15, 1.45]) {
+    const targetZ = s.distance + speed * t;
+    const padZ = Math.max(9, speed * 0.38);
+    const vanLanes = new Set();
+    for (const van of routeVans(targetZ, s.runSeed)) {
+      if (targetZ >= van.ramp - padZ && targetZ <= van.front + padZ * 0.6) vanLanes.add(van.lane);
+    }
+    const byLane = new Map([[-1, []], [0, []], [1, []]]);
+    for (const o of s.items) {
+      if (o.done || o.type === 'coin' || o.type === 'magnet' || o.type === 'shield') continue;
+      if (o.encounter && !o.started) continue;
+      let predZ = o.z;
+      if (o.velocity) {
+        if (o.activate !== undefined && !o.encounter && !o.roofRide && s.distance < o.activate) {
+          const tAct = Math.max(0, (o.activate - s.distance) / speed);
+          predZ = o.z - o.velocity * Math.max(0, t - tAct);
+        } else {
+          predZ = o.z - o.velocity * t;
+        }
+      }
+      const len = o.length || 2.5;
+      if (targetZ >= predZ - padZ && targetZ <= predZ + len + padZ * 0.6) {
+        byLane.get(o.lane)?.push(o);
+      }
+    }
+    const blockedCount = [-1, 0, 1].filter(l => vanLanes.has(l) || byLane.get(l).length > 0).length;
+    if (blockedCount < 3) continue;
+    const removable = [-1, 0, 1].filter(l => !vanLanes.has(l) && byLane.get(l).every(o => !o.roofRide));
+    const pool = removable.length ? removable : [-1, 0, 1].filter(l => !vanLanes.has(l));
+    if (!pool.length) continue;
+    pool.sort((a, b) => Math.abs(a - s.lane) - Math.abs(b - s.lane));
+    for (const o of byLane.get(pool[0])) {
+      o.done = true;
+      o.z = s.distance - 100;
+    }
+  }
+}
+
 export function step(s, dt, random = Math.random) {
   dt = clamp(dt, 0, .05);
   if (s.styleAction > 0) s.styleAction = Math.max(0, s.styleAction - dt);
@@ -378,15 +455,11 @@ export function step(s, dt, random = Math.random) {
         if (targetZ >= seg.base - 45 && targetZ <= seg.base + 20) safeWindow = false;
       }
       if (safeWindow) {
-        const blockedLanes = new Set(
-          s.items
-            .filter(o => !['coin', 'magnet', 'shield'].includes(o.type) && Math.abs(o.z - targetZ) < 12)
-            .map(o => o.lane)
-        );
+        const blockedLanes = predictedBlockedLanesAt(s, targetZ, 0.95);
         const candidates = [-1, 0, 1].filter(
           l => !unsafeSegLanes.has(l) && !blockedLanes.has(l) && vanSurface(targetZ, l, s.runSeed) === 0
         );
-        if (candidates.length > 0 && blockedLanes.size < 2) {
+        if (candidates.length > 0 && blockedLanes.size <= 1) {
           const seedHash = ((s.runSeed || 1) ^ Math.imul(Math.floor(targetZ), 0x9e3779b9)) >>> 0;
           const lane = candidates[seedHash % candidates.length];
           const roll = (seedHash % 100) / 100;
@@ -407,24 +480,20 @@ export function step(s, dt, random = Math.random) {
       const targetLane = s.lane;
       const vanHitCheck = vanSurface(targetZ, targetLane, s.runSeed) > 0;
       if (!vanHitCheck) {
-        const blockedLanes = new Set(
-          s.items
-            .filter(o => !['coin','magnet','shield'].includes(o.type) && Math.abs(o.z - targetZ) < 8)
-            .map(o => o.lane)
-        );
-        if (!blockedLanes.has(targetLane)) {
+        const blockedLanes = predictedBlockedLanesAt(s, targetZ, 0.95);
+        if (!blockedLanes.has(targetLane) && blockedLanes.size <= 1) {
           const freeLanes = [-1, 0, 1].filter(l => l !== targetLane && !blockedLanes.has(l));
           if (freeLanes.length > 0) {
             const seedHash = ((s.runSeed || 1) ^ Math.imul(Math.floor(targetZ), 0x9e3779b9)) >>> 0;
             const roll = (seedHash % 100) / 100;
             let type, variant;
-            if (roll < 0.38) {
+            if (roll < 0.40) {
               type = 'jump';
               variant = (seedHash % 2) ? 'hurdle' : 'bench';
-            } else if (roll < 0.74) {
+            } else if (roll < 0.78) {
               type = 'slide';
               variant = 'scaffold';
-            } else if (roll < 0.90) {
+            } else if (roll < 0.92) {
               type = 'block';
             } else {
               type = 'bus';
@@ -464,12 +533,13 @@ export function step(s, dt, random = Math.random) {
           }
         }
       }
-      const spawnGap = s.distance >= 10000
-        ? Math.max(13, 22 - (s.distance - 10000) / 350)
+      const minReactionGap = Math.max(24, s.speed * 0.55);
+      const baseGap = s.distance >= 10000
+        ? Math.max(18, 26 - (s.distance - 10000) / 350)
         : s.distance >= 8000
-          ? Math.max(22, 30 - (s.distance - 8000) / 250)
-          : Math.max(28, 44 - (s.distance - 5000) / 180);
-      s.nextLaneObstacle += spawnGap;
+          ? Math.max(24, 34 - (s.distance - 8000) / 250)
+          : Math.max(30, 44 - (s.distance - 5000) / 180);
+      s.nextLaneObstacle += Math.max(minReactionGap, baseGap);
     }
   }
   for(const item of s.items){
@@ -481,6 +551,7 @@ export function step(s, dt, random = Math.random) {
     }
     if(item.velocity && ((item.encounter||item.roofRide)?item.started:s.distance>=item.activate))item.z-=item.velocity*dt;
   }
+  enforceOpenEscapeLane(s);
 
   collectMagnetCoins(s);
   updateElevation(s, dt);

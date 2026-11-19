@@ -1,11 +1,11 @@
-import {createSound} from './sound.js?v=2.9.7';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.7';
-import {createRenderer} from './renderer3d.js?v=2.9.7';
-import {createLiteRenderer} from './renderer-lite.js?v=2.9.7';
+import {createSound} from './sound.js?v=2.9.8';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.8';
+import {createRenderer} from './renderer3d.js?v=2.9.8';
+import {createLiteRenderer} from './renderer-lite.js?v=2.9.8';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
-let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false, audioUnlockedOnce = false;
+let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false, audioUnlockedOnce = false;
 const nameModalEl = $('name-modal');
 // Remove controls from a cached older HTML shell as well.
 document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
@@ -573,10 +573,12 @@ function submitPlayerName() {
   try {
     localStorage.setItem(PLAYER_NAME_KEY, playerName);
   } catch {}
+  input?.blur?.();
   updatePlayerNameDisplays(playerName);
   hideNameModal();
   setScreenMode('select');
   showHub('home');
+  menuNeedsFrame = true;
 }
 
 if ($('btn-save-name')) {
@@ -593,11 +595,10 @@ if ($('btn-edit-player-name')) {
 
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
+    setScreenMode('select');
+    showHub('home');
     if (!playerName) {
       showNameModal();
-    } else {
-      setScreenMode('select');
-      showHub('home');
     }
     setTimeout(() => {
       try {
@@ -983,8 +984,9 @@ function tick(t) {
   }
 
   // Pause 3D WebGL rendering completely while static overlay pages (Maps/Settings/Name modal) are open
+  // (after warming up 1 ready frame behind the name modal so clicking Start Adventure is 0ms instant)
   const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'maps' || currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden));
-  if (staticOverlayOpen && assetsReady) {
+  if (staticOverlayOpen && assetsReady && warmedFirstFrame) {
     if (!menuNeedsFrame) return;
     menuNeedsFrame = false;
   }
@@ -1009,7 +1011,10 @@ function tick(t) {
     try { status = draw(s, renderCharId, dt); } catch {}
   }
   lastRenderStatus = status;
-  if(status==='ready'&&!assetsReady){onAllAssetsReady();}
+  if (status === 'ready') {
+    warmedFirstFrame = true;
+    if (!assetsReady) onAllAssetsReady();
+  }
   const showCharBlur = (s.mode === 'ready' && !usingLiteRenderer && status !== 'ready');
   const showCharErr = showCharBlur && status === 'error';
   if (showCharBlur !== lastShowCharBlur || showCharErr !== lastShowCharErr) {

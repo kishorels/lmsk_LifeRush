@@ -1,19 +1,19 @@
-import {createMagnetCoins} from './magnet-coins.js?v=2.9.7';
-import {createPickupModels} from './pickup-models.js?v=2.9.7';
-import {createGuardEffect} from './guard-effect.js?v=2.9.7';
-import {streetSurfaces,curveRelX,curveRelY,roadCurveSlope} from './street-materials.js?v=2.9.7';
-import {createSideTraffic} from './side-vehicles.js?v=2.9.7';
-import {createCaptureStage} from './capture-stage.js?v=2.9.7';
-import {createSky} from './sky-scene.js?v=2.9.7';
-import {createCampus} from './campus-scene.js?v=2.9.7';
-import {createCollegeCampus} from './college-scene.js?v=2.9.7';
-import {createTraffic} from './traffic-scene.js?v=2.9.7';
+import {createMagnetCoins} from './magnet-coins.js?v=2.9.8';
+import {createPickupModels} from './pickup-models.js?v=2.9.8';
+import {createGuardEffect} from './guard-effect.js?v=2.9.8';
+import {streetSurfaces,curveRelX,curveRelY,roadCurveSlope} from './street-materials.js?v=2.9.8';
+import {createSideTraffic} from './side-vehicles.js?v=2.9.8';
+import {createCaptureStage} from './capture-stage.js?v=2.9.8';
+import {createSky} from './sky-scene.js?v=2.9.8';
+import {createCampus} from './campus-scene.js?v=2.9.8';
+import {createCollegeCampus} from './college-scene.js?v=2.9.8';
+import {createTraffic} from './traffic-scene.js?v=2.9.8';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=2.9.7';
-import {createCaptureScene} from './capture-scene.js?v=2.9.7';
-import {loadChaserModel} from './chaser-model.js?v=2.9.7';
-import {loadRunnerModel} from './runner-model.js?v=2.9.7';
-import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.9.7';
+import {createSchoolEntrance} from './school-scene.js?v=2.9.8';
+import {createCaptureScene} from './capture-scene.js?v=2.9.8';
+import {loadChaserModel} from './chaser-model.js?v=2.9.8';
+import {loadRunnerModel} from './runner-model.js?v=2.9.8';
+import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.9.8';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});}
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
@@ -240,15 +240,26 @@ export function createRenderer(canvas, callbacks = {}){
  }
  function obstacle(g,o,map='school',blockKind=0){clear(g);if(['coin','magnet','shield'].includes(o.type)){ensurePickups().add(g,o.type);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
 
- const particles=[];for(let i=0;i<30;i++){const m=ball(scene,0xffdf62,0,0,0,.065);m.visible=false;particles.push({m,life:0,v:new T.Vector3()});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null;
- function resize(){const r=canvas.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.fov=r.width/r.height<.8?64:58;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
+ const particles=[];for(let i=0;i<30;i++){const m=ball(scene,0xffdf62,0,0,0,.065);m.visible=false;particles.push({m,life:0,v:new T.Vector3()});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0;
+ function resize(){const r=canvas.getBoundingClientRect();const rw=Math.round(r.width),rh=Math.round(r.height);if(!rw||!rh||(rw===lastCanvasW&&rh===lastCanvasH))return;lastCanvasW=rw;lastCanvasH=rh;renderer.setSize(rw,rh,false);camera.aspect=rw/rh;camera.fov=rw/rh<.8?64:58;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
  const renderFn=function render(s,character,frameDt){if(contextLost||renderer.getContext?.()?.isContextLost?.())return 'context-lost';stage.restore();capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
  const onPodium=s.mode==='ready'||s.mode==='select';
- if(onPodium!==lastOnPodium){lastOnPodium=onPodium;sun.castShadow=!onPodium;camera.far=onPodium?68:180;camera.updateProjectionMatrix();}
- updateSchool(s);if(!onPodium){updateTraffic(s);updateSideTraffic(s);updateMagnetCoins(s);}
+ const podiumChanged=onPodium!==lastOnPodium;
+ if(podiumChanged){
+   lastOnPodium=onPodium;
+   sun.castShadow=!onPodium;
+   camera.far=onPodium?68:180;
+   camera.updateProjectionMatrix();
+   if(onPodium){
+     trackCameraY=0;
+     camera.position.set(0,1.52,3.65);
+     currentLookX=0;currentLookY=.98;currentLookZ=0;
+   }
+ }
+ updateSchool(s);if(!onPodium||podiumChanged){updateTraffic(s);updateSideTraffic(s);updateMagnetCoins(s);}
  const weather=updateSky(s);updateStreet(s.distance,weather,s.map);
  if(s.map==='college'){if(!updateCollege)updateCollege=createCollegeCampus(scene);updateCollege(s);if(updateCampus)updateCampus(s,weather);}
- else{if(!onPodium){if(!updateCampus)updateCampus=createCampus(scene);updateCampus(s,weather);}if(updateCollege)updateCollege(s);}
+ else{if(!onPodium||podiumChanged){if(!updateCampus&&!onPodium)updateCampus=createCampus(scene);if(updateCampus)updateCampus(s,weather);}if(updateCollege)updateCollege(s);}
  updateChaserModel(s);
  podium.position.set(0,.09,s.distance);
  podium.visible=onPodium;

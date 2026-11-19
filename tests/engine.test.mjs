@@ -232,3 +232,29 @@ test('above 10k m one hit causes instant game over', () => {
   assert.equal(s.damage, 2, 'damage immediately set to 2');
   assert.equal(s.mode, 'falling', 'one hit directly triggers falling/out');
 });
+
+test('all 3 lanes are never simultaneously blocked across low, mid, and high speeds', () => {
+  for (const seed of [1, 7, 42]) {
+    for (const startDist of [100, 2200, 5200, 8400, 10400]) {
+      const s = fresh(seed);
+      s.mode = 'running';
+      s.distance = startDist;
+      s.next = startDist + 10;
+      s.nextMidObstacle = startDist + 50;
+      s.nextLaneObstacle = startDist + 50;
+      for (let i = 0; i < 120; i++) {
+        step(s, .05);
+        s.damage = 0; s.mode = 'running'; s.hit = 0;
+        const nearZ = s.distance + s.speed * 0.55;
+        const blocked = new Set();
+        for (const o of s.items) {
+          if (o.done || ['coin','magnet','shield'].includes(o.type)) continue;
+          if (o.encounter && !o.started) continue;
+          const len = o.length || 2.5;
+          if (nearZ >= o.z - 2 && nearZ <= o.z + len + 2) blocked.add(o.lane);
+        }
+        assert.ok(blocked.size < 3, `seed ${seed} dist ${Math.round(s.distance)} must leave >=1 escape lane`);
+      }
+    }
+  }
+});
