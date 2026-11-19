@@ -11,14 +11,14 @@ export function roadCurveX(distance, map = 'school') {
  if (map !== 'college') return 0;
  const ramp = Math.max(0, Math.min(1, (distance - 22) / 55));
  const ease = ramp * ramp * (3 - 2 * ramp);
- return ease * (11.5 * Math.sin(distance * 0.0115) + 4.8 * Math.sin(distance * 0.029));
+ return ease * (6.8 * Math.sin(distance * 0.0095) + 2.6 * Math.sin(distance * 0.021));
 }
 
 export function roadCurveY(distance, map = 'school') {
  if (map !== 'college') return 0;
  const ramp = Math.max(0, Math.min(1, (distance - 25) / 60));
  const ease = ramp * ramp * (3 - 2 * ramp);
- return ease * (1.25 * Math.sin(distance * 0.016) + 0.45 * Math.cos(distance * 0.039));
+ return ease * (0.65 * Math.sin(distance * 0.013));
 }
 
 export function roadCurveSlope(distance, map = 'school') {

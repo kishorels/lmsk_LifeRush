@@ -1,7 +1,7 @@
-import {createSound} from './sound.js?v=2.9.2';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.2';
-import {createRenderer} from './renderer3d.js?v=2.9.3';
-import {createLiteRenderer} from './renderer-lite.js?v=2.9.2';
+import {createSound} from './sound.js?v=2.9.4';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.4';
+import {createRenderer} from './renderer3d.js?v=2.9.4';
+import {createLiteRenderer} from './renderer-lite.js?v=2.9.4';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
@@ -9,7 +9,15 @@ let canvas=$('world');
 document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
 let assetsReady = false;
 let introFinished = false;
+let rendererStarted = false;
 let boyFraction = 0, chaserFraction = 0;
+
+function scheduleRendererInit() {
+  if (rendererStarted) return;
+  setTimeout(() => {
+    if (typeof ensureRenderer === 'function') ensureRenderer();
+  }, 80);
+}
 
 function updateAssetProgress(type, fraction) {
   if (type === 'boy') boyFraction = Math.max(boyFraction, fraction);
@@ -32,6 +40,7 @@ function activateEnterButton() {
   }
   if (btnTxt) btnTxt.textContent = 'Enter LifeRush';
   if (arrow) arrow.hidden = false;
+  if (typeof scheduleRendererInit === 'function') scheduleRendererInit();
 }
 
 function setupIntroVideo() {
@@ -40,6 +49,8 @@ function setupIntroVideo() {
     activateEnterButton();
     return;
   }
+  video.muted = true;
+  video.defaultMuted = true;
 
   function freezeAtEnd() {
     if (introFinished) return;
@@ -60,12 +71,17 @@ function setupIntroVideo() {
   video.addEventListener('ended', freezeAtEnd);
   video.addEventListener('error', () => activateEnterButton());
 
-  const playPromise = video.play();
-  if (playPromise && typeof playPromise.catch === 'function') {
-    playPromise.catch(() => {
-      video.muted = true;
-      video.play().catch(() => activateEnterButton());
-    });
+  const tryPlay = () => {
+    video.muted = true;
+    const p = video.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => setTimeout(() => video.play().catch(() => activateEnterButton()), 180));
+    }
+  };
+  if (video.readyState >= 2) tryPlay();
+  else {
+    video.addEventListener('canplay', tryPlay, { once: true });
+    tryPlay();
   }
 }
 setupIntroVideo();
@@ -164,15 +180,20 @@ function switchToLiteRenderer(reason) {
   onAllAssetsReady();
 }
 
-try{
-  draw=createRenderer(canvas, {
-    initialModelKey,
-    onBoyProgress: f => updateAssetProgress('boy', f),
-    onChaserProgress: f => updateAssetProgress('chaser', f)
-  });
-}catch(error){
-  switchToLiteRenderer(error?.message || error);
+function ensureRenderer() {
+  if (rendererStarted || draw) return;
+  rendererStarted = true;
+  try{
+    draw=createRenderer(canvas, {
+      initialModelKey,
+      onBoyProgress: f => updateAssetProgress('boy', f),
+      onChaserProgress: f => updateAssetProgress('chaser', f)
+    });
+  }catch(error){
+    switchToLiteRenderer(error?.message || error);
+  }
 }
+if (introFinished) scheduleRendererInit();
 
 const save=()=>{
   try{
@@ -526,6 +547,7 @@ if ($('btn-edit-player-name')) {
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
     assetsReady = true;
+    ensureRenderer();
     try { $('intro-video')?.pause(); } catch {}
     effects.setEnabled(sound);
     effects.unlock();
@@ -725,7 +747,10 @@ document.addEventListener('visibilitychange',()=>{
     effects.unlock();
     if(game.classList.contains('mode-splash')){
       const v=$('intro-video');
-      if(v && sound){ v.muted=false; }
+      if(v){
+        if(sound) v.muted=false;
+        if(v.paused && !introFinished) v.play().catch(()=>{});
+      }
       return;
     }
     if(sound) effects.startBgm?.();
@@ -735,6 +760,7 @@ document.addEventListener('visibilitychange',()=>{
 function tick(t) {
   const dt = prev ? Math.min(0.1, (t-prev)/1000) : 0;
   prev = t;
+  if (game.classList.contains('mode-splash') || !draw) return;
   const old = s.mode, firstHitBefore = s.firstHitAt, captureBefore = s.capture, hitBefore = s.hit;
   const distanceBefore = s.distance, coinsBefore = s.coins;
   

@@ -21,31 +21,51 @@ export function createSchoolEntrance(scene) {
   }
 
   function sign(parent, headline, subline, x, y, z, width, height) {
-    const board = part(parent,0x113c48,x,y,z,width,height,.20);
+    part(parent,0x94a3b8,x,y,z-.01,width+.12,height+.12,.14);
+    const board = part(parent,0x0f2534,x,y,z,width,height,.18);
+    // Brushed aluminum top & bottom trim moldings and top floodlight brackets
+    part(parent,0xdbe6ef,x,y+height/2+.04,z+.02,width+.14,.07,.22);
+    part(parent,0xdbe6ef,x,y-height/2-.04,z+.02,width+.14,.07,.22);
+    for (const lx of [x-width*.32, x+width*.32]) {
+      part(parent,0x1e293b,lx,y+height/2+.16,z+.24,.06,.06,.38);
+      part(parent,0xfef3c7,lx,y+height/2+.13,z+.40,.22,.07,.10);
+    }
     if (typeof document === 'undefined') return;
     const canvas = document.createElement('canvas');
     canvas.width=1024;
     canvas.height=256;
     const draw=canvas.getContext('2d');
     if (!draw) return;
-    draw.fillStyle='#153c47';
+    const grad = draw.createLinearGradient(0,0,0,256);
+    grad.addColorStop(0,'#0f2d3f');
+    grad.addColorStop(.5,'#154150');
+    grad.addColorStop(1,'#0b2230');
+    draw.fillStyle=grad;
     draw.fillRect(0,0,1024,256);
+    draw.strokeStyle='#fbbf24';
+    draw.lineWidth=10;
+    draw.strokeRect(14,14,996,228);
     draw.strokeStyle='#91dbc0';
-    draw.lineWidth=8;
-    draw.strokeRect(16,16,992,224);
+    draw.lineWidth=4;
+    draw.strokeRect(26,26,972,204);
+    for (const [rx,ry] of [[42,42],[982,42],[42,214],[982,214]]) {
+      draw.fillStyle='#cbd5e1'; draw.beginPath(); draw.arc(rx,ry,7,0,Math.PI*2); draw.fill();
+    }
     draw.textAlign='center';
-    draw.fillStyle='#f7f3d8';
-    draw.font='900 94px system-ui';
-    draw.fillText(headline,512,121,944);
-    draw.fillStyle='#a7e8cc';
-    draw.font='700 49px system-ui';
-    draw.fillText(subline,512,196,940);
+    draw.shadowColor='rgba(0,0,0,0.55)'; draw.shadowBlur=10; draw.shadowOffsetY=4;
+    draw.fillStyle='#fff9e2';
+    draw.font='900 88px system-ui';
+    draw.fillText(headline,512,118,920);
+    draw.shadowBlur=0; draw.shadowOffsetY=0;
+    draw.fillStyle='#8ef0c8';
+    draw.font='700 44px system-ui';
+    draw.fillText(subline,512,192,920);
     const texture = new CanvasTexture(canvas);
     texture.colorSpace=SRGBColorSpace;
-    const ink = new MeshStandardMaterial({map:texture, emissiveMap:texture, emissive:0xffffff,emissiveIntensity:.18,roughness:.84});
+    const ink = new MeshStandardMaterial({map:texture, emissiveMap:texture, emissive:0xffffff,emissiveIntensity:.24,roughness:.42,metalness:.08});
     const face = new Mesh(box, ink);
-    face.position.set(x,y,z+.105);
-    face.scale.set(width-.03,height-.03,.012);
+    face.position.set(x,y,z+.10);
+    face.scale.set(width-.02,height-.02,.014);
     board.parent.add(face);
   }
 

@@ -94,7 +94,7 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 .splash-screen {
   position: absolute;
   inset: 0;
-  background: #000000;
+  background: #000000 url('assets/videos/intro-poster.jpg') center/cover no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -108,6 +108,16 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   object-fit: cover;
   display: block;
   background: #000000;
+}
+.intro-video::-webkit-media-controls,
+.intro-video::-webkit-media-controls-enclosure,
+.intro-video::-webkit-media-controls-panel,
+.intro-video::-webkit-media-controls-start-playback-button,
+.intro-video::-webkit-media-controls-overlay-play-button {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  -webkit-appearance: none !important;
 }
 .splash-enter-wrap {
   position: absolute;

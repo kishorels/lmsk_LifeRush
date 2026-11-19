@@ -18,12 +18,18 @@ export function createCollegeCampus(scene){
   const mesh=new Mesh(geo,material(color));mesh.position.set(x,y,z);mesh.scale.set(w,h,d);root.add(mesh);return mesh;
  }
  function label(root,text,x,y,z){
+  part(root,C.frame,x,y,z,.09,.74,4.06);
   if(typeof document==='undefined')return;
-  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
+  const canvas=document.createElement('canvas');canvas.width=640;canvas.height=120;
   const ctx=canvas.getContext('2d');if(!ctx)return;
-  ctx.fillStyle='#213d48';ctx.fillRect(0,0,512,96);ctx.fillStyle='#f4e8cd';ctx.textAlign='center';ctx.font='bold 34px Arial';ctx.fillText(text,256,62,475);
+  const grad=ctx.createLinearGradient(0,0,640,120);grad.addColorStop(0,'#132a3a');grad.addColorStop(.5,'#1d4456');grad.addColorStop(1,'#112736');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,640,120);
+  ctx.strokeStyle='#f59e0b';ctx.lineWidth=6;ctx.strokeRect(8,8,624,104);
+  ctx.strokeStyle='#7dd3fc';ctx.lineWidth=2;ctx.strokeRect(16,16,608,88);
+  ctx.fillStyle='#fff7e0';ctx.textAlign='center';ctx.font='900 42px system-ui, Arial';
+  ctx.fillText(text,320,74,568);
   const map=new CanvasTexture(canvas);map.colorSpace=SRGBColorSpace;
-  const mesh=new Mesh(box,new MeshStandardMaterial({map,roughness:.7}));mesh.position.set(x,y,z);mesh.scale.set(.035,.62,3.9);root.add(mesh);
+  const mesh=new Mesh(box,new MeshStandardMaterial({map,emissiveMap:map,emissive:0xffffff,emissiveIntensity:.18,roughness:.36,metalness:.14}));mesh.position.set(x+(x>0?-.05:.05),y,z);mesh.scale.set(.03,.66,3.94);root.add(mesh);
  }
  function tree(root,side,z,variant=0,x=7.2){
   const h=4.9+(Math.abs(variant)%3)*.3;

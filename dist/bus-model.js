@@ -1,17 +1,27 @@
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
-import {Group,Mesh,MeshStandardMaterial,BoxGeometry,CylinderGeometry,Shape,ExtrudeGeometry,TorusGeometry,Vector3,CanvasTexture,SRGBColorSpace} from './vendor/three.module.js';
+import {Group,Mesh,MeshStandardMaterial,BoxGeometry,CylinderGeometry,Shape,ExtrudeGeometry,TorusGeometry,BufferGeometry,Float32BufferAttribute,Vector3,CanvasTexture,SRGBColorSpace} from './vendor/three.module.js';
 const mats=new Map(),geometries=new Map(),cube=new BoxGeometry(),tyre=new CylinderGeometry(.40,.40,.20,24),hub=new CylinderGeometry(.22,.22,.025,20),archGeo=new TorusGeometry(.47,.035,6,24,Math.PI),lampGeo=new CylinderGeometry(1,1,1,16);
 function paint(color) {
  if (mats.has(color)) return mats.get(color);
- const glass = color === 0x244759, steel = color === 0xbacbd2, rubber = color === 0x192c38;
+ const glass = color === 0x244759 || color === 0x162f42 || color === 0x1f4b68;
+ const steel = color === 0xbacbd2 || color === 0xdbe6ef || color === 0xc8d8e4;
+ const rubber = color === 0x192c38 || color === 0x121923;
+ const ledWhite = color === 0xf8fbff || color === 0xeaf6ff;
+ const ledRed = color === 0xff2e3b || color === 0xff4d4d;
+ const ledAmber = color === 0xffa61e;
+ const emissive = ledWhite ? 0xdbeafe : ledRed ? 0xb91c1c : ledAmber ? 0xd97706 : 0x000000;
+ const emissiveIntensity = ledWhite ? 0.55 : ledRed ? 0.6 : ledAmber ? 0.5 : 0;
  const material = new MeshStandardMaterial({
-  color, roughness:glass ? .13 : steel ? .32 : rubber ? .91 : .37,
-  metalness:glass ? .55 : steel ? .72 : .06
+  color,
+  roughness: glass ? .09 : steel ? .20 : rubber ? .88 : (ledWhite || ledRed || ledAmber) ? .18 : .22,
+  metalness: glass ? .75 : steel ? .88 : rubber ? .04 : .34,
+  emissive,
+  emissiveIntensity
  });
  mats.set(color,material);
  return material;
 }
-let routeSign;
+let routeSign, carPlateMat;
 function destinationBoard() {
  if (routeSign || typeof document === 'undefined') return routeSign;
  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=72;
@@ -23,6 +33,54 @@ function destinationBoard() {
  const map=new CanvasTexture(canvas);map.colorSpace=SRGBColorSpace;
  routeSign=new MeshStandardMaterial({map,emissiveMap:map,emissive:0xffffff,emissiveIntensity:.45});
  return routeSign;
+}
+function licensePlateMat() {
+ if (carPlateMat || typeof document === 'undefined') return carPlateMat;
+ const canvas=document.createElement('canvas');canvas.width=256;canvas.height=64;
+ const ctx=canvas.getContext('2d');
+ if (!ctx) return;
+ ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,256,64);
+ ctx.fillStyle='#1d4ed8';ctx.fillRect(0,0,28,64);
+ ctx.strokeStyle='#0f172a';ctx.lineWidth=4;ctx.strokeRect(2,2,252,60);
+ ctx.fillStyle='#0f172a';ctx.font='900 32px sans-serif';ctx.textAlign='center';
+ ctx.fillText('TN 57 LK',142,43,210);
+ const map=new CanvasTexture(canvas);map.colorSpace=SRGBColorSpace;
+ carPlateMat=new MeshStandardMaterial({map,roughness:.38,metalness:.1});
+ return carPlateMat;
+}
+function extrudeProfile(key, points, depth, bevel = .04) {
+ if (geometries.has(key)) return geometries.get(key);
+ const shape = new Shape();
+ shape.moveTo(points[0][0], points[0][1]);
+ for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+ shape.closePath();
+ const g = new ExtrudeGeometry(shape, {
+  depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.85, bevelSegments: 2, curveSegments: 8
+ });
+ geometries.set(key, g);
+ return g;
+}
+function coachworkGeo(key, sections) {
+ if (geometries.has(key)) return geometries.get(key);
+ const positions = [], indices = [];
+ for (const [z, base, top, lw, uw] of sections) {
+  positions.push(-lw, base, z, lw, base, z, uw, top, z, -uw, top, z);
+ }
+ for (let i = 0; i < sections.length - 1; i++) for (let f = 0; f < 4; f++) {
+  const a = i * 4 + f, b = i * 4 + (f + 1) % 4;
+  indices.push(a, b, b + 4, a, b + 4, a + 4);
+ }
+ const end = 4 * (sections.length - 1);
+ indices.push(0, 2, 1, 0, 3, 2, end, end + 1, end + 2, end, end + 2, end + 3);
+ const geo = new BufferGeometry();
+ geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
+ geo.setIndex(indices);
+ geo.computeVertexNormals();
+ // Ensure uvs exist so mergeGeometries in batchBody combines cleanly with Box/Cylinder/Extrude geometries.
+ const count = geo.attributes.position.count;
+ geo.setAttribute('uv', new Float32BufferAttribute(new Float32Array(count * 2), 2));
+ geometries.set(key, geo);
+ return geo;
 }
 // Merge fixed coach panels once per body size. Wheel hubs stay independently animated.
 const bodyBatches=new Map();
@@ -107,56 +165,129 @@ export function buildCollegeVehicle(kind='car',length=4.5,roof=1.45,oncoming=tru
  const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];
  const add=(c,x,y,z,w,h,d,geo=cube)=>{const m=new Mesh(geo,paint(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const shell=(c,x,y,z,w,h,d,r=.10)=>add(c,x,y,z,1,1,1,rounded(w,h,d,r));
- const dark=0x162231,glass=0x1f4b68,silver=0xc8d8e4,white=0xf1f5f9,teal=0x0ea5a4,crimson=0xcf3241,scootyBlue=0x228be6;
+ const bar=(c,a,b,rad=.026)=>{const p=new Vector3(...a),q=new Vector3(...b),dir=q.clone().sub(p),m=add(c,(p.x+q.x)/2,(p.y+q.y)/2,(p.z+q.z)/2,rad,dir.length(),rad,lampGeo);m.quaternion.setFromUnitVectors(new Vector3(0,1,0),dir.normalize());return m;};
+ const dark=0x121923,glass=0x162f42,silver=0xdbe6ef,white=0xf1f5f9,teal=0x0ea5a4,crimson=0xdc2626,scootyBlue=0x0284c7,lamp=0xf8fbff,amber=0xffa61e,redLamp=0xff2e3b;
+ const plate=licensePlateMat();
  if(kind==='van'){
-  shell(white,0,(roof+.58)/2,-length/2,1.90,roof-.58,length,.18);
-  shell(teal,0,.46,-length/2,1.92,.44,length-.06,.10);
-  shell(dark,0,.22,-length/2,1.88,.14,length+.02,.05);
-  shell(glass,0,roof*.73,.02,1.68,roof*.32,.14,.05);
+  // Sleek aerodynamic Campus EV Shuttle Van with tumblehome cabin
+  const vGeo=coachworkGeo('vanBody:'+length+':'+roof,[
+   [-length,.28,.76,.80,.78],[-length+.12,.24,roof-.06,.92,.86],[-1.12,.24,roof,.94,.85],
+   [-.48,.24,.84,.93,.88],[-.04,.26,.64,.82,.78],[.04,.30,.54,.72,.70]
+  ]);
+  add(white,0,0,0,1,1,1,vGeo);
+  const vGlass=coachworkGeo('vanGlass:'+length+':'+roof,[
+   [-length+.30,roof*.56,roof-.10,.88,.84],[-1.14,roof*.56,roof-.05,.89,.83],[-.50,.82,roof*.96,.85,.78],[-.22,.82,.84,.82,.78]
+  ]);
+  add(glass,0,0,0,1,1,1,vGlass);
+  add(white,0,roof-.02,-length*.68,1.58,.06,length*.56);
+  shell(teal,0,.44,-length/2,1.88,.22,length-.16,.04);
+  shell(dark,0,.21,-length/2,1.84,.12,length-.06,.03);
   for(const side of [-1,1]){
-   add(teal,side*.965,roof*.58,-length/2,.025,.14,length*.86);
-   add(silver,side*.56,roof+.04,-length/2,.07,.08,length*.82);
-   shell(glass,side*.955,roof*.72,-length*.22,.03,roof*.28,length*.26,.012);
+   add(silver,side*.56,roof+.04,-length*.66,.06,.05,length*.48);
+   bar(dark,[side*.90,.82,-.58],[side*1.04,.86,-.52],.02);
+   shell(white,side*1.06,.87,-.54,.12,.10,.08,.02);
+   add(lamp,side*.60,.52,.03,.26,.11,.04);
+   add(amber,side*.76,.46,.02,.09,.06,.04);
+   add(redLamp,side*.72,.62,-length-.01,.16,.24,.04);
   }
-  for(const x of [-.66,.66])add(0xe0f7ff,x,.56,.05,.34,.11,.03);
-  add(0xff4d4d,-.72,.64,-length-.03,.20,.14,.04);
-  add(0xff4d4d,.72,.64,-length-.03,.20,.14,.04);
+  shell(dark,0,.42,.03,.66,.16,.04,.01);
+  if(plate){const pf=add(white,0,.29,.05,.40,.10,.015);pf.material=plate;}
  }else if(kind==='scooty'){
-  shell(scootyBlue,0,.58,-.42,.42,.56,.44,.09);
-  shell(white,0,.64,-.19,.32,.36,.08,.04);
-  shell(dark,0,.28,-1.02,.36,.10,.76,.04);
-  shell(scootyBlue,0,.56,-1.68,.38,.36,.92,.09);
-  shell(dark,0,.80,-1.64,.30,.12,.76,.05);
-  add(dark,0,1.02,-.42,.68,.045,.05);
-  for(const side of [-1,1])add(silver,side*.28,1.12,-.42,.09,.06,.03);
-  add(0xfff4c2,0,.78,-.16,.16,.14,.04);
-  add(0xff3b3b,0,.62,-2.16,.16,.07,.03);
-  shell(0x1e293b,0,1.05,-1.44,.38,.52,.26,.08);
-  shell(0xf97316,0,1.12,-1.66,.32,.40,.16,.06);
-  add(0xe2a885,0,1.46,-1.34,.22,.24,.22);
-  shell(crimson,0,1.52,-1.35,.27,.24,.28,.09);
-  shell(dark,0,1.50,-1.22,.24,.10,.06,.02);
+  // Realistic Campus Scooty: centered (+depth/2) curved apron, twin forks, fender, chrome exhaust & rider
+  const apronProf=[[-.48,.24],[-.48,.88],[-.33,.94],[-.15,.82],[-.12,.38],[-.26,.24]];
+  const ap=add(scootyBlue,.15,0,0,1,1,1,extrudeProfile('scootyApron',apronProf,.30,.04));
+  ap.rotation.y=-Math.PI/2;
+  const tailProf=[[-2.14,.48],[-2.08,.76],[-1.18,.78],[-1.12,.38],[-1.84,.34]];
+  const tp=add(scootyBlue,.18,0,0,1,1,1,extrudeProfile('scootyTail',tailProf,.36,.045));
+  tp.rotation.y=-Math.PI/2;
+  shell(white,0,.64,-.12,.22,.38,.05,.02);
+  shell(dark,0,.26,-.76,.36,.08,.72,.03);
+  for(const side of [-1,1])bar(silver,[side*.10,.28,-.30],[side*.08,.96,-.42],.022);
+  const fGuard=add(scootyBlue,0,.38,-.31,.26,.42,.38,archGeo);fGuard.rotation.y=Math.PI/2;fGuard.scale.set(.70,.55,.35);
+  shell(dark,0,.78,-1.58,.30,.12,.82,.05);
+  shell(0x334155,0,.85,-1.76,.28,.09,.36,.04);
+  bar(silver,[-.16,.84,-1.96],[.16,.84,-1.96],.018);
+  const muffler=add(dark,.22,.34,-1.72,.085,.44,.085,lampGeo);muffler.rotation.x=Math.PI/2-.15;
+  add(silver,.23,.35,-1.72,.07,.32,.07,lampGeo).rotation.x=Math.PI/2-.15;
+  const visor=shell(glass,0,1.08,-.36,.28,.19,.035,.012);visor.rotation.x=.38;
+  bar(dark,[-.34,.98,-.40],[.34,.98,-.40],.022);
+  for(const side of [-1,1]){
+   add(dark,side*.32,.98,-.40,.11,.045,.045);
+   bar(silver,[side*.24,.99,-.40],[side*.28,1.12,-.38],.01);
+   shell(dark,side*.30,1.14,-.38,.12,.065,.035,.012);
+   add(amber,side*.13,.76,-.11,.06,.06,.03);
+  }
+  add(lamp,0,.74,-.07,.16,.11,.04);
+  add(redLamp,0,.64,-2.18,.15,.08,.04);
+  if(plate){const pb=add(white,0,.44,-2.19,.24,.10,.015);pb.material=plate;}
+  shell(0x1e293b,0,1.10,-1.44,.34,.50,.22,.08);
+  shell(0x0ea5e9,0,1.16,-1.60,.26,.34,.14,.05);
+  for(const side of [-1,1]){
+   bar(0x1e293b,[side*.17,1.26,-1.42],[side*.27,1.04,-.88],.04);
+   bar(0x1e293b,[side*.27,1.04,-.88],[side*.31,.98,-.42],.034);
+   bar(0x0f172a,[side*.13,.88,-1.48],[side*.18,.52,-.92],.06);
+   bar(0x0f172a,[side*.18,.52,-.92],[side*.16,.28,-.82],.045);
+  }
+  add(0xe2a885,0,1.46,-1.36,.19,.21,.19);
+  shell(crimson,0,1.52,-1.36,.25,.24,.27,.09);
+  shell(glass,0,1.50,-1.22,.22,.10,.05,.02);
  }else{
+  // Sculpted Realistic Sports Sedan using tapered 3D automotive cross-sections
   const bodyLen=Math.min(length,4.6);
-  const zMid=-length/2;
-  shell(crimson,0,.52,zMid,1.76,.54,bodyLen,.12);
-  shell(crimson,0,1.04,zMid-.15,1.48,.52,bodyLen*.52,.14);
-  shell(glass,0,1.03,zMid-.14,1.52,.40,bodyLen*.46,.08);
-  shell(dark,0,.25,zMid,1.80,.16,bodyLen+.05,.05);
-  add(0xeef8ff,-.64,.56,zMid+bodyLen/2+.02,.30,.12,.03);
-  add(0xeef8ff,.64,.56,zMid+bodyLen/2+.02,.30,.12,.03);
-  add(dark,0,.44,zMid+bodyLen/2+.02,.62,.16,.03);
-  add(0xff4242,-.64,.58,zMid-bodyLen/2-.02,.30,.12,.03);
-  add(0xff4242,.64,.58,zMid-bodyLen/2-.02,.30,.12,.03);
+  const z0=-length/2-bodyLen/2, z1=-length/2+bodyLen/2;
+  const cBody=coachworkGeo('cBody:'+bodyLen,[
+   [z0,.34,.72,.74,.72],[z0+.35,.28,.88,.88,.82],[z0+1.10,.28,.91,.90,.84],
+   [z1-1.35,.28,.89,.90,.84],[z1-.30,.29,.73,.88,.80],[z1,.34,.60,.74,.71]
+  ]);
+  const cCabin=coachworkGeo('cCabin:'+bodyLen+':'+roof,[
+   [z0+.62,.86,.90,.78,.74],[z0+1.26,.89,roof,.81,.64],
+   [z1-1.95,.88,roof+.02,.81,.64],[z1-1.15,.85,.88,.79,.74]
+  ]);
+  add(crimson,0,0,0,1,1,1,cBody);
+  add(glass,0,0,0,1,1,1,cCabin);
+  shell(crimson,0,roof-.01,z0+1.65,1.26,.06,bodyLen*.28,.025);
+  shell(crimson,0,.92,z0+.16,1.42,.06,.16,.02);
+  shell(dark,0,.22,-length/2,1.76,.12,bodyLen-.08,.03);
+  shell(dark,0,.43,z1+.01,.76,.16,.04,.01);
+  add(silver,0,.47,z1+.035,.66,.024,.02);
+  add(silver,0,.40,z1+.035,.62,.024,.02);
+  if(plate){
+   const pf=add(white,0,.29,z1+.04,.40,.10,.015);pf.material=plate;
+   const pr=add(white,0,.46,z0-.02,.40,.10,.015);pr.material=plate;
+  }
+  for(const side of [-1,1]){
+   bar(crimson,[side*.79,.87,z1-1.15],[side*.64,roof,z1-1.92],.032);
+   bar(dark,[side*.81,.89,z0+1.95],[side*.65,roof,z0+1.82],.028);
+   bar(crimson,[side*.78,.86,z0+.64],[side*.64,roof,z0+1.26],.032);
+   bar(dark,[side*.84,.88,z1-1.26],[side*.98,.92,z1-1.24],.02);
+   shell(crimson,side*1.00,.93,z1-1.26,.13,.08,.09,.025);
+   add(lamp,side*.60,.56,z1+.01,.26,.10,.04);
+   add(amber,side*.76,.56,z1+.01,.08,.07,.04);
+   add(redLamp,side*.62,.66,z0-.01,.32,.11,.04);
+   add(silver,side*.46,.24,z0-.03,.065,.065,.08,lampGeo).rotation.x=Math.PI/2;
+   for(const wz of [-length/2+1.25,-length/2-1.25]){
+    const arch=add(dark,side*.88,.35,wz,.86,.86,.45,archGeo);arch.rotation.y=Math.PI/2;
+   }
+  }
+  add(redLamp,0,.67,z0-.01,.88,.04,.03);
+  add(crimson,0,roof+.06,z0+1.35,.06,.10,.15);
  }
  batchBody(g,['college',kind,length,roof,oncoming].join(':'));
- const wheelXs=kind==='scooty'?[0]:[-.84,.84];
- const wheelZs=kind==='scooty'?[-.32,-1.95]:kind==='van'?[-1.35,-length+1.35]:[-length/2+1.25,-length/2-1.25];
- const wScale=kind==='scooty'?.78:1;
+ const wheelXs=kind==='scooty'?[0]:[-.86,.86];
+ const wheelZs=kind==='scooty'?[-.31,-1.95]:kind==='van'?[-1.35,-length+1.35]:[-length/2+1.25,-length/2-1.25];
+ const wScale=kind==='scooty'?.76:.94;
  for(const wx of wheelXs)for(const wz of wheelZs){
   const w=add(dark,wx,.36*wScale,wz,1,wScale,wScale,tyre);w.rotation.z=Math.PI/2;
-  const r=add(silver,wx+(wx>=0?.09:-.09),.36*wScale,wz,1,wScale*.85,wScale*.85,hub);r.rotation.z=Math.PI/2;
-  g.userData.wheels.push(w);
+  const r=add(silver,wx+(wx>=0?.09:-.09),.36*wScale,wz,1,wScale*.88,wScale*.88,hub);r.rotation.z=Math.PI/2;
+  const spokes=new Group();spokes.position.set(wx+(wx>=0?.11:-.11),.36*wScale,wz);g.add(spokes);g.userData.wheels.push(spokes);
+  for(let i=0;i<5;i++){
+   const sp=new Mesh(cube,paint(dark));
+   sp.scale.set(.02,.045*wScale,.16*wScale);
+   const a=i*Math.PI*2/5;
+   sp.position.set(0,Math.cos(a)*.11*wScale,Math.sin(a)*.11*wScale);
+   sp.rotation.x=a;
+   spokes.add(sp);
+  }
  }
  return g;
 }

@@ -1,19 +1,19 @@
-import {createMagnetCoins} from './magnet-coins.js?v=2.9.2';
-import {createPickupModels} from './pickup-models.js?v=2.9.2';
-import {createGuardEffect} from './guard-effect.js?v=2.9.2';
-import {streetSurfaces,curveRelX,curveRelY,roadCurveSlope} from './street-materials.js?v=2.9.3';
-import {createSideTraffic} from './side-vehicles.js?v=2.9.2';
-import {createCaptureStage} from './capture-stage.js?v=2.9.2';
-import {createSky} from './sky-scene.js?v=2.9.2';
-import {createCampus} from './campus-scene.js?v=2.9.2';
-import {createCollegeCampus} from './college-scene.js?v=2.9.3';
-import {createTraffic} from './traffic-scene.js?v=2.9.2';
+import {createMagnetCoins} from './magnet-coins.js?v=2.9.4';
+import {createPickupModels} from './pickup-models.js?v=2.9.4';
+import {createGuardEffect} from './guard-effect.js?v=2.9.4';
+import {streetSurfaces,curveRelX,curveRelY,roadCurveSlope} from './street-materials.js?v=2.9.4';
+import {createSideTraffic} from './side-vehicles.js?v=2.9.4';
+import {createCaptureStage} from './capture-stage.js?v=2.9.4';
+import {createSky} from './sky-scene.js?v=2.9.4';
+import {createCampus} from './campus-scene.js?v=2.9.4';
+import {createCollegeCampus} from './college-scene.js?v=2.9.4';
+import {createTraffic} from './traffic-scene.js?v=2.9.4';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=2.9.2';
-import {createCaptureScene} from './capture-scene.js?v=2.9.2';
-import {loadChaserModel} from './chaser-model.js?v=2.9.2';
-import {loadRunnerModel} from './runner-model.js?v=2.9.2';
-import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.9.2';
+import {createSchoolEntrance} from './school-scene.js?v=2.9.4';
+import {createCaptureScene} from './capture-scene.js?v=2.9.4';
+import {loadChaserModel} from './chaser-model.js?v=2.9.4';
+import {loadRunnerModel} from './runner-model.js?v=2.9.4';
+import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.9.4';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});}
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
@@ -59,82 +59,179 @@ export function createRenderer(canvas, callbacks = {}){
  const legs=[],arms=[];for(const side of [-1,1]){const leg=new T.Group();leg.position.set(side*.17,.88,0);body.add(leg);mesh(cyl,0x283962,leg,0,-.21,0,.12,.45,.12,true);const knee=new T.Group();knee.position.y=-.42;leg.add(knee);mesh(cyl,0x344771,knee,0,-.18,0,.10,.38,.1,true);box(knee,0xffffff,0,-.4,-.08,.25,.17,.42,true);box(knee,0xf66d7d,0,-.35,-.1,.26,.05,.26);legs.push({leg,knee});const arm=new T.Group();arm.position.set(side*.36,1.53,0);body.add(arm);mesh(cyl,0xffcb38,arm,0,-.12,0,.115,.26,.115,true);mesh(cyl,0xd9986f,arm,0,-.35,0,.085,.3,.085,true);ball(arm,0xe7ae84,0,-.52,0,.09);arms.push(arm);}
  // Pooled obstacles / pickup models: no geometry allocation during a run.
  const pool=[];for(let i=0;i<64;i++){const root=new T.Group();root.userData.captureObstacle=true;scene.add(root);root.visible=false;pool.push(root);}
- let festBannerMat=null;
+ const obsTexMats=new Map();
+ function canvasObsMat(key,w,h,paintFn,rough=.45,metal=.1,emissiveInt=.18){
+  if(obsTexMats.has(key))return obsTexMats.get(key);
+  if(typeof document==='undefined')return null;
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+  const ctx=cv.getContext('2d');if(!ctx)return null;
+  paintFn(ctx,w,h);
+  const tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;
+  const m=new T.MeshStandardMaterial({map:tex,emissiveMap:emissiveInt?tex:null,emissive:emissiveInt?0xffffff:0,emissiveIntensity:emissiveInt,roughness:rough,metalness:metal});
+  obsTexMats.set(key,m);return m;
+ }
  function getFestBannerMat(){
-  if(festBannerMat)return festBannerMat;
-  if(typeof document!=='undefined'){
-   const cv=document.createElement('canvas');cv.width=512;cv.height=128;
-   const ctx=cv.getContext('2d');
-   if(ctx){
-    ctx.fillStyle='#132b4f';ctx.fillRect(0,0,512,128);
-    ctx.fillStyle='#ff9d1b';ctx.fillRect(0,0,512,14);ctx.fillRect(0,114,512,14);
-    ctx.fillStyle='#ffe268';ctx.font='900 44px sans-serif';ctx.textAlign='center';
-    ctx.fillText('TECH FEST · LIFE RUSH',256,78,470);
-    const tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;
-    festBannerMat=new T.MeshStandardMaterial({map:tex,roughness:.55});
+  return canvasObsMat('fest',512,160,(ctx,w,h)=>{
+   const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#0d1e3a');g.addColorStop(.5,'#193663');g.addColorStop(1,'#0d1e3a');
+   ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+   ctx.fillStyle='#f59e0b';ctx.fillRect(0,0,w,16);ctx.fillRect(0,h-16,w,16);
+   ctx.strokeStyle='#38bdf8';ctx.lineWidth=4;ctx.strokeRect(10,22,w-20,h-44);
+   ctx.fillStyle='#fde68a';ctx.font='900 44px system-ui, sans-serif';ctx.textAlign='center';
+   ctx.fillText('TECH FEST · LIFE RUSH',w/2,86,465);
+   ctx.fillStyle='#7dd3fc';ctx.font='700 22px system-ui, sans-serif';
+   ctx.fillText('ANNUAL INNOVATION & CULTURAL EXPO',w/2,126,460);
+  },.35,.2,.35)||mat(0x132b4f);
+ }
+ function getNoticeMat(){
+  return canvasObsMat('notice',512,384,(ctx,w,h)=>{
+   ctx.fillStyle='#a1683a';ctx.fillRect(0,0,w,h);
+   for(let i=0;i<160;i++){ctx.fillStyle=i%2?'rgba(0,0,0,.06)':'rgba(255,255,255,.05)';ctx.fillRect((i*73)%w,(i*41)%h,6,4);}
+   const posters=[
+    [24,24,148,165,'#fef08a','#b91c1c','HACKATHON','48HR CODE','REGISTER'],
+    [186,28,144,175,'#e0f2fe','#0369a1','CULTURALS','TECH STAGE','6 PM TODAY'],
+    [346,24,142,155,'#dcfce7','#15803d','SPORTS MEET','TRACK FINALS','MAIN GROUND'],
+    [40,210,196,144,'#fff1f2','#be123c','EXAM NOTICE','TIMETABLE','OUT NOW'],
+    [256,214,224,140,'#f8fafc','#1e293b','PLACEMENT CELL','DRIVE MONDAY','ROOM 304']
+   ];
+   for(const [x,y,pw,ph,bg,hd,t1,t2,t3]of posters){
+    ctx.fillStyle=bg;ctx.fillRect(x,y,pw,ph);
+    ctx.fillStyle=hd;ctx.fillRect(x,y,pw,34);
+    ctx.fillStyle='#ffffff';ctx.font='900 17px sans-serif';ctx.textAlign='center';ctx.fillText(t1,x+pw/2,y+23,pw-10);
+    ctx.fillStyle='#0f172a';ctx.font='800 18px sans-serif';ctx.fillText(t2,x+pw/2,y+80,pw-12);
+    ctx.fillStyle='#475569';ctx.font='700 15px sans-serif';ctx.fillText(t3,x+pw/2,y+118,pw-12);
+    ctx.fillStyle='#ef4444';ctx.beginPath();ctx.arc(x+pw/2,y+8,6,0,Math.PI*2);ctx.fill();
    }
-  }
-  return festBannerMat||mat(0x132b4f);
+  },.55,.04,.06)||mat(0xfef3c7);
+ }
+ function getVendingMat(){
+  return canvasObsMat('vending',256,384,(ctx,w,h)=>{
+   ctx.fillStyle='#0f172a';ctx.fillRect(0,0,w,h);
+   const cols=['#ef4444','#3b82f6','#22c55e','#f59e0b','#ec4899'];
+   for(let r=0;r<4;r++){
+    const sy=22+r*88;
+    ctx.fillStyle='#1e293b';ctx.fillRect(10,sy+58,w-20,10);
+    ctx.fillStyle='rgba(191,219,254,0.12)';ctx.fillRect(10,sy,w-20,56);
+    for(let c=0;c<4;c++){
+     const col=cols[(r*2+c)%cols.length],cx=22+c*56;
+     ctx.fillStyle=col;ctx.fillRect(cx,sy+10,36,46);
+     ctx.fillStyle='#ffffff';ctx.fillRect(cx+6,sy+20,24,10);
+     ctx.fillStyle='#cbd5e1';ctx.fillRect(cx+8,sy+2,20,8);
+    }
+   }
+  },.12,.3,.42)||mat(0xbfdbfe);
+ }
+ function getWoodMat(){
+  return canvasObsMat('wood',256,128,(ctx,w,h)=>{
+   ctx.fillStyle='#b7773b';ctx.fillRect(0,0,w,h);
+   for(let y=0;y<h;y+=32){ctx.fillStyle=y%64?'#c58447':'#ab6c32';ctx.fillRect(0,y,w,30);ctx.fillStyle='#6e421b';ctx.fillRect(0,y+30,w,2);}
+  },.65,0,0)||mat(0xc98a4b);
+ }
+ function getChevronMat(){
+  return canvasObsMat('chevron',512,64,(ctx,w,h)=>{
+   ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,w,h);
+   ctx.fillStyle='#dc2626';
+   for(let x=-64;x<w+64;x+=64){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+32,0);ctx.lineTo(x+64,h);ctx.lineTo(x+32,h);ctx.closePath();ctx.fill();}
+  },.35,.05,.18)||mat(0xffffff);
+ }
+ function getSolarMat(){
+  return canvasObsMat('solar',512,192,(ctx,w,h)=>{
+   ctx.fillStyle='#0f295c';ctx.fillRect(0,0,w,h);
+   ctx.strokeStyle='#38bdf8';ctx.lineWidth=3;
+   for(let x=0;x<=w;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+   for(let y=0;y<=h;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  },.15,.55,.22)||mat(0x1d4ed8);
  }
  function clear(g){while(g.children.length)g.remove(g.children[0]);}
+ function texturedPanel(g,m,x,y,z,w,h,d,fallback){const p=new T.Mesh(cube,m||mat(fallback));p.position.set(x,y,z);p.scale.set(w,h,d);p.castShadow=p.receiveShadow=true;g.add(p);return p;}
  function collegeObstacle(g,o,blockKind){
   if(o.type==='jump'&&o.variant==='bench'){
-   // Campus Canteen Table + Coffee Cups
-   for(const x of [-.70,.70])box(g,0x1e293b,x,.38,0,.10,.76,.62,true);
-   box(g,0xc98a4b,0,.78,0,1.88,.10,.78,true);
-   for(const x of [-.48,.48])box(g,0xf5f5f4,x,.89,0,.14,.14,.14);
-   box(g,0x0ea5e9,-.15,.85,.12,.24,.04,.32);
+   // Realistic Campus Canteen Table: planked wood tabletop, steel frame, coffee cups & laptop
+   for(const x of [-.72,.72]){box(g,0x1e293b,x,.38,0,.09,.74,.58,true);box(g,0x475569,x,.04,0,.18,.07,.70,true);}
+   box(g,0x334155,0,.68,0,1.64,.06,.56);
+   texturedPanel(g,getWoodMat(),0,.77,0,1.90,.09,.78,0xc98a4b);
+   for(const x of [-.52,.52]){mesh(cyl,0xf8fafc,g,x,.88,0,.07,.13,.07,true);mesh(cyl,0x78350f,g,x,.88,0,.073,.06,.073);mesh(cyl,0x0f172a,g,x,.95,0,.075,.02,.075);}
+   box(g,0x94a3b8,-.12,.83,.14,.32,.025,.24);box(g,0x38bdf8,-.12,.94,.02,.32,.20,.02).rotation.x=-.2;
   }else if(o.type==='jump'&&o.variant==='hurdle'){
-   // University Security Boom Barrier + Traffic Cones
-   box(g,0x1e3a5f,-.80,.48,0,.22,.96,.24,true);
-   box(g,0x1e3a5f,.80,.48,0,.22,.96,.24,true);
-   box(g,0xffffff,0,.80,0,1.92,.16,.12,true);
-   for(const x of [-.6,-.2,.2,.6])box(g,0xf97316,x,.80,.065,.18,.16,.02);
-   for(const x of [-.75,.75]){const coneM=mesh(cone,0xf97316,g,x,.24,.28,.16,.48,.16,true);mesh(cyl,0xffffff,g,x,.24,.28,.11,.10,.11);}
+   // University Security Boom Barrier + Reflective Cones
+   for(const x of [-.84,.84]){
+    box(g,0x1e3a5f,x,.48,0,.22,.96,.24,true);
+    box(g,0xfacc15,x,.98,0,.25,.08,.26);
+    box(g,0xef4444,x,.78,.125,.08,.06,.02);
+   }
+   texturedPanel(g,getChevronMat(),0,.80,0,1.94,.16,.12,0xffffff);
+   for(const x of [-.76,.76]){
+    box(g,0x0f172a,x,.025,.28,.34,.05,.34,true);
+    mesh(cone,0xf97316,g,x,.25,.28,.15,.46,.15,true);
+    mesh(cyl,0xf8fafc,g,x,.28,.28,.10,.11,.10);
+   }
   }else if(o.type==='jump'){
-   // Library Book Trolley loaded with colorful books
-   for(const x of [-.72,.72]){box(g,0x64748b,x,.42,0,.08,.76,.48,true);mesh(cyl,0x0f172a,g,x,.07,0,.07,.06,.07);}
-   for(const y of [.28,.56])box(g,0x94a3b8,0,y,0,1.56,.06,.48,true);
-   const cols=[0xef4444,0x3b82f6,0xf59e0b,0x10b981,0x8b5cf6];
-   for(let j=0;j<5;j++)box(g,cols[j],-.52+j*.26,.74,0,.22,.30,.36,true);
+   // Steel Library Book Trolley with angled shelves & colorful hardcover books
+   for(const x of [-.74,.74]){box(g,0x94a3b8,x,.44,0,.07,.80,.48,true);mesh(cyl,0x0f172a,g,x,.06,.16,.06,.05,.06);mesh(cyl,0x0f172a,g,x,.06,-.16,.06,.05,.06);}
+   box(g,0x334155,.78,.86,0,.06,.06,.48);
+   for(const y of [.26,.54,.80])box(g,0xcbd5e1,0,y,0,1.56,.05,.48,true);
+   const cols=[0xdc2626,0x2563eb,0xd97706,0x059669,0x7c3aed,0x0284c7];
+   for(let j=0;j<6;j++){box(g,cols[j],-.56+j*.22,.70,0,.18,.28,.36,true);box(g,0xf8fafc,-.56+j*.22,.70,.185,.12,.08,.01);}
   }else if(o.type==='slide'&&o.variant==='scaffold'){
-   // College Fest Archway ("TECH FEST")
-   for(const x of [-.90,.90]){box(g,0x1e3a5f,x,1.32,0,.16,2.64,.36,true);box(g,0x0ea5e9,x,.08,0,.38,.16,.56);}
-   const banner=new T.Mesh(cube,getFestBannerMat());banner.position.set(0,2.14,0);banner.scale.set(1.96,.88,.22);banner.castShadow=true;g.add(banner);
-   box(g,0xfacc15,0,2.62,0,2.04,.10,.30);
+   // Realistic Aluminum Space-Frame Truss Archway ("TECH FEST · LIFE RUSH")
+   for(const x of [-.92,.92]){
+    box(g,0x0f172a,x,.09,0,.40,.18,.58,true);
+    for(const dx of [-.08,.08])for(const dz of [-.12,.12])box(g,0xcbd5e1,x+dx,1.34,dz,.045,2.62,.045,true);
+    for(let y=.42;y<=2.4;y+=.48)box(g,0x94a3b8,x,y,0,.18,.04,.28);
+    box(g,0x38bdf8,x-.09*(x<0?-1:1),2.56,.18,.12,.12,.14);
+   }
+   box(g,0x1e293b,0,2.16,0,2.04,.94,.18,true);
+   texturedPanel(g,getFestBannerMat(),0,2.16,.11,1.94,.86,.03,0x132b4f);
+   texturedPanel(g,getFestBannerMat(),0,2.16,-.11,1.94,.86,.03,0x132b4f);
+   box(g,0xfacc15,0,2.66,0,2.08,.09,.30);
   }else if(o.type==='slide'){
-   // Solar Campus Skywalk Canopy
-   for(const x of [-.90,.90])box(g,0x334155,x,1.32,0,.16,2.64,.34,true);
-   box(g,0x0f172a,0,2.15,0,1.98,.78,.58,true);
-   for(let j=-1;j<=1;j++)box(g,0x1d4ed8,j*.58,2.15,.30,.50,.62,.04);
-   box(g,0x38bdf8,0,1.78,.31,.90,.06,.04);
+   // Realistic Solar Campus Skywalk Canopy
+   for(const x of [-.92,.92]){box(g,0x334155,x,1.32,0,.16,2.64,.34,true);box(g,0x0f172a,x,.08,0,.36,.16,.50);}
+   box(g,0x0f172a,0,2.16,0,2.02,.82,.60,true);
+   texturedPanel(g,getSolarMat(),0,2.16,.31,1.88,.68,.03,0x1d4ed8);
+   box(g,0x38bdf8,0,1.76,.32,1.60,.06,.04);
   }else if(o.type==='block'){
    if(blockKind===0){
-    // Soda / Snack Vending Machine
-    box(g,0x1d4ed8,0,1.18,0,1.32,2.36,.95,true);
-    box(g,0xbfdbfe,0,1.42,.49,.94,1.25,.04);
-    for(let r=0;r<3;r++)for(let c=0;c<3;c++)box(g,[0xef4444,0xf59e0b,0x22c55e][(r+c)%3],-.28+c*.28,1.02+r*.36,.52,.18,.22,.03);
-    box(g,0x0f172a,0,.44,.49,.88,.34,.05);
+    // Illuminated Glass-Front Campus Vending Machine
+    box(g,0x1e3a8a,0,1.18,0,1.34,2.38,.96,true);
+    box(g,0x0f172a,0,1.18,.48,1.16,2.14,.04);
+    texturedPanel(g,getVendingMat(),0,1.42,.51,.84,1.26,.02,0xbfdbfe);
+    box(g,0x334155,.49,1.36,.51,.14,.56,.03);
+    box(g,0x22c55e,.49,1.52,.53,.09,.06,.02);
+    box(g,0x0f172a,-.10,.44,.51,.88,.34,.05);
+    box(g,0x38bdf8,0,2.24,.51,1.08,.12,.03);
    }else if(blockKind===1){
-    // Campus Notice Board with Posters
-    for(const x of [-.68,.68])box(g,0x475569,x,1.15,0,.12,2.30,.18,true);
-    box(g,0x78350f,0,1.45,0,1.56,1.25,.12,true);
-    box(g,0xfef3c7,0,1.45,.07,1.38,1.08,.03);
-    box(g,0xef4444,-.34,1.62,.09,.44,.38,.02);box(g,0x3b82f6,.28,1.54,.09,.48,.46,.02);box(g,0x10b981,-.12,1.18,.09,.56,.32,.02);
+    // Glass-Framed Campus Cork Notice Board
+    for(const x of [-.72,.72])box(g,0x334155,x,1.15,0,.12,2.32,.18,true);
+    box(g,0x78350f,0,1.46,0,1.64,1.28,.14,true);
+    texturedPanel(g,getNoticeMat(),0,1.46,.08,1.46,1.10,.02,0xfef3c7);
+    box(g,0x1e293b,0,2.16,0,1.50,.14,.16);
    }else if(blockKind===2){
-    // 3-Bin Campus Recycling Station
-    box(g,0x334155,0,.12,0,1.68,.24,.80,true);
+    // 3-Bin Molded Campus Recycling Station
+    box(g,0x334155,0,.12,0,1.72,.24,.82,true);
     const binCols=[0x2563eb,0x16a34a,0xeab308];
-    for(let b=0;b<3;b++){box(g,binCols[b],-.52+b*.52,.78,0,.46,1.15,.64,true);box(g,0x0f172a,-.52+b*.52,1.40,0,.50,.12,.68);}
-    box(g,0xf8fafc,0,1.90,0,1.64,.56,.12,true);
+    for(let b=0;b<3;b++){
+     const bx=-.54+b*.54;
+     box(g,binCols[b],bx,.76,0,.46,1.12,.64,true);
+     box(g,0x0f172a,bx,1.38,0,.50,.14,.68);
+     box(g,0xf8fafc,bx,.82,.33,.28,.22,.02);
+    }
+    box(g,0x1e293b,0,1.92,0,1.68,.52,.12,true);
+    box(g,0x22c55e,0,2.14,0,1.60,.08,.14);
    }else{
-    // Parked Campus Scooty blocking lane
-    box(g,0x0f172a,0,.28,0,1.36,.10,.40,true);
-    box(g,0xf97316,-.44,.62,0,.42,.58,.44,true);
-    box(g,0xf97316,.38,.56,0,.76,.36,.42,true);
-    box(g,0x1e293b,.38,.80,0,.64,.12,.32);
-    box(g,0x1e293b,-.44,1.06,0,.08,.06,.72);
-    for(const x of [-.56,.56])mesh(cyl,0x0f172a,g,x,.26,0,.26,.16,.26);
+    // Realistic Parked Campus Scooty with front forks, apron, chrome muffler & spoked wheels
+    box(g,0x0f172a,0,.26,0,1.28,.09,.34,true);
+    box(g,0x0284c7,-.44,.60,0,.38,.56,.34,true);
+    box(g,0xf8fafc,-.58,.62,0,.08,.36,.24);
+    box(g,0x0284c7,.38,.54,0,.74,.34,.36,true);
+    box(g,0x1e293b,.36,.78,0,.64,.12,.30);
+    box(g,0xdbe6ef,.66,.80,0,.06,.05,.28);
+    box(g,0xdbe6ef,-.50,.48,.10,.05,.52,.05).rotation.z=.22;
+    box(g,0xdbe6ef,-.50,.48,-.10,.05,.52,.05).rotation.z=.22;
+    box(g,0x0f172a,-.42,1.02,0,.07,.06,.68);
+    box(g,0xf8fbff,-.64,.74,0,.06,.12,.14);
+    box(g,0xff3434,.76,.60,0,.05,.08,.14);
+    box(g,0xdbe6ef,.46,.32,.21,.44,.08,.08);
+    for(const x of [-.56,.54]){mesh(cyl,0x0f172a,g,x,.25,0,.26,.14,.26,true);mesh(cyl,0xdbe6ef,g,x,.25,0,.15,.16,.15);}
    }
   }
  }
@@ -157,17 +254,20 @@ export function createRenderer(canvas, callbacks = {}){
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
  const inSelect=s.mode==='ready'||s.mode==='select'||s.mode==='intro';
- const bendX=inSelect?0:curveRelX(s.distance+15,s)*.62;
- const bendY=inSelect?0:curveRelY(s.distance+15,s)*.55;
- if(!inSelect&&s.map==='college')runner.rotation.z=-Math.atan(roadCurveSlope(s.distance,'college'))*.22;
  const collegeRun=!inSelect&&s.map==='college';
- const targetCamY=inSelect?1.52:(collegeRun?4.15:3.8)+trackCameraY;
+ const camCurveX=collegeRun?curveRelX(Math.max(0,s.distance-6.8),s):0;
+ const camCurveY=collegeRun?curveRelY(Math.max(0,s.distance-6.8),s):0;
+ const bendX=collegeRun?curveRelX(s.distance+12,s)*.35:0;
+ const bendY=collegeRun?curveRelY(s.distance+12,s)*.35:0;
+ if(collegeRun)runner.rotation.z=-Math.atan(roadCurveSlope(s.distance,'college'))*.22;
+ const targetCamX=s.mode==='intro'?.48:inSelect?0:camCurveX+s.x*.65;
+ const targetCamY=inSelect?1.52:(collegeRun?4.25+camCurveY*.8:3.8)+trackCameraY;
  const targetCamZ=inSelect?3.65:6.8;
- const targetLookX=inSelect?0:s.x*.65*.37+bendX;
- const targetLookY=inSelect?.98:(collegeRun?.9:1.35)+trackCameraY+bendY;
+ const targetLookX=inSelect?0:s.x*(collegeRun?.42:.37*.65)+bendX;
+ const targetLookY=inSelect?.98:(collegeRun?1.02:1.35)+trackCameraY+bendY;
  const targetLookZ=inSelect?0:collegeRun?-7.5:-12;
- const camBlend=1-Math.exp(-5.5*Math.min(.05,dt||.016));
- camera.position.x+=((s.mode==='intro'?.48:inSelect?0:s.x*.65)-camera.position.x)*camBlend;
+ const camBlend=1-Math.exp(-(collegeRun?8.5:5.5)*Math.min(.05,dt||.016));
+ camera.position.x+=(targetCamX-camera.position.x)*camBlend;
  camera.position.y+=(targetCamY-camera.position.y)*camBlend;
  camera.position.z+=(targetCamZ-camera.position.z)*camBlend;
  currentLookX+=(targetLookX-currentLookX)*camBlend;
