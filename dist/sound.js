@@ -1,8 +1,29 @@
 import {flightPhase} from './airliner.js';
-// Locally synthesized effects: no downloads, keys or recurring audio requests.
+// Locally synthesized effects & background music stream.
 export function createSound() {
- let context,master,enabled=true,jetNoise,jetVoice;
- function unlock(){try{context??=new (window.AudioContext||window.webkitAudioContext)();if(!master){master=context.createGain();master.connect(context.destination);}master.gain.value=enabled?.65:0;context.resume().catch(()=>{});}catch{}}
+ let context,master,enabled=true,jetNoise,jetVoice,bgm=null;
+ function initBgm(){
+  if(typeof Audio==='undefined')return;
+  if(!bgm){
+   try{
+    bgm=new Audio(new URL('./assets/bgm.mp3',import.meta.url).href);
+    bgm.loop=true;
+    bgm.volume=.42;
+   }catch{}
+  }
+ }
+ function startBgm(){
+  initBgm();
+  if(!bgm||!enabled)return;
+  if(bgm.paused)bgm.play().catch(()=>{});
+ }
+ function pauseBgm(){
+  if(bgm&&!bgm.paused)bgm.pause();
+ }
+ function unlock(){
+  startBgm();
+  try{context??=new (window.AudioContext||window.webkitAudioContext)();if(!master){master=context.createGain();master.connect(context.destination);}master.gain.value=enabled?.65:0;context.resume().catch(()=>{});}catch{}
+ }
  function tone(from,to,duration=.12,volume=.1,type='sine',delay=0){
   if(!enabled||!context||context.state!=='running')return;
   const t=context.currentTime+delay,o=context.createOscillator(),g=context.createGain();
@@ -51,7 +72,12 @@ export function createSound() {
   else if(name==='book'){tone(620,980,.12,.11,'triangle');tone(980,1470,.14,.10,'sine',.06);}
   else if(name==='swag'){tone(180,680,.22,.18,'triangle');tone(90,45,.32,.22,'sawtooth',.06);tone(680,1200,.18,.12,'sine',.16);}
  }
- return {unlock,play,setEnabled(value){enabled=value;if(master)master.gain.value=enabled?.65:0;if(value)unlock();},
+ return {unlock,play,startBgm,pauseBgm,setEnabled(value){
+  enabled=value;
+  if(master)master.gain.value=enabled?.65:0;
+  if(value){startBgm();unlock();}
+  else{pauseBgm();}
+ },
  update(s){
   flyover(s);
   if(s.mode!=='running')return;

@@ -298,7 +298,17 @@ canvas.addEventListener('pointerup',e=>{
   touch=null;
 });
 canvas.addEventListener('pointercancel',()=>touch=null);
-document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    pause();
+    effects.pauseBgm?.();
+  } else if(sound) {
+    effects.startBgm?.();
+  }
+});
+['pointerdown','keydown','touchstart'].forEach(type=>{
+  window.addEventListener(type,()=>effects.unlock(),{once:true,passive:true});
+});
 
 function frame(t) {
   const dt = prev ? (t-prev)/1000 : 0;
