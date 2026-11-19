@@ -185,7 +185,7 @@ export function createSound() {
   }
   else if (name === 'hit') {
    playSample('damage', 0.95);
-   if (String(character).includes('female')) {
+   if (String(character).includes('female') || String(character).includes('woman')) {
     playSample('female_hurt', 1.0);
    } else {
     playSample('male_hurt', 1.0);

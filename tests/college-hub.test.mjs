@@ -89,8 +89,11 @@ test('unified character carousel with left/right arrows and 2-step College unloc
    'gender-split character menus removed in favor of unified carousel');
  assert.ok(htmlSrc.includes('id="char-prev"')&&htmlSrc.includes('id="char-next"')&&htmlSrc.includes('id="char-equip-btn"'),
    'Characters screen exposes Left/Right arrow navigation and select button');
- assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&gameSrc.includes("id: 'female'")&&gameSrc.includes("id: 'college-male'")&&gameSrc.includes("id: 'college-female'"),
-   'unified roster cycles cleanly through all 4 characters');
+assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&gameSrc.includes("id: 'female'")&&gameSrc.includes("id: 'college-male'")&&gameSrc.includes("id: 'college-woman'")&&gameSrc.includes("id: 'college-man'"),
+  'unified roster cycles cleanly through all 5 characters (2 School + 3 College)');
+ const moveFn = gameSrc.match(/function moveCarousel\([^)]*\)\s*\{[^}]*\}/)?.[0] || '';
+ assert.ok(moveFn && !moveFn.includes('selectUnlockedCharacter'),
+   'Left/Right arrows only preview characters and never auto-select unlocked characters until SELECT CHARACTER is clicked');
 
  // Two-step College unlock thresholds: 10,000m in 1 run + 20,000 cumulative coins
  assert.ok(gameSrc.includes('COLLEGE_UNLOCK_DISTANCE = 10000')&&gameSrc.includes('COLLEGE_UNLOCK_COINS = 20000'),
@@ -102,9 +105,17 @@ test('unified character carousel with left/right arrows and 2-step College unloc
  assert.ok(htmlSrc.includes('id="map-unlock-checklist"')&&htmlSrc.includes('id="char-unlock-checklist"'),
    'both Maps and Characters tabs render the 2-step unlock checklist');
 
- // 3D and 2D renderers handle full model keys ('college-male' / 'college-female') even when previewing on School map
- assert.ok(r3dSrc.includes("rawChar.startsWith('college-')?rawChar"),
+ // 3D and 2D renderers handle all 5 character keys ('college-male', 'college-woman', 'college-man') and Neutral Idle
+ assert.ok(r3dSrc.includes("rawChar.startsWith('college-')?rawChar")&&r3dSrc.includes("'college-woman'")&&r3dSrc.includes("'college-man'"),
    '3D renderer supports explicit college character preview keys without double-prefixing');
  assert.ok(liteSrc.includes("String(character).includes('female')")&&liteSrc.includes("String(character).startsWith('college-')"),
    '2D lite renderer supports full character preview keys');
+ const collegeMan=await glb('college-man.glb');
+ const collegeWoman=await glb('college-woman.glb');
+ assert.equal(collegeMan.animations.length,9,'college-man.glb carries all 9 animations including Idle');
+ assert.equal(collegeWoman.animations.length,9,'college-woman.glb carries all 9 animations including Idle');
+ const injuredAll=JSON.parse(await readFile(new URL('../dist/assets/injured-run.json',import.meta.url),'utf8'));
+ assert.ok(injuredAll['college-man']?.length>40&&injuredAll['college-woman']?.length>40,'injured-run.json carries CC_Base tracks for college-man and college-woman');
+ const collegeIdleJson=JSON.parse(await readFile(new URL('../dist/assets/college-idle.json',import.meta.url),'utf8'));
+ assert.ok(collegeIdleJson['college-male']?.length>40,'college-idle.json carries Neutral Idle tracks for college-male');
 });

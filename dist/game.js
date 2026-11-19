@@ -1,7 +1,7 @@
-import {createSound} from './sound.js?v=2.8.9';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.8.9';
-import {createRenderer} from './renderer3d.js?v=2.8.9';
-import {createLiteRenderer} from './renderer-lite.js?v=2.8.9';
+import {createSound} from './sound.js?v=2.9.0';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.0';
+import {createRenderer} from './renderer3d.js?v=2.9.0';
+import {createLiteRenderer} from './renderer-lite.js?v=2.9.0';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
@@ -81,7 +81,8 @@ const CHARACTER_ROSTER = [
   { id: 'male', name: 'SCHOOL BOY', outfit: 'School Uniform · School Campus', map: 'school', gender: 'male', lockedByCollege: false },
   { id: 'female', name: 'SCHOOL GIRL', outfit: 'School Uniform · School Campus', map: 'school', gender: 'female', lockedByCollege: false },
   { id: 'college-male', name: 'COLLEGE BOY', outfit: 'Casual Outfit · College Campus', map: 'college', gender: 'male', lockedByCollege: true },
-  { id: 'college-female', name: 'COLLEGE GIRL', outfit: 'Casual Outfit · College Campus', map: 'college', gender: 'female', lockedByCollege: true }
+  { id: 'college-woman', name: 'COLLEGE WOMAN', outfit: 'Blue Style · College Campus', map: 'college', gender: 'female', lockedByCollege: true },
+  { id: 'college-man', name: 'COLLEGE MAN', outfit: 'Jacket Style · College Campus', map: 'college', gender: 'male', lockedByCollege: true }
 ];
 
 const game = canvas.closest('.game');
@@ -103,18 +104,18 @@ try{
   const savedMap=localStorage.getItem('runverse-map')==='college'?'college':'school';
   if (!isCollegeUnlocked()) {
     selectedMap = 'school';
-    equippedCharId = (savedChar === 'female' || savedChar === 'college-female') ? 'female' : 'male';
+    equippedCharId = (savedChar === 'female' || savedChar === 'college-woman') ? 'female' : 'male';
   } else {
     selectedMap = savedMap;
     if (CHARACTER_ROSTER.some(c => c.id === savedChar)) {
       equippedCharId = savedChar;
     } else {
       equippedCharId = savedChar === 'female'
-        ? (selectedMap === 'college' ? 'college-female' : 'female')
+        ? (selectedMap === 'college' ? 'college-woman' : 'female')
         : (selectedMap === 'college' ? 'college-male' : 'male');
     }
   }
-  character = equippedCharId.includes('female') ? 'female' : 'male';
+  character = (equippedCharId.includes('female') || equippedCharId.includes('woman')) ? 'female' : 'male';
   carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
 }catch{}
 s.map=selectedMap;
@@ -354,13 +355,8 @@ function selectUnlockedCharacter(id) {
 
 function moveCarousel(delta) {
   carouselIndex = (carouselIndex + delta + CHARACTER_ROSTER.length) % CHARACTER_ROSTER.length;
-  const entry = CHARACTER_ROSTER[carouselIndex];
-  if (isCharUnlocked(entry)) {
-    selectUnlockedCharacter(entry.id);
-  } else {
-    updateCarouselUI();
-    triggerSwag();
-  }
+  updateCarouselUI();
+  triggerSwag();
 }
 
 if ($('char-prev')) $('char-prev').onclick = () => moveCarousel(-1);
@@ -368,9 +364,8 @@ if ($('char-next')) $('char-next').onclick = () => moveCarousel(1);
 document.querySelectorAll('#char-carousel-dots .char-dot').forEach((dot, idx) => {
   dot.onclick = () => {
     carouselIndex = idx;
-    const entry = CHARACTER_ROSTER[carouselIndex];
-    if (isCharUnlocked(entry)) selectUnlockedCharacter(entry.id);
-    else { updateCarouselUI(); triggerSwag(); }
+    updateCarouselUI();
+    triggerSwag();
   };
 });
 if ($('char-equip-btn')) {
@@ -395,9 +390,15 @@ function selectMap(map, fromUser = false){
   }
   selectedMap=map==='college'?'college':'school';
   s.map=selectedMap;
-  equippedCharId = selectedMap === 'college'
-    ? (character === 'female' ? 'college-female' : 'college-male')
-    : (character === 'female' ? 'female' : 'male');
+  if (selectedMap === 'college') {
+    if (!equippedCharId.startsWith('college-')) {
+      equippedCharId = character === 'female' ? 'college-woman' : 'college-male';
+    }
+  } else {
+    if (equippedCharId.startsWith('college-')) {
+      equippedCharId = character === 'female' ? 'female' : 'male';
+    }
+  }
   carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
   syncMapHeaderUI();
   updateCarouselUI();

@@ -80,6 +80,7 @@ function createSchoolBadgeTexture(CanvasTextureClass) {
 
 let sharedMaleClipsPromise = null;
 let sharedInjuredClipsPromise = null;
+let sharedCollegeIdlePromise = null;
 
 function loadInjuredRunData() {
   if (!sharedInjuredClipsPromise) {
@@ -92,6 +93,17 @@ function loadInjuredRunData() {
   return sharedInjuredClipsPromise;
 }
 
+function loadCollegeIdleData() {
+  if (!sharedCollegeIdlePromise) {
+    sharedCollegeIdlePromise = typeof fetch === 'function'
+      ? fetch(new URL('./assets/college-idle.json', import.meta.url).href)
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null)
+      : Promise.resolve(null);
+  }
+  return sharedCollegeIdlePromise;
+}
+
 export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = false) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   function load() {
@@ -99,7 +111,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
       male: './assets/runverse-schoolboy.glb?v=2.1',
       female: './assets/schoolgirl.glb?v=uniform-2-hair',
       'college-male': './assets/runverse-runner-v6.glb',
-      'college-female': './assets/casual-schoolgirl.glb'
+      'college-woman': './assets/college-woman.glb?v=1',
+      'college-man': './assets/college-man.glb?v=1'
     };
     const loader = new GLTFLoader();
     const progress = xhr => { if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total); };
@@ -110,10 +123,17 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     const schoolMotion = selected === 'college-male'
       ? (sharedMaleClipsPromise || (sharedMaleClipsPromise = loader.loadAsync(new URL(assets.male, import.meta.url).href)))
       : Promise.resolve(null);
-    Promise.all([main, schoolMotion, loadInjuredRunData()]).then(([gltf, schoolGltf, injuredData]) => {
+    const collegeIdlePromise = selected === 'college-male' ? loadCollegeIdleData() : Promise.resolve(null);
+    Promise.all([main, schoolMotion, loadInjuredRunData(), collegeIdlePromise]).then(([gltf, schoolGltf, injuredData, collegeIdleData]) => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall', 'ShoulderSweep'];
     if (schoolGltf) for (const clip of schoolGltf.animations) if (!clips.has(clip.name)) clips.set(clip.name, clip);
+    if (selected === 'college-male' && collegeIdleData?.['college-male']?.length) {
+      const idleTracks = collegeIdleData['college-male'].map(t => t.type === 'vector'
+        ? new VectorKeyframeTrack(t.name, t.times, t.values)
+        : new QuaternionKeyframeTrack(t.name, t.times, t.values));
+      clips.set('Idle', new AnimationClip('Idle', collegeIdleData.duration, idleTracks));
+    }
     if (names.some(name => !clips.has(name))) { render.failed=true; return; }
 
     clips.set('HeadHit', AnimationUtils.subclip(clips.get('HeadHit'), 'HeadHit', 1, 20, 30));
@@ -178,7 +198,9 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     mixer = new AnimationMixer(model);
     actions = Object.fromEntries(names.map(name => [name, mixer.clipAction(clips.get(name))]));
     if (injuredData) {
-      const trackKey = selected.includes('female') ? 'female' : 'male';
+      const trackKey = injuredData[selected]
+        ? selected
+        : (selected.includes('female') || selected.includes('woman') ? 'female' : 'male');
       const rawTracks = injuredData[trackKey] || [];
       if (rawTracks.length) {
         const tracks = rawTracks.map(t => t.type === 'vector'
