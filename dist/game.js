@@ -134,7 +134,12 @@ $('sound').onclick=()=>{
   sound=!sound;
   soundButton();
   try{localStorage.setItem('runverse-sound',sound?'on':'off');}catch{}
-  if(sound)effects.play('coin');
+  if(sound){
+    effects.startBgm?.();
+    effects.play('coin');
+  }else{
+    effects.pauseBgm?.();
+  }
 };
 
 function triggerSwag(){
@@ -166,8 +171,9 @@ setScreenMode('splash');
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
     if (!assetsReady) return;
+    effects.setEnabled(sound);
     effects.unlock();
-    effects.play('coin');
+    if(sound) effects.startBgm?.();
     setScreenMode('select');
     triggerSwag();
   };
@@ -183,9 +189,9 @@ function start(){
   $('toast').textContent='🔔 School Bell Rang! Sprint to class · Find the next roof ramp';
   effects.setEnabled(sound);
   effects.unlock();
-  effects.play('bell');
+  if(sound) effects.startBgm?.();
   effects.play('swag');
-  effects.play('start');
+  effects.play('bell');
 }
 
 function pause(){
@@ -307,8 +313,11 @@ document.addEventListener('visibilitychange',()=>{
     effects.startBgm?.();
   }
 });
-['pointerdown','keydown','touchstart'].forEach(type=>{
-  window.addEventListener(type,()=>effects.unlock(),{once:true,passive:true});
+['pointerdown','click','keydown','touchstart'].forEach(type=>{
+  window.addEventListener(type,()=>{
+    effects.unlock();
+    if(sound) effects.startBgm?.();
+  },{passive:true});
 });
 
 function frame(t) {
@@ -350,7 +359,8 @@ function frame(t) {
   if (old === 'captured' && captureBefore < CAPTURE_GESTURE_START && s.capture >= CAPTURE_GESTURE_START) effects.play('swag');
 
   if (s.coins > coinsBefore) {
-    effects.play('roofCoin');
+    if (s.y > 1.2 || s.roofRide) effects.play('roofCoin');
+    else effects.play('coin');
     const counter=$('coins').parentElement;
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       counter.getAnimations().forEach(animation=>animation.cancel());
