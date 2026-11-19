@@ -174,9 +174,6 @@ export function createSound() {
   }
   else if (name === 'hit') {
    playSample('damage', 1.0);
-   const impact = { bus: [180, 880], van: [160, 690], sideVehicle: [190, 920], block: [140, 320], jump: [220, 380], slide: [240, 1150] }[cause] || [180, 500];
-   tone(impact[0], 65, 0.16, 0.22, 'triangle');
-   tone(impact[1], impact[1] * 0.5, 0.12, 0.18, 'square');
   }
   else if (name === 'horn') {
    tone(185, 180, 0.30, 0.10, 'sawtooth');
