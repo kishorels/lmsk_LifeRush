@@ -15,9 +15,9 @@ test('repeated ramp works at maximum speed',()=>{
  assert.ok(reached);assert.equal(s.damage,0);assert.ok(s.coins>0);
 });
 test('every traffic block leaves a ground lane free',()=>{
- for(let i=0;i<90;i++){const base=100+i*160,items=trafficPattern(base,i),lanes=new Set(items.filter(o=>o.type!=='skill').map(o=>o.lane));
+ for(let i=0;i<90;i++){const base=100+i*160,items=trafficPattern(base,i),lanes=new Set(items.filter(o=>o.type!=='coin').map(o=>o.lane));
  for(const v of routeVans(base))if(v.ramp>=base&&v.ramp<base+160)lanes.add(v.lane);
- assert.equal(lanes.size,2);assert.ok(!lanes.has(items.find(o=>o.type==='skill').lane));}
+ assert.equal(lanes.size,2);assert.ok(!lanes.has(items.find(o=>o.type==='coin').lane));}
 });
 test('jump bridges roof gap and lands on the second vehicle',()=>{
  const s=fresh();s.mode='running';s.next=100000;s.distance=110;s.x=s.lane=-1;
@@ -37,5 +37,5 @@ test('crowded recovery corridor is cleared without chained hits',()=>{
  const s=fresh();s.mode='running';s.distance=80;s.next=100000;s.x=s.lane=0;
  s.items=[{type:'bus',lane:0,z:80,length:10,done:false},...[-1,0,1].map(lane=>({type:'block',lane,z:81,done:false}))];
  step(s,.025);assert.equal(s.damage,1);assert.equal(s.mode,'running');
- assert.equal(s.items.filter(o=>o.lane===s.lane&&o.type!=='skill').length,0);
+ assert.equal(s.items.filter(o=>o.lane===s.lane&&o.type!=='coin').length,0);
 });

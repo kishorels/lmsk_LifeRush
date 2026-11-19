@@ -1,8 +1,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';import{fresh,action,step,hits,pattern,career,height,chaseRemaining,chasePose,capturePose,CAPTURE_DURATION}from'../dist/engine.js';
 test('lane boundaries and pause input',()=>{const s=fresh();s.mode='running';for(let i=0;i<10;i++)action(s,'right');assert.equal(s.lane,1);for(let i=0;i<10;i++)action(s,'left');assert.equal(s.lane,-1);s.mode='paused';action(s,'right');assert.equal(s.lane,-1);});
 test('jump, slide and collision outcomes',()=>{const s=fresh();s.mode='running';assert.ok(hits(s,{lane:0,type:'jump'}));action(s,'jump');s.jump=.475;assert.equal(hits(s,{lane:0,type:'jump'}),false);assert.ok(hits(s,{lane:0,type:'block'}));s.jump=0;action(s,'slide');assert.equal(hits(s,{lane:0,type:'slide'}),false);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.slide,0);assert.ok(hits(s,{lane:0,type:'slide'}));});
-test('safe generated rows and reset',()=>{for(let i=0;i<1000;i++){const row=pattern(50);assert.equal(row.filter(x=>x.type!=='skill').length,1);assert.notEqual(row[0].lane,row[1].lane);}const s=fresh();s.skills[0]=100;s.distance=300;s.items.push({});const reset=fresh();assert.deepEqual(reset.skills,[0,0,0]);assert.equal(reset.distance,0);assert.equal(reset.items.length,0);});
-test('collection, crash, frozen pause, and countdown',()=>{const s=fresh();s.mode='running';s.next=1000;s.items=[{z:1,lane:0,type:'skill',skill:1}];step(s,.05);assert.equal(s.skills[1],1);s.mode='paused';const d=s.distance;step(s,.05);assert.equal(s.distance,d);s.mode='countdown';s.countdown=.02;step(s,.05);assert.equal(s.mode,'running');s.items=[{z:1,lane:0,type:'block'}];step(s,.05);assert.equal(s.mode,'running');assert.equal(s.damage,1);assert.ok(s.hit);for(let i=0;i<15;i++)step(s,.05);assert.equal(s.damage,1);s.items=[{z:s.distance+1,lane:0,type:'slide'}];step(s,.05);assert.equal(s.mode,'falling');assert.equal(s.damage,2);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.mode,'captured');for(let i=0;i<54;i++)step(s,.05);assert.equal(s.mode,'crashed');});
+test('safe generated rows and reset',()=>{for(let i=0;i<1000;i++){const row=pattern(50);assert.equal(row.filter(x=>x.type!=='coin').length,1);assert.notEqual(row[0].lane,row[1].lane);}const s=fresh();s.skills[0]=100;s.distance=300;s.items.push({});const reset=fresh();assert.deepEqual(reset.skills,[0,0,0]);assert.equal(reset.distance,0);assert.equal(reset.items.length,0);});
+test('collection, crash, frozen pause, and countdown',()=>{const s=fresh();s.mode='running';s.next=1000;s.items=[{z:1,lane:0,type:'coin'}];step(s,.05);assert.equal(s.coins,1);s.mode='paused';const d=s.distance;step(s,.05);assert.equal(s.distance,d);s.mode='countdown';s.countdown=.02;step(s,.05);assert.equal(s.mode,'running');s.items=[{z:1,lane:0,type:'block'}];step(s,.05);assert.equal(s.mode,'running');assert.equal(s.damage,1);assert.ok(s.hit);for(let i=0;i<15;i++)step(s,.05);assert.equal(s.damage,1);s.items=[{z:s.distance+1,lane:0,type:'slide'}];step(s,.05);assert.equal(s.mode,'falling');assert.equal(s.damage,2);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.mode,'captured');for(let i=0;i<Math.ceil(CAPTURE_DURATION/.05)+1;i++)step(s,.05);assert.equal(s.mode,'crashed');});
 test('career ties are explicit',()=>{assert.equal(career([2,2,0]),'Engineer / Doctor');assert.equal(career([0,0,0]),'Your story is still unwritten');});
 
 test('airborne down input drops from the current height and ground double down rolls', () => {
@@ -89,7 +89,7 @@ test('a second hit during pursuit lets the chaser catch up during the fall', () 
   for (let i=0;i<30;i++) step(s,.05);
   assert.ok(capturePose(s).lift>.9);
   assert.equal(s.distance,distance);
-  for (let i=0;i<30;i++) step(s,.05);
+  for (let i=0;i<Math.ceil(CAPTURE_DURATION/.05)+1;i++) step(s,.05);
   assert.equal(s.mode,'crashed');
   assert.equal(s.capture,CAPTURE_DURATION);
   assert.ok(chasePose(s).z < behind);

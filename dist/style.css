@@ -505,10 +505,10 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   box-shadow: 0 0 10px #ab47bc77;
 }
 .counters .power-pill.shield {
-  background: #00838fe8;
-  color: #b2ebf2;
-  border-color: #80deea;
-  box-shadow: 0 0 10px #00bcd477;
+  background: #263d37ed;
+  color: #ffe4af;
+  border-color: #d5ab59;
+  box-shadow: 0 0 10px #d5ab5933;
 }
 
 .hud-distance-box {
@@ -598,3 +598,26 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   font: bold italic .82em Georgia,serif;
   vertical-align: .06em;
 }
+
+.asset-credits-link {
+  color: #d3d9db;
+  font-size: 11px;
+  text-underline-offset: 3px;
+}
+
+.pickup-icon {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
+  vertical-align: middle;
+  filter: drop-shadow(0 2px 2px #0006);
+}
+.power-pill .pickup-icon { width: 24px; height: 24px; }
+.skill-guide .pickup-icon { width: 34px; height: 34px; margin-right: 8px; }
+.pickup-icon.magnet-icon { animation: magnet-sway 2.4s ease-in-out infinite; }
+.pickup-icon.shield-icon { animation: shield-shine 3s ease-in-out infinite; }
+.pickup-icon.gold-icon { animation: coin-shine 3.2s ease-in-out infinite; }
+@keyframes magnet-sway { 0%,100% { transform: rotate(-9deg); } 50% { transform: rotate(9deg) translateY(-2px); } }
+@keyframes shield-shine { 0%,100% { filter: drop-shadow(0 1px 2px #0006); } 50% { filter: brightness(1.15) drop-shadow(0 0 5px #ffc45a88); } }
+@keyframes coin-shine { 0%,100% { transform: perspective(120px) rotateY(-18deg); } 50% { transform: perspective(120px) rotateY(18deg); filter: brightness(1.2) drop-shadow(0 0 4px #ffc34a99); } }
+@media (prefers-reduced-motion: reduce) { .pickup-icon { animation: none !important; } }

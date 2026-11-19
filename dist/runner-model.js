@@ -157,6 +157,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress) {
     }
     parent.add(model);
     render.model = model;
+    render.signatureClip = clips.get('ShoulderSweep');
+    if (onProgress) onProgress(1.0);
   }, xhr => {
     if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
   }, error => { render.failed=true; console.warn('Could not load the runner character.', error); });

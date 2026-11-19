@@ -1,10 +1,11 @@
-import { DirectionalLight, Quaternion, Vector3 } from './vendor/three.module.js';
-import { capturePose, ease } from './engine.js';
+import { AnimationMixer, DirectionalLight, LoopOnce, Quaternion, Vector3 } from './vendor/three.module.js';
+import { CAPTURE_GESTURE_START, capturePose, ease } from './engine.js';
 
 // Preserve the underlying animation poses before applying contact and acting.
 export function createCaptureScene(scene) {
   const before = new Map();
   const saved = new WeakMap();
+  const gestures = new WeakMap();
   const up = new Vector3(0, 1, 0);
   const fill = new DirectionalLight(0xffebda, 0);
   scene?.add(fill, fill.target);
@@ -78,8 +79,39 @@ export function createCaptureScene(scene) {
     }
   }
 
-  function frame(camera, s, player, playerModel, fallback, monster, monsterModel) {
-    const {lift, laugh, reach: reaching, show} = capturePose(s);
+  // Mirror the actual opening clip's hand/elbow path onto the free arm.
+  // IK adapts to the villain's proportions while its other hand holds the hero.
+  function shoulderGesture(source, clip, targetModel, weight, time) {
+    if (!source || !clip || !targetModel || weight<=0) return;
+    let sample=gestures.get(source);
+    if (!sample) {
+      const model=source.clone(true);
+      model.position.set(0,0,0);model.rotation.set(0,0,0);model.scale.setScalar(1);
+      const mixer=new AnimationMixer(model),action=mixer.clipAction(clip);
+      action.setLoop(LoopOnce,1);action.clampWhenFinished=true;action.play();
+      sample={model,mixer,action};gestures.set(source,sample);
+    }
+    sample.action.time=Math.max(0,Math.min(clip.duration-.0001,time));
+    sample.mixer.update(0);sample.model.updateWorldMatrix(true,true);
+    const sourceUpper=bone(sample.model,'RightArm'),sourceElbow=bone(sample.model,'RightForeArm'),sourceHand=bone(sample.model,'RightHand');
+    const upper=bone(targetModel,'LeftArm'),elbow=bone(targetModel,'LeftForeArm'),hand=bone(targetModel,'LeftHand');
+    if(!sourceUpper||!sourceElbow||!sourceHand||!upper||!elbow||!hand)return;
+    const sourceOrigin=point(sourceUpper),sourceWrist=point(sourceHand),sourceBend=point(sourceElbow);
+    const sourceLength=sourceOrigin.distanceTo(sourceBend)+sourceBend.distanceTo(sourceWrist);
+    const scale=(point(upper).distanceTo(point(elbow))+point(elbow).distanceTo(point(hand)))/sourceLength;
+    const orientation=targetModel.getWorldQuaternion(new Quaternion());
+    const offset=sourceWrist.sub(sourceOrigin);offset.x*=-1;offset.multiplyScalar(scale).applyQuaternion(orientation);
+    const pole=sourceBend.sub(sourceOrigin);pole.x*=-1;pole.applyQuaternion(orientation).normalize();
+    const target=point(upper).add(offset);
+    reach(upper,elbow,hand,point(hand).lerp(target,weight),pole);
+    const wrist=sourceHand.getWorldQuaternion(new Quaternion());
+    wrist.set(wrist.x,-wrist.y,-wrist.z,wrist.w).premultiply(orientation);
+    const delta=wrist.multiply(hand.getWorldQuaternion(new Quaternion()).invert());
+    rotate(hand,new Quaternion().slerp(delta,weight));
+  }
+
+  function frame(camera, s, player, playerModel, fallback, monster, monsterModel, signatureClip) {
+    const {lift, laugh, gesture, reach: reaching, show} = capturePose(s);
     const center = s.x * 2.2;
     const crouch = reaching * (1-lift);
     player.scale.setScalar(1-.17*lift);
@@ -119,6 +151,7 @@ export function createCaptureScene(scene) {
       }
     }
 
+    shoulderGesture(playerModel,signatureClip,monsterModel,gesture,s.capture-CAPTURE_GESTURE_START);
     const pushIn = ease(.04,1.50,s.capture);
     camera.position.set(center+1.58*(1-pushIn)+.016, 2.0+.15*pushIn, -5.8+.45*pushIn);
     camera.lookAt(center+.065,.90,-.01);

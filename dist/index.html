@@ -20,7 +20,7 @@
   <aside>
     <div class="eyebrow">ONE RUN. A THOUSAND POSSIBILITIES.</div>
     <h1>Your life.<br>Your choices.<br><em>Your run.</em></h1>
-    <p>Late for school! Sprint through the campus gates, collect textbooks and exam hall tickets, dodge school buses, and sprint toward your future.</p>
+    <p>Late for school! Sprint through the campus gates, collect gold coins, power up with magnets and shields, dodge school buses, and sprint toward your future.</p>
     <div class="mode">
       <span class="mode-icon">🏫</span>
       <div>
@@ -31,10 +31,10 @@
       <span class="live">01</span>
     </div>
     <div class="skill-guide">
-      <span>POWER-UPS & SKILLS</span>
-      <div><b class="knowledge">🧲</b> School Magnet <small>Auto-pull items</small></div>
-      <div><b class="care">🛡️</b> School Bag Shield <small>Crash protection</small></div>
-      <div><b class="courage">📚</b> Textbooks <small>Academic score boost</small></div>
+      <span>COINS &amp; POWER-UPS</span>
+      <div><img class="pickup-icon gold-icon" src="assets/icons/coin.svg" alt=""> Gold Coins <small>Collect gold coins</small></div>
+      <div><img class="pickup-icon magnet-icon" src="assets/icons/magnet.svg" alt=""> Magnet <small>Pull nearby coins</small></div>
+      <div><img class="pickup-icon shield-icon" src="assets/icons/shield.svg" alt=""> Shield <small>One-hit protection</small></div>
     </div>
     <footer>THE JOURNEY STARTS HERE <span>➔</span></footer>
   </aside>
@@ -58,18 +58,11 @@
     <div class="hud-sub-bar" id="hud-sub-bar">
       <div class="counters">
         <div class="counters-row-1">
-          <span class="coins" aria-label="Roof coins"><i class="coin-mark" aria-hidden="true">R</i> <b id="coins">0</b></span>
-          <span class="books-pill" aria-label="Textbooks collected">📚 <b id="books">0</b></span>
-          <span id="health" aria-label="2 hits left">♥ ♥</span>
+          <span class="coins" aria-label="Gold coins"><img class="pickup-icon gold-icon" src="assets/icons/coin.svg" alt=""> <b id="coins">0</b></span>
         </div>
         <div class="counters-row-2">
-          <span id="magnet-pill" class="power-pill magnet" hidden>🧲 <b id="magnet-timer">10s</b></span>
-          <span id="shield-pill" class="power-pill shield" hidden>🛡️ SHIELD</span>
-        </div>
-        <div class="counters-row-3">
-          <span class="knowledge" title="Engineering Skill">▤ <b id="k">0</b></span>
-          <span class="care" title="Medical Skill">✚ <b id="c">0</b></span>
-          <span class="courage" title="Discipline Skill">⬟ <b id="s">0</b></span>
+          <span id="magnet-pill" class="power-pill magnet" hidden><img class="pickup-icon magnet-icon" src="assets/icons/magnet.svg" alt="Magnet"> <b id="magnet-timer">12s</b></span>
+          <span id="shield-pill" class="power-pill shield" hidden><img class="pickup-icon shield-icon" src="assets/icons/shield.svg" alt=""> SHIELD</span>
         </div>
       </div>
 
@@ -95,19 +88,18 @@
         <div class="splash-features">
           <span>🏫 School Rush</span>
           <span>🧲 Power-ups</span>
-          <span>🔥 Vijay Swag</span>
         </div>
 
         <!-- Asset Download Progress Bar -->
         <div class="splash-loader-wrap" id="splash-loader-wrap">
           <div class="splash-progress-track">
-            <div id="splash-progress-bar" class="splash-progress-bar" style="width: 5%;"></div>
+            <div id="splash-progress-bar" class="splash-progress-bar" style="width: 1%;"></div>
           </div>
-          <div id="splash-status-text" class="splash-status-text">⏳ Downloading 3D Assets... 5%</div>
+          <div id="splash-status-text" class="splash-status-text">⏳ Downloading 3D Assets... 1%</div>
         </div>
 
         <button id="btn-enter" class="enter-btn loading" disabled>
-          <span id="btn-enter-text">DOWNLOADING ASSETS...</span>
+          <span id="btn-enter-text">DOWNLOADING ASSETS... 1%</span>
           <span class="btn-arrow" id="btn-enter-arrow" hidden>➔</span>
         </button>
         <p class="splash-tip" id="splash-tip">Loading 3D Campus, Hero & Audio...</p>
@@ -143,15 +135,6 @@
 
       <!-- Bottom Actions Container (Vertical Stack, Zero Overlap) -->
       <div class="select-bottom-panel">
-        <!-- Action Trigger: Thalapathy Vijay Signature Style -->
-        <button id="btn-swag" class="btn-swag-action" aria-label="Trigger Vijay Signature Hand Gesture">
-          <span class="swag-fire">🔥</span>
-          <div class="swag-text-block">
-            <strong>THALAPATHY STYLE</strong>
-            <small>Signature Hand Gesture</small>
-          </div>
-          <span class="swag-sparkle">✨</span>
-        </button>
 
         <!-- Start Run Button -->
         <button id="start" class="btn-start-rush">
@@ -160,6 +143,7 @@
         </button>
 
         <p class="select-guide-text">Swipe or WASD · Space: Jump · Down: Slide/Roll</p>
+        <a class="asset-credits-link" href="credits.html">Asset credits</a>
       </div>
     </div>
 
@@ -198,6 +182,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=2.1"></script>
+<script type="module" src="boot.js?v=2.2"></script>
 </body>
 </html>

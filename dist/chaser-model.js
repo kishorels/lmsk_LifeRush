@@ -27,6 +27,7 @@ export function loadChaserModel(scene, onProgress) {
     mixer = new AnimationMixer(model);
     run = mixer.clipAction(clip).play();
     idle = mixer.clipAction(rest).play();
+    if (onProgress) onProgress(1.0);
   }, xhr => {
     if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
   }, error => console.warn('Could not load the Mutant chaser.', error));

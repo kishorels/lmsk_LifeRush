@@ -1,7 +1,8 @@
 import {repeatedVans,trafficPattern,sideVehicleX} from './traffic-rules.js';
 export {trafficPattern};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
-export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 2.65;
+export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95;
+export const MAGNET_RADIUS = 18, CAPTURE_GESTURE_START = 2.55;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
 export const SCHOOL_GATE = 11;
@@ -18,7 +19,7 @@ export function fresh() {
     damage: 0, hit: 0, fall: 0, capture: 0, items: [], next: 100,
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
-    magnet: 0, shield: false, books: 0, styleAction: 0, collectedPowerup: null,
+    magnet: 0, shield: false, books: 0, styleAction: 0, collectedPowerup: null, coinFlights: [],
   };
 }
 
@@ -60,6 +61,53 @@ export function action(s, input) {
 export function height(s) {
   if (s.drop) return s.drop.start * (s.drop.remaining / s.drop.duration);
   return s.floor + (s.jump ? Math.sin(Math.PI * (1 - s.jump / JUMP_DURATION)) * 2.3 : 0);
+}
+
+// Range ignores elevation so a magnet works from the road and from any roof.
+export function inMagnetRange(s,lane,z) {
+  return s.magnet>0 && Math.hypot((lane-s.x)*2.2,z-s.distance)<=MAGNET_RADIUS;
+}
+
+function pullCoin(s,lane,z,y) {
+  s.coinFlights.push({x:lane*2.2,y,z,elapsed:0,duration:.30+.20*Math.min(1,Math.abs(z-s.distance)/MAGNET_RADIUS)});
+}
+
+function collectMagnetCoins(s) {
+  if(s.magnet<=0)return;
+  for(const item of s.items)if(item.type==='coin'&&!item.done&&inMagnetRange(s,item.lane,item.z)){
+    item.done=true;pullCoin(s,item.lane,item.z,1.1);
+  }
+  ROOF_COINS.forEach((z,i)=>{
+    if(!(s.roofCoins&(1<<i))&&inMagnetRange(s,SCHOOL_VAN.lane,z)){
+      s.roofCoins|=1<<i;pullCoin(s,SCHOOL_VAN.lane,z,SCHOOL_VAN.roof+.67);
+    }
+  });
+  for(const van of routeVans(s.distance)){
+    if(van.id==='entry')continue;
+    for(let i=0;i<4;i++){
+      const z=van.rear+2+i*4,id=van.id+':'+i;
+      if(!s.collected.includes(id)&&inMagnetRange(s,van.lane,z)){
+        s.collected.push(id);pullCoin(s,van.lane,z,van.roof+.69);
+      }
+    }
+  }
+  for(const bus of s.items){
+    if(!bus.roofRide||!bus.started)continue;
+    for(let i=0;i<4;i++){
+      const z=bus.z+4+i*4,id=bus.id+':'+i;
+      if(!s.collected.includes(id)&&inMagnetRange(s,bus.lane,z)){
+        s.collected.push(id);pullCoin(s,bus.lane,z,bus.roof+.69);
+      }
+    }
+  }
+}
+
+function advanceCoinFlights(s,dt) {
+  for(const flight of s.coinFlights)flight.elapsed+=dt;
+  s.coinFlights=s.coinFlights.filter(flight=>{
+    if(flight.elapsed<flight.duration)return true;
+    s.coins++;return false;
+  });
 }
 
 export function vanSurface(distance, lanePosition) {
@@ -153,7 +201,9 @@ export function capturePose(s) {
   const lift = ease(.38, 1.30, t);
   const laughIn = ease(1.22, 1.43, t) * (1 - ease(2.22, 2.58, t));
   const laugh = laughIn * (.55 + .45 * Math.sin((t-1.3) * (2*Math.PI/.22)));
-  return { lift, laugh, reach: ease(0, .40, t), show: ease(1.02, 1.58, t) };
+  const gesture=ease(CAPTURE_GESTURE_START,CAPTURE_GESTURE_START+.14,t)
+    *(1-ease(CAPTURE_GESTURE_START+SWEEP_SECONDS-.12,CAPTURE_GESTURE_START+SWEEP_SECONDS,t));
+  return { lift, laugh, gesture, reach: ease(0, .40, t), show: ease(1.02, 1.58, t) };
 }
 
 export function chaseRemaining(s) {
@@ -183,8 +233,7 @@ export function chasePose(s) {
 export function pattern(z, random = Math.random) {
   const lane = Math.floor(random() * 3) - 1;
   const type = ['block', 'jump', 'slide'][Math.floor(random() * 3)];
-  const skill = Math.floor(random() * 3);
-  return [{z, lane, type, done: false}, {z: z + 9, lane: lane === 1 ? 0 : lane + 1, type: 'skill', skill, done: false}];
+  return [{z, lane, type, done: false}, {z: z + 9, lane: lane === 1 ? 0 : lane + 1, type: 'coin', done: false}];
 }
 
 export function hits(s, obstacle) {
@@ -206,7 +255,7 @@ export function recoverFromBus(s) {
   const horizon=s.speed*1.15;
   const vans=routeVans(s.distance);
   const candidates=[-1,0,1].filter(lane=>!vans.some(v=>v.lane===lane && v.front>s.distance && v.ramp<s.distance+horizon));
-  const blocked=(lane)=>s.items.filter(o=>o.type!=='skill' && o.lane===lane && o.z+(o.length||0)>s.distance-1 && o.z<s.distance+horizon+(o.velocity||0)*1.15);
+  const blocked=(lane)=>s.items.filter(o=>!['coin','magnet','shield'].includes(o.type) && o.lane===lane && o.z+(o.length||0)>s.distance-1 && o.z<s.distance+horizon+(o.velocity||0)*1.15);
   candidates.sort((a,b)=>blocked(a).length-blocked(b).length || Math.abs(a-s.x)-Math.abs(b-s.x));
   const lane=candidates[0]??0;
   // In a fully crowded recovery window, clear just the landing corridor.
@@ -257,12 +306,14 @@ export function step(s, dt, random = Math.random) {
     return;
   }
   if (s.mode === 'falling') {
+    advanceCoinFlights(s,dt);
     advanceDrop(s, dt);
     s.fall = Math.max(0, s.fall - dt);
     if (!s.fall) s.mode = 'captured';
     return;
   }
   if (s.mode === 'captured') {
+    advanceCoinFlights(s,dt);
     s.capture = Math.min(CAPTURE_DURATION, s.capture + dt);
     if (s.capture >= CAPTURE_DURATION) s.mode = 'crashed';
     return;
@@ -270,6 +321,7 @@ export function step(s, dt, random = Math.random) {
   if (s.mode !== 'running') return;
 
   s.time += dt;
+  advanceCoinFlights(s,dt);
   // End the chase before resolving any collisions on this frame.
   if (s.firstHitAt !== null && chaseRemaining(s) === 0) {
     s.firstHitAt = null;
@@ -284,19 +336,11 @@ export function step(s, dt, random = Math.random) {
   s.roll = Math.max(0, s.roll - dt);
   s.hit = Math.max(0, s.hit - dt);
   s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
-  if(s.magnet>0){
-    s.magnet=Math.max(0,s.magnet-dt);
-    for(const item of s.items){
-      if(['skill','book','magnet','shield'].includes(item.type)&&!item.done){
-        const dz=item.z-s.distance;
-        if(dz>-1&&dz<18)item.lane+=(s.x-item.lane)*Math.min(1,14*dt);
-      }
-    }
-  }
+  s.magnet=Math.max(0,s.magnet-dt);
   if(s.distance+120>s.next) {
     const newItems=trafficPattern(s.next,s.trafficIndex++);
-    const safeLane=newItems.find(o=>o.type==='skill')?.lane??0;
-    if(s.trafficIndex%2===0) newItems.push({z:s.next+28,lane:safeLane,type:'book',done:false});
+    const safeLane=newItems.find(o=>o.type==='coin')?.lane??0;
+    for(let i=0;i<3;i++)newItems.push({z:s.next+28+i*4,lane:safeLane,type:'coin',done:false});
     if(s.trafficIndex%4===1) newItems.push({z:s.next+52,lane:safeLane,type:'magnet',done:false});
     else if(s.trafficIndex%4===3) newItems.push({z:s.next+52,lane:safeLane,type:'shield',done:false});
     s.items.push(...newItems);s.next+=160;
@@ -311,6 +355,7 @@ export function step(s, dt, random = Math.random) {
     if(item.velocity && ((item.encounter||item.roofRide)?item.started:s.distance>=item.activate))item.z-=item.velocity*dt;
   }
 
+  collectMagnetCoins(s);
   updateElevation(s, dt);
   if(s.jumpBuffer>0 && !s.jump && !s.drop && !s.fallSpeed && !s.hit)action(s,'jump');
   for(const van of routeVans(s.distance)) {
@@ -334,10 +379,8 @@ export function step(s, dt, random = Math.random) {
     }
     if (obstacle.done || obstacle.z > s.distance + 1.1) continue;
     obstacle.done = true;
-    if (obstacle.type === 'skill') {
-      if (Math.abs(s.x - obstacle.lane) < .55) s.skills[obstacle.skill]++;
-    } else if (obstacle.type === 'book') {
-      if (Math.abs(s.x - obstacle.lane) < .65) { s.books = (s.books || 0) + 1; s.collectedPowerup = 'book'; }
+    if (obstacle.type === 'coin') {
+      if (Math.abs(s.x - obstacle.lane) < .65) s.coins++;
     } else if (obstacle.type === 'magnet') {
       if (Math.abs(s.x - obstacle.lane) < .65) { s.magnet = 12; s.collectedPowerup = 'magnet'; }
     } else if (obstacle.type === 'shield') {
@@ -347,6 +390,7 @@ export function step(s, dt, random = Math.random) {
       if (s.mode !== 'running') break;
     }
   }
+  collectMagnetCoins(s);
   s.items = s.items.filter(o => o.z > s.distance - (o.length || 8)-4);
 }
 

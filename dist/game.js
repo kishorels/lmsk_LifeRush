@@ -1,26 +1,31 @@
 import {createSound} from './sound.js';
-import {SWEEP_SECONDS,fresh,action,step,height,career,isCapture,SCHOOL_GATE,SCHOOL_VAN} from './engine.js';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE,SCHOOL_VAN} from './engine.js';
 import {createRenderer} from './renderer3d.js';
 import {createLiteRenderer} from './renderer-lite.js';
 
 const $=id=>document.getElementById(id),canvas=$('world');
 let assetsReady = false;
-let boyProgress = 0, chaserProgress = 0;
+let realDownloadPct = 0;
+let virtualPct = 1;
+let currentDisplayPct = 1;
+let boyFraction = 0, chaserFraction = 0;
 
 function updateAssetProgress(type, fraction) {
-  if (type === 'boy') boyProgress = Math.max(boyProgress, fraction);
-  if (type === 'chaser') chaserProgress = Math.max(chaserProgress, fraction);
-  const total = Math.min(1, boyProgress * 0.85 + chaserProgress * 0.15);
-  const pct = Math.max(5, Math.floor(total * 100));
+  if (type === 'boy') boyFraction = Math.max(boyFraction, fraction);
+  if (type === 'chaser') chaserFraction = Math.max(chaserFraction, fraction);
+  const total = Math.min(1, boyFraction * 0.85 + chaserFraction * 0.15);
+  realDownloadPct = Math.max(realDownloadPct, Math.floor(total * 100));
+}
 
+function renderProgress(pct) {
   const bar = $('splash-progress-bar');
   const txt = $('splash-status-text');
   const btnTxt = $('btn-enter-text');
 
   if (bar) bar.style.width = pct + '%';
   if (txt) {
-    if (pct < 35) txt.textContent = `⏳ Downloading 3D Hero... ${pct}%`;
-    else if (pct < 75) txt.textContent = `⚡ Downloading Campus & Mutant... ${pct}%`;
+    if (pct < 30) txt.textContent = `⏳ Downloading 3D Hero... ${pct}%`;
+    else if (pct < 70) txt.textContent = `⚡ Downloading Campus & Mutant... ${pct}%`;
     else if (pct < 100) txt.textContent = `✨ Preparing GPU Shaders... ${pct}%`;
     else txt.textContent = `✅ 3D Assets Ready! (100%)`;
   }
@@ -29,10 +34,7 @@ function updateAssetProgress(type, fraction) {
   }
 }
 
-function onAllAssetsReady() {
-  if (assetsReady) return;
-  assetsReady = true;
-
+function activateEnterButton() {
   const bar = $('splash-progress-bar');
   const txt = $('splash-status-text');
   const btn = $('btn-enter');
@@ -41,7 +43,7 @@ function onAllAssetsReady() {
   const tip = $('splash-tip');
 
   if (bar) bar.style.width = '100%';
-  if (txt) txt.textContent = `✅ 3D Assets Ready! (100%)`;
+  if (txt) txt.textContent = '✅ 3D Assets Ready! (100%)';
   if (btn) {
     btn.disabled = false;
     btn.classList.remove('loading');
@@ -50,6 +52,45 @@ function onAllAssetsReady() {
   if (btnTxt) btnTxt.textContent = 'ENTER GAME';
   if (arrow) arrow.hidden = false;
   if (tip) tip.textContent = '★ All 3D Assets Loaded! Click to Enter ★';
+}
+
+function startProgressTicker() {
+  function tick() {
+    if (assetsReady) {
+      if (currentDisplayPct < 100) {
+        const step = Math.max(1, Math.ceil((100 - currentDisplayPct) * 0.35));
+        currentDisplayPct = Math.min(100, currentDisplayPct + step);
+        renderProgress(currentDisplayPct);
+        setTimeout(tick, 20);
+      } else {
+        renderProgress(100);
+        activateEnterButton();
+      }
+      return;
+    }
+
+    // While downloading: smoothly climb 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20...
+    if (virtualPct < 92) {
+      const inc = virtualPct < 12 ? 0.9 : virtualPct < 35 ? 0.7 : virtualPct < 70 ? 0.4 : 0.2;
+      virtualPct = Math.min(92, virtualPct + inc);
+    }
+    const target = Math.max(virtualPct, realDownloadPct);
+
+    if (currentDisplayPct < target) {
+      const step = Math.max(1, Math.floor((target - currentDisplayPct) * 0.35));
+      currentDisplayPct = Math.min(Math.floor(target), currentDisplayPct + step);
+      renderProgress(currentDisplayPct);
+    }
+
+    setTimeout(tick, 60);
+  }
+  tick();
+}
+startProgressTicker();
+
+function onAllAssetsReady() {
+  if (assetsReady) return;
+  assetsReady = true;
 }
 
 let draw;
@@ -65,7 +106,7 @@ try{
   onAllAssetsReady();
 }
 const game = canvas.closest('.game');
-let s=fresh(),best=0,character='male',sound=true,prev=0,w=600,h=700,lastCount=0;
+let s=fresh(),best=0,character='male',sound=true,prev=0,w=600,h=700;
 
 try{
   best=Number(localStorage.getItem('runverse-best'))||0;
@@ -98,9 +139,7 @@ function triggerSwag(){
   s.styleAction = SWEEP_SECONDS;
   effects.unlock();
   effects.play('swag');
-  $('toast').textContent='🔥 Thalapathy Swag! Mass Action ✨';
 }
-if($('btn-swag')) $('btn-swag').onclick = triggerSwag;
 
 function select(c){
   character=c;
@@ -138,7 +177,6 @@ function start(){
   s.mode = 'intro';
   s.styleAction = SWEEP_SECONDS;
   s.speed = 0;
-  lastCount=0;
   setScreenMode('running');
   $('toast').textContent='🔔 School Bell Rang! Sprint to class · Ramp in right lane';
   effects.setEnabled(sound);
@@ -188,18 +226,18 @@ function crash(){
     slide:'Slide under the teal overhead beams.'
   }[s.cause]||'Keep practicing!';
   
-  const totalScore = Math.floor(s.distance) + (s.books || 0) * 50;
+  const totalScore = Math.floor(s.distance) + s.coins * 10;
   const grade = totalScore >= 450 ? 'A+ 🌟' : totalScore >= 220 ? 'A 🥇' : 'B 🥈';
   if($('grade-badge')) $('grade-badge').textContent = grade;
   if($('report-grade')) $('report-grade').hidden = false;
   
   show(
     'ACADEMIC REPORT CARD',
-    Math.floor(s.distance)+' m · 📚 '+(s.books||0)+' books · '+s.skills.reduce((a,b)=>a+b,0)+' skills. '+hint,
+    Math.floor(s.distance)+' m | '+s.coins+' coins. '+hint,
     'RUN AGAIN',
     'REPORT CARD'
   );
-  $('tip').textContent='Career tendency: '+career(s.skills)+' · Grade: '+grade;
+  $('tip').textContent='Coins: '+s.coins+' | Grade: '+grade;
 }
 
 if($('start')) $('start').onclick=()=>$('start').dataset.loadError==='true'?location.reload():start();
@@ -285,6 +323,7 @@ function frame(t) {
   game.classList.toggle('capture', isCapture(s));
   if (old !== 'crashed' && s.mode === 'crashed') crash();
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) effects.play('laugh');
+  if (old === 'captured' && captureBefore < CAPTURE_GESTURE_START && s.capture >= CAPTURE_GESTURE_START) effects.play('swag');
 
   if (s.coins > coinsBefore) {
     effects.play('roofCoin');
@@ -300,20 +339,17 @@ function frame(t) {
   // Powerup sound & toasts
   if (s.collectedPowerup === 'magnet') {
     effects.play('magnet');
-    $('toast').textContent = '🧲 School Magnet! Pulling all books & coins!';
+    $('toast').textContent='Magnet active! Collect nearby gold coins.';
     s.collectedPowerup = null;
   } else if (s.collectedPowerup === 'shield') {
     effects.play('shield');
-    $('toast').textContent = '🛡️ School Bag Shield Active! 1 Hit Protected!';
-    s.collectedPowerup = null;
-  } else if (s.collectedPowerup === 'book') {
-    effects.play('book');
-    $('toast').textContent = '📚 Textbook Collected! Exam Score Boost!';
+    $('toast').textContent='Shield active! Protected from one hit.';
     s.collectedPowerup = null;
   }
+
   if (s.shieldAbsorbed) {
     effects.play('shield');
-    $('toast').textContent = '🛡️ Shield Absorbed Obstacle Crash!';
+    $('toast').textContent='Shield absorbed the crash!';
     s.shieldAbsorbed = false;
   }
 
@@ -335,29 +371,15 @@ function frame(t) {
     $('toast').textContent='Jump onto the moving bus · Follow the roof coins';
   }
   
-  const count = s.skills.reduce((a,b) => a+b, 0);
-  if (count > lastCount) {
-    effects.play('coin');
-    lastCount = count;
-    if (!s.hit) $('toast').textContent = 'Skill collected. Your future is taking shape.';
-  }
   if (s.firstHitAt !== null && s.firstHitAt !== firstHitBefore) {
     effects.play('hit',s.cause);
   } else if (firstHitBefore !== null && s.firstHitAt === null) {
-    $('toast').textContent = 'You escaped. Both hearts restored.';
+    $('toast').textContent = 'You escaped the chaser!';
   }
   
-  const health = $('health'), left = 2-s.damage;
-  if (health.dataset.left !== String(left)) {
-    health.dataset.left = left;
-    health.textContent = ['♡ ♡','♥ ♡','♥ ♥'][left];
-    health.setAttribute('aria-label', left === 1 ? '1 hit left' : left+' hits left');
-  }
   $('distance').innerHTML = Math.floor(s.distance)+'<span> m</span>';
   $('coins').textContent = s.coins;
-  if($('books')) $('books').textContent = s.books || 0;
   $('best').textContent = best+' m';
-  ['k','c','s'].forEach((id,i) => $(id).textContent = s.skills[i]);
   
   // Powerup HUD indicators
   const magPill = $('magnet-pill');
