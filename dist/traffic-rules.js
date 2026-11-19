@@ -53,19 +53,28 @@ export function repeatedVans(distance,seed=0){
   }
   return vans;
 }
-export function trafficPattern(base,index,seed=0){
-  const p=routeSegment(seed,index),items=[],lane=p.trafficLane;
+export function trafficPattern(base,index,seed=0,map='school'){
+  const p=routeSegment(seed,index),items=[],lane=p.trafficLane,isCollege=map==='college';
+  const sideVar=isCollege?(['scooty','car','scooty','bike'][(index+(seed&3))%4]):p.vehicle;
+  const cKind1=isCollege?((index%2)?'scooty':'car'):undefined;
+  const cKind2=isCollege?((index%2)?'car':'scooty'):undefined;
+  const mkTraffic=(z,tLane,vel,extra={})=>{
+    const ck=extra.collegeKind;
+    const len=isCollege?(ck==='scooty'?2.6:4.6):10;
+    const rf=isCollege?(ck==='scooty'?1.65:1.45):2.8;
+    return {z,lane:tLane,type:'bus',velocity:vel,length:len,roof:rf,done:false,...extra};
+  };
   if(p.kind==='encounter'){
     const trigger=base+p.triggerAt;
     items.push(
-      {z:base+110,lane:p.side,type:'sideVehicle',variant:p.vehicle,trigger,encounter:true,started:false,length:3.4,done:false},
-      {z:base+140,lane,type:'bus',velocity:22,trigger,encounter:true,started:false,length:10,done:false});
-    if(!seed||p.extraBus)items.push({z:base+130,lane:p.side,type:'bus',velocity:20,activate:trigger,length:10,done:false});
+      {z:base+110,lane:p.side,type:'sideVehicle',variant:sideVar,trigger,encounter:true,started:false,length:3.4,done:false},
+      mkTraffic(base+140,lane,22,{trigger,encounter:true,started:false,collegeKind:cKind1}));
+    if(!seed||p.extraBus)items.push(mkTraffic(base+130,p.side,20,{activate:trigger,collegeKind:cKind2}));
     items.push({z:base+p.barrierAt,lane:p.side,type:p.barrierType,variant:p.variant,done:false});
   }else{
-    items.push({z:base+130,lane,type:'bus',velocity:18,activate:base-25,length:10,done:false});
-    if(!seed||p.lateBus)items.push({z:base+235,lane:p.roofLane,type:'bus',velocity:18,activate:base+65,length:10,done:false});
-    if(!seed||p.extraBus)items.push({z:base+190,lane,type:'bus',velocity:24,activate:base-25,length:10,done:false});
+    items.push(mkTraffic(base+130,lane,18,{activate:base-25,collegeKind:cKind1}));
+    if(!seed||p.lateBus)items.push(mkTraffic(base+235,p.roofLane,18,{activate:base+65,collegeKind:cKind2}));
+    if(!seed||p.extraBus)items.push(mkTraffic(base+190,lane,24,{activate:base-25,collegeKind:cKind1}));
     items.push({id:'moving-roof-'+index,z:base+70,lane:p.roofLane,type:'bus',roofRide:true,started:false,activate:base+56,length:22,roof:2.8,done:false},
       {z:base+p.barrierAt,lane:p.roofLane,type:p.barrierType,variant:p.variant,done:false});
   }

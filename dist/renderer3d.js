@@ -1,19 +1,19 @@
-import {createMagnetCoins} from './magnet-coins.js?v=2.9.1';
-import {createPickupModels} from './pickup-models.js?v=2.9.1';
-import {createGuardEffect} from './guard-effect.js?v=2.9.1';
-import {streetSurfaces} from './street-materials.js?v=2.9.1';
-import {createSideTraffic} from './side-vehicles.js?v=2.9.1';
-import {createCaptureStage} from './capture-stage.js?v=2.9.1';
-import {createSky} from './sky-scene.js?v=2.9.1';
-import {createCampus} from './campus-scene.js?v=2.9.1';
-import {createCollegeCampus} from './college-scene.js?v=2.9.1';
-import {createTraffic} from './traffic-scene.js?v=2.9.1';
+import {createMagnetCoins} from './magnet-coins.js?v=2.9.2';
+import {createPickupModels} from './pickup-models.js?v=2.9.2';
+import {createGuardEffect} from './guard-effect.js?v=2.9.2';
+import {streetSurfaces,curveRelX,curveRelY,roadCurveSlope} from './street-materials.js?v=2.9.2';
+import {createSideTraffic} from './side-vehicles.js?v=2.9.2';
+import {createCaptureStage} from './capture-stage.js?v=2.9.2';
+import {createSky} from './sky-scene.js?v=2.9.2';
+import {createCampus} from './campus-scene.js?v=2.9.2';
+import {createCollegeCampus} from './college-scene.js?v=2.9.2';
+import {createTraffic} from './traffic-scene.js?v=2.9.2';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=2.9.1';
-import {createCaptureScene} from './capture-scene.js?v=2.9.1';
-import {loadChaserModel} from './chaser-model.js?v=2.9.1';
-import {loadRunnerModel} from './runner-model.js?v=2.9.1';
-import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.9.1';
+import {createSchoolEntrance} from './school-scene.js?v=2.9.2';
+import {createCaptureScene} from './capture-scene.js?v=2.9.2';
+import {loadChaserModel} from './chaser-model.js?v=2.9.2';
+import {loadRunnerModel} from './runner-model.js?v=2.9.2';
+import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=2.9.2';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});}
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
@@ -59,14 +59,92 @@ export function createRenderer(canvas, callbacks = {}){
  const legs=[],arms=[];for(const side of [-1,1]){const leg=new T.Group();leg.position.set(side*.17,.88,0);body.add(leg);mesh(cyl,0x283962,leg,0,-.21,0,.12,.45,.12,true);const knee=new T.Group();knee.position.y=-.42;leg.add(knee);mesh(cyl,0x344771,knee,0,-.18,0,.10,.38,.1,true);box(knee,0xffffff,0,-.4,-.08,.25,.17,.42,true);box(knee,0xf66d7d,0,-.35,-.1,.26,.05,.26);legs.push({leg,knee});const arm=new T.Group();arm.position.set(side*.36,1.53,0);body.add(arm);mesh(cyl,0xffcb38,arm,0,-.12,0,.115,.26,.115,true);mesh(cyl,0xd9986f,arm,0,-.35,0,.085,.3,.085,true);ball(arm,0xe7ae84,0,-.52,0,.09);arms.push(arm);}
  // Pooled obstacles / pickup models: no geometry allocation during a run.
  const pool=[];for(let i=0;i<64;i++){const root=new T.Group();root.userData.captureObstacle=true;scene.add(root);root.visible=false;pool.push(root);}
+ let festBannerMat=null;
+ function getFestBannerMat(){
+  if(festBannerMat)return festBannerMat;
+  if(typeof document!=='undefined'){
+   const cv=document.createElement('canvas');cv.width=512;cv.height=128;
+   const ctx=cv.getContext('2d');
+   if(ctx){
+    ctx.fillStyle='#132b4f';ctx.fillRect(0,0,512,128);
+    ctx.fillStyle='#ff9d1b';ctx.fillRect(0,0,512,14);ctx.fillRect(0,114,512,14);
+    ctx.fillStyle='#ffe268';ctx.font='900 44px sans-serif';ctx.textAlign='center';
+    ctx.fillText('TECH FEST · LIFE RUSH',256,78,470);
+    const tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;
+    festBannerMat=new T.MeshStandardMaterial({map:tex,roughness:.55});
+   }
+  }
+  return festBannerMat||mat(0x132b4f);
+ }
  function clear(g){while(g.children.length)g.remove(g.children[0]);}
- function obstacle(g,o){clear(g);if(['coin','magnet','shield'].includes(o.type)){pickups.add(g,o.type);}else if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
+ function collegeObstacle(g,o,blockKind){
+  if(o.type==='jump'&&o.variant==='bench'){
+   // Campus Canteen Table + Coffee Cups
+   for(const x of [-.70,.70])box(g,0x1e293b,x,.38,0,.10,.76,.62,true);
+   box(g,0xc98a4b,0,.78,0,1.88,.10,.78,true);
+   for(const x of [-.48,.48])box(g,0xf5f5f4,x,.89,0,.14,.14,.14);
+   box(g,0x0ea5e9,-.15,.85,.12,.24,.04,.32);
+  }else if(o.type==='jump'&&o.variant==='hurdle'){
+   // University Security Boom Barrier + Traffic Cones
+   box(g,0x1e3a5f,-.80,.48,0,.22,.96,.24,true);
+   box(g,0x1e3a5f,.80,.48,0,.22,.96,.24,true);
+   box(g,0xffffff,0,.80,0,1.92,.16,.12,true);
+   for(const x of [-.6,-.2,.2,.6])box(g,0xf97316,x,.80,.065,.18,.16,.02);
+   for(const x of [-.75,.75]){const coneM=mesh(cone,0xf97316,g,x,.24,.28,.16,.48,.16,true);mesh(cyl,0xffffff,g,x,.24,.28,.11,.10,.11);}
+  }else if(o.type==='jump'){
+   // Library Book Trolley loaded with colorful books
+   for(const x of [-.72,.72]){box(g,0x64748b,x,.42,0,.08,.76,.48,true);mesh(cyl,0x0f172a,g,x,.07,0,.07,.06,.07);}
+   for(const y of [.28,.56])box(g,0x94a3b8,0,y,0,1.56,.06,.48,true);
+   const cols=[0xef4444,0x3b82f6,0xf59e0b,0x10b981,0x8b5cf6];
+   for(let j=0;j<5;j++)box(g,cols[j],-.52+j*.26,.74,0,.22,.30,.36,true);
+  }else if(o.type==='slide'&&o.variant==='scaffold'){
+   // College Fest Archway ("TECH FEST")
+   for(const x of [-.90,.90]){box(g,0x1e3a5f,x,1.32,0,.16,2.64,.36,true);box(g,0x0ea5e9,x,.08,0,.38,.16,.56);}
+   const banner=new T.Mesh(cube,getFestBannerMat());banner.position.set(0,2.14,0);banner.scale.set(1.96,.88,.22);banner.castShadow=true;g.add(banner);
+   box(g,0xfacc15,0,2.62,0,2.04,.10,.30);
+  }else if(o.type==='slide'){
+   // Solar Campus Skywalk Canopy
+   for(const x of [-.90,.90])box(g,0x334155,x,1.32,0,.16,2.64,.34,true);
+   box(g,0x0f172a,0,2.15,0,1.98,.78,.58,true);
+   for(let j=-1;j<=1;j++)box(g,0x1d4ed8,j*.58,2.15,.30,.50,.62,.04);
+   box(g,0x38bdf8,0,1.78,.31,.90,.06,.04);
+  }else if(o.type==='block'){
+   if(blockKind===0){
+    // Soda / Snack Vending Machine
+    box(g,0x1d4ed8,0,1.18,0,1.32,2.36,.95,true);
+    box(g,0xbfdbfe,0,1.42,.49,.94,1.25,.04);
+    for(let r=0;r<3;r++)for(let c=0;c<3;c++)box(g,[0xef4444,0xf59e0b,0x22c55e][(r+c)%3],-.28+c*.28,1.02+r*.36,.52,.18,.22,.03);
+    box(g,0x0f172a,0,.44,.49,.88,.34,.05);
+   }else if(blockKind===1){
+    // Campus Notice Board with Posters
+    for(const x of [-.68,.68])box(g,0x475569,x,1.15,0,.12,2.30,.18,true);
+    box(g,0x78350f,0,1.45,0,1.56,1.25,.12,true);
+    box(g,0xfef3c7,0,1.45,.07,1.38,1.08,.03);
+    box(g,0xef4444,-.34,1.62,.09,.44,.38,.02);box(g,0x3b82f6,.28,1.54,.09,.48,.46,.02);box(g,0x10b981,-.12,1.18,.09,.56,.32,.02);
+   }else if(blockKind===2){
+    // 3-Bin Campus Recycling Station
+    box(g,0x334155,0,.12,0,1.68,.24,.80,true);
+    const binCols=[0x2563eb,0x16a34a,0xeab308];
+    for(let b=0;b<3;b++){box(g,binCols[b],-.52+b*.52,.78,0,.46,1.15,.64,true);box(g,0x0f172a,-.52+b*.52,1.40,0,.50,.12,.68);}
+    box(g,0xf8fafc,0,1.90,0,1.64,.56,.12,true);
+   }else{
+    // Parked Campus Scooty blocking lane
+    box(g,0x0f172a,0,.28,0,1.36,.10,.40,true);
+    box(g,0xf97316,-.44,.62,0,.42,.58,.44,true);
+    box(g,0xf97316,.38,.56,0,.76,.36,.42,true);
+    box(g,0x1e293b,.38,.80,0,.64,.12,.32);
+    box(g,0x1e293b,-.44,1.06,0,.08,.06,.72);
+    for(const x of [-.56,.56])mesh(cyl,0x0f172a,g,x,.26,0,.26,.16,.26);
+   }
+  }
+ }
+ function obstacle(g,o,map='school',blockKind=0){clear(g);if(['coin','magnet','shield'].includes(o.type)){pickups.add(g,o.type);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
 
- const particles=[];for(let i=0;i<30;i++){const m=ball(scene,0xffdf62,0,0,0,.065);m.visible=false;particles.push({m,life:0,v:new T.Vector3()});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0,currentLookY=.98,currentLookZ=0;
+ const particles=[];for(let i=0;i<30;i++){const m=ball(scene,0xffdf62,0,0,0,.065);m.visible=false;particles.push({m,life:0,v:new T.Vector3()});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0;
  function resize(){const r=canvas.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.fov=r.width/r.height<.8?64:58;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
  return function render(s,character,frameDt){if(contextLost||renderer.getContext?.()?.isContextLost?.())return 'context-lost';stage.restore();capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
  updateSchool(s);updateTraffic(s);updateSideTraffic(s);updateMagnetCoins(s);
- const weather=updateSky(s);updateStreet(s.distance,weather);updateCampus(s,weather);updateCollege(s);
+ const weather=updateSky(s);updateStreet(s.distance,weather,s.map);updateCampus(s,weather);updateCollege(s);
  updateChaserModel(s);
  const onPodium=s.mode==='ready'||s.mode==='select';
  podium.position.set(0,.09,s.distance);
@@ -74,19 +152,24 @@ export function createRenderer(canvas, callbacks = {}){
  const fallRecoil = s.mode==='falling' ? Math.sin(Math.min(1,(1-s.fall/FALL_DURATION)/.38)*Math.PI)*.45 : 0;
  runner.position.set(s.x*2.2,height(s)+(onPodium?.04:0),fallRecoil);const rawChar=String(character||'male');const desiredKey=['male','female','college-male','college-woman','college-man'].includes(rawChar)?(rawChar.startsWith('college-')?rawChar:(s.map==='college'?(rawChar==='female'?'college-woman':'college-male'):rawChar)):'male';const altKey=desiredKey==='college-woman'?'female':(desiredKey.startsWith('college-')?'male':`college-${desiredKey}`);const isFemaleBody=desiredKey.includes('female')||desiredKey.includes('woman'),isCollegeBody=desiredKey.startsWith('college-')||s.map==='college';if(!heroModels[desiredKey]?.model)heroModels[desiredKey]?.(s,desiredKey,frameDt);const modelKey=onPodium?desiredKey:(heroModels[desiredKey]?.model?desiredKey:heroModels[altKey]?.model?altKey:desiredKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleBody?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleBody;cap.visible=!isFemaleBody;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
  updateGuard(s,selectedModel?.model);
- let n=0;for(const o of s.items){if(o.type==='bus'||o.type==='sideVehicle')continue;const z=o.z-s.distance;if(o.done||z< -3||z>125)continue;const g=pool[n++];if(!g)break;const key=o.type+':'+o.skill+':'+o.variant;if(g.userData.key!==key){obstacle(g,o);g.userData.key=key;}g.visible=true;g.position.set(o.lane*2.2,0,-z);const isFloat=['coin','magnet','shield'].includes(o.type);g.rotation.y=0;if(isFloat){g.position.y=Math.sin(s.time*3+o.z)*.10;pickups.animate(g,o.type,s.time,o.z);}}for(;n<pool.length;n++)pool[n].visible=false;
+ let n=0;for(const o of s.items){if(o.type==='bus'||o.type==='sideVehicle')continue;const z=o.z-s.distance;if(o.done||z< -3||z>125)continue;const g=pool[n++];if(!g)break;const blockKind=Math.abs(Math.floor(o.z)+o.lane)%4;const key=(s.map==='college'?'col:':'sch:')+o.type+':'+o.skill+':'+o.variant+':'+(o.type==='block'?blockKind:0);if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;}g.visible=true;const cx=curveRelX(o.z,s),cy=curveRelY(o.z,s);const isFloat=['coin','magnet','shield'].includes(o.type);g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy,-z);g.rotation.y=isFloat?0:-Math.atan(roadCurveSlope(o.z,s.map));if(isFloat){pickups.animate(g,o.type,s.time,o.z);}}for(;n<pool.length;n++)pool[n].visible=false;
  const count=s.coins;if(count>total){burst=.22;for(const p of particles){p.life=.5+Math.random()*.3;p.m.visible=true;p.m.position.set(s.x*2.2,height(s)+.8,0);p.v.set((Math.random()-.5)*4,Math.random()*4,(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
  const inSelect=s.mode==='ready'||s.mode==='select'||s.mode==='intro';
+ const bendX=inSelect?0:curveRelX(s.distance+15,s)*.62;
+ const bendY=inSelect?0:curveRelY(s.distance+15,s)*.55;
+ if(!inSelect&&s.map==='college')runner.rotation.z=-Math.atan(roadCurveSlope(s.distance,'college'))*.22;
  const targetCamY=inSelect?1.52:3.8+trackCameraY;
  const targetCamZ=inSelect?3.65:6.8;
- const targetLookY=inSelect?.98:1.35+trackCameraY;
+ const targetLookX=inSelect?0:s.x*.65*.37+bendX;
+ const targetLookY=inSelect?.98:1.35+trackCameraY+bendY;
  const targetLookZ=inSelect?0:-12;
  const camBlend=1-Math.exp(-5.5*Math.min(.05,dt||.016));
  camera.position.x+=((s.mode==='intro'?.48:inSelect?0:s.x*.65)-camera.position.x)*camBlend;
  camera.position.y+=(targetCamY-camera.position.y)*camBlend;
  camera.position.z+=(targetCamZ-camera.position.z)*camBlend;
+ currentLookX+=(targetLookX-currentLookX)*camBlend;
  currentLookY+=(targetLookY-currentLookY)*camBlend;
  currentLookZ+=(targetLookZ-currentLookZ)*camBlend;
  if(s.mode==='falling'){
@@ -98,7 +181,7 @@ export function createRenderer(canvas, callbacks = {}){
    camera.position.x+=Math.sin(s.time*60)*shake;
    camera.position.y+=Math.cos(s.time*75)*shake*.5;
  }
- camera.lookAt(camera.position.x*.37,currentLookY,currentLookZ);
+ camera.lookAt(inSelect?camera.position.x*.37:currentLookX,currentLookY,currentLookZ);
  if(isCapture(s)){
 
    if(body.visible){

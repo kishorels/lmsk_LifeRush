@@ -352,7 +352,7 @@ export function step(s, dt, random = Math.random) {
   s.magnet=Math.max(0,s.magnet-dt);
   if(s.distance+120>s.next) {
     const index=s.trafficIndex++;
-    const newItems=trafficPattern(s.next,index,s.runSeed);
+    const newItems=trafficPattern(s.next,index,s.runSeed,s.map);
     const safeLane=newItems.find(o=>o.type==='coin')?.lane??0;
     if(!s.runSeed)for(let i=0;i<3;i++)newItems.push({z:s.next+28+i*4,lane:safeLane,type:'coin',done:false});
     if(!s.runSeed&&s.trafficIndex%4===1) newItems.push({z:s.next+52,lane:safeLane,type:'magnet',done:false});
@@ -426,13 +426,17 @@ export function step(s, dt, random = Math.random) {
               type = 'bus';
             }
             if (type === 'bus') {
+              const isCol=s.map==='college';
+              const cKind=isCol?((seedHash%2)?'scooty':'car'):undefined;
               s.items.push({
                 z: targetZ + 15,
                 lane: targetLane,
                 type: 'bus',
+                collegeKind: cKind,
                 velocity: 18,
                 activate: targetZ - 30,
-                length: 10,
+                length: isCol ? (cKind==='scooty'?2.6:4.6) : 10,
+                roof: isCol ? (cKind==='scooty'?1.65:1.45) : 2.8,
                 done: false,
               });
             } else {

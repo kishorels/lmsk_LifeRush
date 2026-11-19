@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {Scene} from '../dist/vendor/three.module.js';
 import {createCollegeCampus} from '../dist/college-scene.js';
+import {roadCurveX,roadCurveY,roadCurveSlope} from '../dist/campus-layout.js';
+import {trafficPattern} from '../dist/traffic-rules.js';
 import {createSound} from '../dist/sound.js';
 
 async function glb(name){
@@ -123,4 +125,26 @@ assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&
    'Characters page includes Left/Right holographic preview cards and character loading blur veil');
  assert.ok(cssSrc.includes('.game.is-char-loading #world')&&cssSrc.includes('blur('),
    'Canvas blurs cleanly with blue hologram veil whenever a character is still loading or failed to load');
+});
+
+test('college uses Kodaikanal-style winding road, scooty/car traffic instead of buses, and college obstacles',async()=>{
+ assert.equal(roadCurveX(500,'school'),0);
+ assert.equal(roadCurveY(500,'school'),0);
+ const xValues=[120,250,400,600].map(d=>roadCurveX(d,'college'));
+ assert.ok(xValues.some(x=>x>3)&&xValues.some(x=>x<-3),'College road sweeps left and right in S-curves');
+ assert.ok(Number.isFinite(roadCurveSlope(300,'college'))&&roadCurveSlope(300,'college')!==0);
+
+ const colItems=[0,1,2,3].flatMap(i=>trafficPattern(120+i*240,i,42,'college'));
+ const oncoming=colItems.filter(i=>i.type==='bus'&&!i.roofRide);
+ assert.ok(oncoming.length>0&&oncoming.every(i=>i.collegeKind==='car'||i.collegeKind==='scooty'),
+   'College oncoming traffic uses cars and scooties rather than yellow school buses');
+ const side=colItems.find(i=>i.type==='sideVehicle');
+ assert.ok(side&&['scooty','car','bike'].includes(side.variant),'College side encounters include scooties and cars');
+
+ const busModelSrc=await readFile(new URL('../dist/bus-model.js',import.meta.url),'utf8');
+ const r3dSrc=await readFile(new URL('../dist/renderer3d.js',import.meta.url),'utf8');
+ assert.ok(busModelSrc.includes('export function buildCollegeVehicle'),
+   'bus-model exports dedicated College cars, scooties and campus SUVs');
+ assert.ok(r3dSrc.includes('function collegeObstacle')&&r3dSrc.includes('TECH FEST · LIFE RUSH'),
+   'renderer3d builds College-themed obstacles (Fest Arch, Vending Machine, Book Trolley, Scooty)');
 });

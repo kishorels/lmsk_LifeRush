@@ -1,7 +1,9 @@
 import {
   Color, TextureLoader, RepeatWrapping, SRGBColorSpace, EquirectangularReflectionMapping,
-  Mesh, MeshStandardMaterial, PlaneGeometry, DoubleSide
+  Mesh, MeshStandardMaterial, PlaneGeometry, DoubleSide, Group
 } from './vendor/three.module.js';
+import { roadCurveX, roadCurveY, roadCurveSlope, curveRelX, curveRelY } from './campus-layout.js';
+export { roadCurveX, roadCurveY, roadCurveSlope, curveRelX, curveRelY };
 
 const textures = new Map();
 function texture(name, color = true) {
@@ -23,8 +25,13 @@ export function streetSurfaces(scene, box) {
     scene.environment = environment;
   }
   const scrolling = [];
+  const schoolGroup = new Group();
+  const collegeGroup = new Group();
+  collegeGroup.visible = false;
+  scene.add(schoolGroup, collegeGroup);
+
   function strip(name, x, y, width, height, span, across, tint) {
-    const surface = box(scene, tint, x, y, -65, width, height, 200);
+    const surface = box(schoolGroup, tint, x, y, -65, width, height, 200);
     const map = texture(name);
     if (map && !scrolling.some(entry => entry.map === map)) {
       map.repeat.set(across, 200 / span);
@@ -34,7 +41,7 @@ export function streetSurfaces(scene, box) {
     return surface.material;
   }
   strip('turf', 0, -.34, 240, .3, 5, 48, 0xd7cfac);
-  box(scene, 0x9b8e75, 0, -.12, -65, 14, .3, 200);
+  box(schoolGroup, 0x9b8e75, 0, -.12, -65, 14, .3, 200);
   const road = strip('asphalt', 0, .02, 7.1, .14, 16, 1, 0xffffff);
   strip('pavers', -4.4, .06, 1.65, .22, 3.3, 1, 0xffffff);
   strip('pavers', 4.4, .06, 1.65, .22, 3.3, 1, 0xffffff);
@@ -46,9 +53,58 @@ export function streetSurfaces(scene, box) {
     road.bumpMap = road.map;
     road.bumpScale = .018;
   }
+
+  // Subdivided Kodaikanal-style curving road ribbons for College mode
+  const collegeRibbons = [];
+  function curvedStrip(mat, xOffset, yOffset, width, segsZ = 54, segsX = 1) {
+    const geom = new PlaneGeometry(width, 200, segsX, segsZ);
+    geom.rotateX(-Math.PI / 2);
+    geom.translate(xOffset, yOffset, -65);
+    const pos = geom.attributes.position;
+    const base = new Float32Array(pos.array);
+    const mesh = new Mesh(geom, mat);
+    mesh.receiveShadow = true;
+    collegeGroup.add(mesh);
+    collegeRibbons.push({ geom, pos, base });
+    return mesh;
+  }
+  const turfMat = new MeshStandardMaterial({ color: 0x6f9468, map: texture('turf'), roughness: .98 });
+  const gravelMat = new MeshStandardMaterial({ color: 0x525d69, roughness: .95 });
+  const railMat = new MeshStandardMaterial({ color: 0xf4b942, roughness: .55, metalness: .25 });
+  const curbMat = new MeshStandardMaterial({ color: 0xe3e8ef, roughness: .75 });
+  const paversMat = new MeshStandardMaterial({ color: 0xe6edf5, map: texture('pavers'), roughness: .9 });
+  curvedStrip(turfMat, 0, -.20, 240, 36, 4);
+  curvedStrip(gravelMat, 0, -.04, 13.6, 54, 1);
+  curvedStrip(road, 0, .09, 7.1, 54, 1);
+  curvedStrip(paversMat, -4.4, .14, 1.65, 54, 1);
+  curvedStrip(paversMat, 4.4, .14, 1.65, 54, 1);
+  // Mountain ghat guardrails & concrete curbs along both edges of the College road
+  curvedStrip(curbMat, -5.28, .22, .28, 54, 1);
+  curvedStrip(curbMat, 5.28, .22, .28, 54, 1);
+  curvedStrip(railMat, -5.32, .48, .18, 54, 1);
+  curvedStrip(railMat, 5.32, .48, .18, 54, 1);
+
   const dry = new Color(0xffffff), wet = new Color(0x9099a1);
-  return (distance, weather) => {
-    for (const {map, span} of scrolling) map.offset.y = (distance / span) % 1;
+  return (distance, weather, map = 'school') => {
+    const isCollege = map === 'college';
+    schoolGroup.visible = !isCollege;
+    collegeGroup.visible = isCollege;
+    for (const {map: m, span} of scrolling) m.offset.y = (distance / span) % 1;
+    if (isCollege) {
+      const originX = roadCurveX(distance, 'college');
+      const originY = roadCurveY(distance, 'college');
+      for (const { geom, pos, base } of collegeRibbons) {
+        const arr = pos.array;
+        for (let i = 0; i < arr.length; i += 3) {
+          const zScene = base[i + 2];
+          const worldDist = distance - zScene;
+          arr[i] = base[i] + (roadCurveX(worldDist, 'college') - originX);
+          arr[i + 1] = base[i + 1] + (roadCurveY(worldDist, 'college') - originY);
+        }
+        pos.needsUpdate = true;
+        geom.computeBoundingSphere();
+      }
+    }
     road.color.copy(dry).lerp(wet, weather.rain);
     road.roughness = 1 - .69 * weather.rain;
     road.envMapIntensity = .35 + weather.rain * 1.95;

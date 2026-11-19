@@ -1,7 +1,7 @@
-import {createSound} from './sound.js?v=2.9.1';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.1';
-import {createRenderer} from './renderer3d.js?v=2.9.1';
-import {createLiteRenderer} from './renderer-lite.js?v=2.9.1';
+import {createSound} from './sound.js?v=2.9.2';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.2';
+import {createRenderer} from './renderer3d.js?v=2.9.2';
+import {createLiteRenderer} from './renderer-lite.js?v=2.9.2';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
@@ -280,7 +280,7 @@ function updateUnlockUI() {
     collegeCard.setAttribute('aria-disabled', String(!unlocked));
   }
   if ($('college-map-sub')) {
-    $('college-map-sub').textContent = unlocked ? 'Casual outfits · blocks' : '🔒 Complete 2 goals';
+    $('college-map-sub').textContent = unlocked ? 'Winding hills · scooties & cars' : '🔒 Complete 2 goals';
   }
   if ($('college-map-badge')) {
     $('college-map-badge').textContent = unlocked ? '✓' : '🔒';
@@ -601,13 +601,14 @@ function crash(){
   save();
   effects.play('over');
   setScreenMode('gameover');
+  const isCol=selectedMap==='college';
   const hint={
-    sideVehicle:'Watch the side entrance. Move into the clear lane.',
-    bus:'Dodge the oncoming bus. Change lanes before headlights reach you.',
+    sideVehicle:isCol?'Watch the campus side roads for scooties & cars!':'Watch the side entrance. Move into the clear lane.',
+    bus:isCol?'Dodge oncoming college cars & scooties on the curve!':'Dodge the oncoming bus. Change lanes before headlights reach you.',
     van:'Take a striped ramp, or use the clear ground lane.',
-    block:'Change lanes to dodge the tall crates.',
-    jump:'Jump over the school benches and hurdles.',
-    slide:'Slide under the teal overhead beams.'
+    block:isCol?'Dodge the vending machines, notice boards & parked scooties.':'Change lanes to dodge the tall crates.',
+    jump:isCol?'Jump over the library book carts, canteen tables & barriers.':'Jump over the school benches and hurdles.',
+    slide:isCol?'Slide under the College Fest banner & solar arches.':'Slide under the teal overhead beams.'
   }[s.cause]||'Keep practicing!';
   
   const totalScore = runDist + s.coins * 10;
@@ -853,7 +854,7 @@ function tick(t) {
     $('toast').textContent = 'Roof route · Follow the coins and run off the far end';
   }
   if(s.mode==='running'&&s.items.some(o=>o.roofRide&&o.started&&o.lane===s.lane&&o.z-s.distance<20&&o.z+o.length>s.distance)){
-    $('toast').textContent='Jump onto the moving bus · Follow the roof coins';
+    $('toast').textContent=selectedMap==='college'?'Jump onto the moving campus SUV · Follow the roof coins':'Jump onto the moving bus · Follow the roof coins';
   }
   
   if (firstHitBefore !== null && s.firstHitAt === null) {

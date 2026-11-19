@@ -1,5 +1,6 @@
 import {makeCoin,spinCoin} from './coin.js';
 import {height} from './engine.js';
+import {curveRelX,curveRelY} from './campus-layout.js';
 
 export function createMagnetCoins(scene) {
   const pool=[];
@@ -10,9 +11,11 @@ export function createMagnetCoins(scene) {
       if(!pool[i])pool[i]=makeCoin(scene,0,0,0);
       const coin=pool[i],p=Math.min(1,f.elapsed/f.duration),blend=1-Math.pow(1-p,2);
       coin.visible=true;
-      const y=f.y+(height(s)+1.05-f.y)*blend+Math.sin(p*Math.PI)*.28;
+      const startX=f.x+curveRelX(f.z,s);
+      const startY=f.y+curveRelY(f.z,s);
+      const y=startY+(height(s)+1.05-startY)*blend+Math.sin(p*Math.PI)*.28;
       spinCoin(coin,s.time,i,y);
-      coin.position.x=f.x+(s.x*2.2-f.x)*blend;
+      coin.position.x=startX+(s.x*2.2-startX)*blend;
       coin.position.z=(s.distance-f.z)*(1-blend);
       coin.scale.setScalar(1.22*(1-.35*p));
     }

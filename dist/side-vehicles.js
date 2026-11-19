@@ -1,5 +1,6 @@
 import {Group,Mesh,MeshStandardMaterial,BoxGeometry,CylinderGeometry,SphereGeometry,TorusGeometry,Vector3,BufferGeometry,Float32BufferAttribute} from './vendor/three.module.js';
 import {sideVehicleX} from './traffic-rules.js';
+import {curveRelX,curveRelY,roadCurveSlope} from './campus-layout.js';
 const cube=new BoxGeometry(),sphere=new SphereGeometry(1,12,8),tyre=new TorusGeometry(.32,.055,6,20),rod=new CylinderGeometry(1,1,1,8),materials=new Map();
 function part(g,c,x,y,z,w,h,d,geometry=cube){if(!materials.has(c))materials.set(c,new MeshStandardMaterial({color:c,roughness:.55}));const m=new Mesh(geometry,materials.get(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=true;g.add(m);return m;}
 function bar(g,c,a,b,r=.035){const p=new Vector3(...a),q=new Vector3(...b),m=part(g,c,0,0,0,r,p.distanceTo(q),r,rod);m.position.copy(p.add(q).multiplyScalar(.5));m.quaternion.setFromUnitVectors(new Vector3(0,1,0),q.sub(new Vector3(...a)).normalize());return m;}
@@ -34,6 +35,14 @@ export function buildSideVehicle(kind){const g=new Group();g.userData.captureObs
   part(g,0x1d2b37,0,.37,1.64,1.52,.16,.08);part(g,0xeaf9ef,0,.41,1.69,.4,.13,.02);
   for(const x of [-.57,.57])part(g,0xfff1c1,x,.71,1.61,.36,.14,.04);
   for(const x of [-.8,.8])for(const z of [-1.05,1.05]){const w=part(g,0x152131,x,.32,z,1,1,1,tyre);w.rotation.y=Math.PI/2;g.userData.wheels.push(w);part(g,0xb6c9d1,x*1.035,.32,z,.04,.21,.21,sphere);}
+ }else if(kind==='scooty'){
+  for(const z of [-.66,.66]){const w=part(g,0x172330,0,.28,z,.82,.82,1.6,tyre);w.rotation.y=Math.PI/2;g.userData.wheels.push(w);}
+  part(g,0x0ea5e9,0,.55,.52,.38,.52,.36);part(g,0xf8fafc,0,.62,.70,.28,.34,.08);
+  part(g,0x172330,0,.22,.02,.36,.08,.76);part(g,0x0ea5e9,0,.48,-.48,.34,.32,.78);part(g,0x1f2937,0,.70,-.44,.28,.12,.68);
+  part(g,0xfff3c4,0,.74,.72,.14,.14,.04);bar(g,0x1b2a35,[-.34,.98,.48],[.34,.98,.48]);
+  part(g,0x1e293b,0,1.12,-.24,.40,.56,.26,sphere);part(g,0xf97316,0,1.18,-.42,.30,.38,.14);
+  part(g,0xe0a580,0,1.54,-.16,.19,.22,.19,sphere);part(g,0xef4444,0,1.62,-.16,.24,.18,.24,sphere);
+  for(const side of [-1,1]){bar(g,0x334155,[side*.20,1.32,-.18],[side*.30,1.08,.18],.06);bar(g,0x334155,[side*.30,1.08,.18],[side*.32,.98,.48],.05);bar(g,0x1e293b,[side*.14,.92,-.26],[side*.20,.56,.06],.09);}
  }else{
   for(const z of [-.68,.68]){const w=part(g,0x172330,0,.35,z,1,1,kind==='bike'?2:1,tyre);w.rotation.y=Math.PI/2;g.userData.wheels.push(w);for(let i=0;i<6;i++){const a=i*Math.PI/3;bar(g,0xb2c7cf,[0,.35,z],[0,.35+Math.sin(a)*.29,z+Math.cos(a)*.29],.012);}}
   const c=kind==='bike'?0x294de0:0xf19b27;
@@ -46,4 +55,4 @@ export function buildSideVehicle(kind){const g=new Group();g.userData.captureObs
  }
  return g;
 }
-export function createSideTraffic(scene){const models=new Map();return s=>{const live=new Set();for(const o of s.items){if(o.type!=='sideVehicle'||!o.started)continue;live.add(o);if(!models.has(o)){const g=buildSideVehicle(o.variant);scene.add(g);models.set(o,g);}const g=models.get(o),t=Math.max(0,Math.min(1,(s.time-o.startedAt)/.45));g.position.set(sideVehicleX(o,s.time),.09,s.distance-o.z);g.rotation.y=-o.lane*Math.PI/2*(1-t);g.userData.wheels.forEach(w=>w.rotation.z=s.time*9*(1-t));}for(const [o,g]of models)if(!live.has(o)){scene.remove(g);models.delete(o);}};}
+export function createSideTraffic(scene){const models=new Map();return s=>{const live=new Set();for(const o of s.items){if(o.type!=='sideVehicle'||!o.started)continue;live.add(o);if(!models.has(o)){const g=buildSideVehicle(o.variant);scene.add(g);models.set(o,g);}const g=models.get(o),t=Math.max(0,Math.min(1,(s.time-o.startedAt)/.45));g.position.set(sideVehicleX(o,s.time)+curveRelX(o.z,s),.09+curveRelY(o.z,s),s.distance-o.z);g.rotation.y=-o.lane*Math.PI/2*(1-t)-Math.atan(roadCurveSlope(o.z,s.map));g.userData.wheels.forEach(w=>w.rotation.z=s.time*9*(1-t));}for(const [o,g]of models)if(!live.has(o)){scene.remove(g);models.delete(o);}};}

@@ -102,3 +102,61 @@ export function buildBus(length=10,roof=2.8,oncoming=true){
  batchBody(g,[length,roof,oncoming].join(':'));
  return g;
 }
+
+export function buildCollegeVehicle(kind='car',length=4.5,roof=1.45,oncoming=true){
+ const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];
+ const add=(c,x,y,z,w,h,d,geo=cube)=>{const m=new Mesh(geo,paint(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
+ const shell=(c,x,y,z,w,h,d,r=.10)=>add(c,x,y,z,1,1,1,rounded(w,h,d,r));
+ const dark=0x162231,glass=0x1f4b68,silver=0xc8d8e4,white=0xf1f5f9,teal=0x0ea5a4,crimson=0xcf3241,scootyBlue=0x228be6;
+ if(kind==='van'){
+  shell(white,0,(roof+.58)/2,-length/2,1.90,roof-.58,length,.18);
+  shell(teal,0,.46,-length/2,1.92,.44,length-.06,.10);
+  shell(dark,0,.22,-length/2,1.88,.14,length+.02,.05);
+  shell(glass,0,roof*.73,.02,1.68,roof*.32,.14,.05);
+  for(const side of [-1,1]){
+   add(teal,side*.965,roof*.58,-length/2,.025,.14,length*.86);
+   add(silver,side*.56,roof+.04,-length/2,.07,.08,length*.82);
+   shell(glass,side*.955,roof*.72,-length*.22,.03,roof*.28,length*.26,.012);
+  }
+  for(const x of [-.66,.66])add(0xe0f7ff,x,.56,.05,.34,.11,.03);
+  add(0xff4d4d,-.72,.64,-length-.03,.20,.14,.04);
+  add(0xff4d4d,.72,.64,-length-.03,.20,.14,.04);
+ }else if(kind==='scooty'){
+  shell(scootyBlue,0,.58,-.42,.42,.56,.44,.09);
+  shell(white,0,.64,-.19,.32,.36,.08,.04);
+  shell(dark,0,.28,-1.02,.36,.10,.76,.04);
+  shell(scootyBlue,0,.56,-1.68,.38,.36,.92,.09);
+  shell(dark,0,.80,-1.64,.30,.12,.76,.05);
+  add(dark,0,1.02,-.42,.68,.045,.05);
+  for(const side of [-1,1])add(silver,side*.28,1.12,-.42,.09,.06,.03);
+  add(0xfff4c2,0,.78,-.16,.16,.14,.04);
+  add(0xff3b3b,0,.62,-2.16,.16,.07,.03);
+  shell(0x1e293b,0,1.05,-1.44,.38,.52,.26,.08);
+  shell(0xf97316,0,1.12,-1.66,.32,.40,.16,.06);
+  add(0xe2a885,0,1.46,-1.34,.22,.24,.22);
+  shell(crimson,0,1.52,-1.35,.27,.24,.28,.09);
+  shell(dark,0,1.50,-1.22,.24,.10,.06,.02);
+ }else{
+  const bodyLen=Math.min(length,4.6);
+  const zMid=-length/2;
+  shell(crimson,0,.52,zMid,1.76,.54,bodyLen,.12);
+  shell(crimson,0,1.04,zMid-.15,1.48,.52,bodyLen*.52,.14);
+  shell(glass,0,1.03,zMid-.14,1.52,.40,bodyLen*.46,.08);
+  shell(dark,0,.25,zMid,1.80,.16,bodyLen+.05,.05);
+  add(0xeef8ff,-.64,.56,zMid+bodyLen/2+.02,.30,.12,.03);
+  add(0xeef8ff,.64,.56,zMid+bodyLen/2+.02,.30,.12,.03);
+  add(dark,0,.44,zMid+bodyLen/2+.02,.62,.16,.03);
+  add(0xff4242,-.64,.58,zMid-bodyLen/2-.02,.30,.12,.03);
+  add(0xff4242,.64,.58,zMid-bodyLen/2-.02,.30,.12,.03);
+ }
+ batchBody(g,['college',kind,length,roof,oncoming].join(':'));
+ const wheelXs=kind==='scooty'?[0]:[-.84,.84];
+ const wheelZs=kind==='scooty'?[-.32,-1.95]:kind==='van'?[-1.35,-length+1.35]:[-length/2+1.25,-length/2-1.25];
+ const wScale=kind==='scooty'?.78:1;
+ for(const wx of wheelXs)for(const wz of wheelZs){
+  const w=add(dark,wx,.36*wScale,wz,1,wScale,wScale,tyre);w.rotation.z=Math.PI/2;
+  const r=add(silver,wx+(wx>=0?.09:-.09),.36*wScale,wz,1,wScale*.85,wScale*.85,hub);r.rotation.z=Math.PI/2;
+  g.userData.wheels.push(w);
+ }
+ return g;
+}

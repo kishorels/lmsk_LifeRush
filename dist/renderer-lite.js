@@ -2,14 +2,14 @@ import {drawLitePowerup} from './pickup-models.js';
 import {drawLiteCoin} from './coin.js';
 import {createLiteScenery} from './lite-scenery.js';
 import {weatherAt,weatherColor} from './weather.js';
-import {campusAnchor,campusKind,CAMPUS_SLOTS} from './campus-layout.js';
+import {campusAnchor,campusKind,CAMPUS_SLOTS,roadCurveX} from './campus-layout.js';
 import {drawAirliner,flightPhase} from './airliner.js';
 import {repeatedVans,sideVehicleX} from './traffic-rules.js';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,height,chasePose,capturePose,isCapture,SCHOOL_GATE,ROLL_DURATION,FALL_DURATION,HIT_DURATION} from './engine.js';
 export function createLiteRenderer(canvas){let s,character,w=600,h=700;const ctx=canvas.getContext('2d');
 function resize(){const r=canvas.getBoundingClientRect();w=r.width||390;h=r.height||780;const d=Math.min(devicePixelRatio||1,2);canvas.width=w*d;canvas.height=h*d;ctx?.setTransform(d,0,0,d,0,0);}new ResizeObserver(resize).observe(canvas);
 const poly=(points,color)=>{ctx.fillStyle=color;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();};
-function project(x,z,y=0){const p=10/(z+10);return {x:w/2+(x-s.x*.55)*w*.15*p,y:h*.30+h*.75*p-y*h*.12*p,k:h*.12*p};}
+function project(x,z,y=0){const p=10/(z+10);const curveX=(s?.map==='college'&&z>0)?(roadCurveX((s.distance||0)+Math.max(0,z-3),'college')-roadCurveX(s.distance||0,'college'))*.38:0;return {x:w/2+(x+curveX-s.x*.55)*w*.15*p,y:h*.30+h*.75*p-y*h*.12*p,k:h*.12*p};}
 function box(x,z,width,height,depth,front,side='#a46e43',top='#d0a46b',y=0,visibleSide){
   const left=x-width/2,right=x+width/2,far=z+depth,high=y+height;
   const shape=(points,color)=>poly(points.map(point=>{const p=project(...point);return [p.x,p.y];}),color);
@@ -261,13 +261,20 @@ function school(scenery) {
     }});
   });
 }
+function drawCollegeVan(x,z1,z2,width,roof){
+ const d=Math.max(.5,z2-z1);
+ box(x,z1,width,roof-.4,d,'#0ea5a4','#0d9488','#f1f5f9',.35);
+ box(x,z1,width*.88,roof*.25,.14,'#1f4b68','#1e3a5f','#0ea5a4',roof*.62);
+}
 function traffic(scenery) {
+ const isCol=s.map==='college';
  for(const v of repeatedVans(s.distance,s.runSeed)) {
   const rear=3+v.rear-s.distance,front=3+v.front-s.distance,ramp=3+v.ramp-s.distance,x=v.lane*2.2;
   if(front<0||ramp>145)continue;
   const near=Math.max(-1,rear);
   scenery.push({z:near,draw:()=>{
-   sceneryArt.bus(x,rear,front,v.width,v.roof,true);
+   if(isCol)drawCollegeVan(x,rear,front,v.width,v.roof);
+   else sceneryArt.bus(x,rear,front,v.width,v.roof,true);
    for(let i=0;i<4;i++){
     const z=rear+2+i*4;if(z<0||s.collected.includes(v.id+':'+i))continue;
     const p=project(x,z,v.roof+.58);drawLiteCoin(ctx,p,s.time,i);
@@ -284,7 +291,16 @@ function traffic(scenery) {
   const z=3+o.z-s.distance;if(z+o.length<0||z>145)continue;
   const near=Math.max(-1,z),x=o.lane*2.2;
   scenery.push({z:near,draw:()=>{
-   sceneryArt.bus(x,z,z+o.length,1.94,2.8,Boolean(o.roofRide));
+   if(isCol&&o.roofRide){
+    drawCollegeVan(x,z,z+o.length,1.90,o.roof||2.8);
+   }else if(isCol&&o.collegeKind==='scooty'){
+    box(x,z,.46,1.15,2.1,'#0ea5e9','#0284c7','#f8fafc',.18);
+    box(x,z,0.34,.55,.55,'#1e293b','#0f172a','#ef4444',1.05);
+   }else if(isCol){
+    box(x,z,1.74,.78,Math.min(o.length,4.6),'#cf3241','#991b1b','#1f4b68',.24);
+   }else{
+    sceneryArt.bus(x,z,z+o.length,1.94,2.8,Boolean(o.roofRide));
+   }
    if(o.roofRide){for(let i=0;i<4;i++){const cz=z+4+i*4;if(cz<0||s.collected.includes(o.id+':'+i))continue;const p=project(x,cz,3.4);drawLiteCoin(ctx,p,s.time,i);}}
   }});
  }

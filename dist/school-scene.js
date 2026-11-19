@@ -1,6 +1,6 @@
 import {makeCoin,spinCoin} from './coin.js';
-import {campusMaterial, roadsideTree} from './street-materials.js';
-import {buildBus} from './bus-model.js';
+import {campusMaterial, roadsideTree, curveRelX, curveRelY} from './street-materials.js';
+import {buildBus, buildCollegeVehicle} from './bus-model.js';
 import { BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SRGBColorSpace } from './vendor/three.module.js';
 import { SCHOOL_GATE, SCHOOL_VAN, ROOF_COINS } from './engine.js';
 
@@ -115,6 +115,7 @@ export function createSchoolEntrance(scene) {
   const mid=-(van.front+van.rear)/2, rear=-van.rear;
   const road=.09, roof=road+van.roof;
   const body=buildBus(length,van.roof,false);body.name='entry-bus';body.position.set(x,road,rear);vehicle.add(body);
+  const collegeBody=buildCollegeVehicle('van',length,van.roof,false);collegeBody.name='entry-college-van';collegeBody.position.set(x,road,rear);collegeBody.visible=false;vehicle.add(collegeBody);
 
   const run=van.rear-van.ramp, slope=Math.atan2(van.roof,run);
   const ramp=part(vehicle,0x327a75,x,road+van.roof/2-.06,-(van.ramp+van.rear)/2,van.width,.12,Math.hypot(run,van.roof));
@@ -127,8 +128,10 @@ export function createSchoolEntrance(scene) {
   }
   const coins=ROOF_COINS.map(distance=>makeCoin(vehicle,x,roof+.58,-distance));
   return state=>{
-    campus.position.z=state.distance;
-    schoolSigns.visible=state.map!=='college';collegeSigns.visible=state.map==='college';
+    const isCollege=state.map==='college';
+    campus.position.set(curveRelX(0,state),curveRelY(0,state),state.distance);
+    schoolSigns.visible=!isCollege;collegeSigns.visible=isCollege;
+    body.visible=!isCollege;collegeBody.visible=isCollege;
     const entry=state.entryVan??SCHOOL_VAN;
     vehicle.position.set((entry.lane-SCHOOL_VAN.lane)*2.2,0,SCHOOL_VAN.rear-entry.rear);
     campus.visible=state.distance<entry.front+28;

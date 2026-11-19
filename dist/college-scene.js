@@ -1,16 +1,16 @@
-import {BoxGeometry,CanvasTexture,Group,Mesh,MeshStandardMaterial,SRGBColorSpace} from './vendor/three.module.js';
+import {BoxGeometry,CanvasTexture,ConeGeometry,Group,Mesh,MeshStandardMaterial,SRGBColorSpace} from './vendor/three.module.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
-import {campusAnchor,campusKind,CAMPUS_SLOTS} from './campus-layout.js';
+import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,roadCurveSlope} from './campus-layout.js';
 
 // A separate modern campus set; it uses the same collision-safe road and route plan.
 export function createCollegeCampus(scene){
- const box=new BoxGeometry(),materials=new Map();
+ const box=new BoxGeometry(),pineCone=new ConeGeometry(1,1,7),materials=new Map();
  function material(color){
   if(!materials.has(color))materials.set(color,new MeshStandardMaterial({color,roughness:color===0x346483 ? .29 : .88,metalness:color===0x346483 ? .32 : 0}));
   return materials.get(color);
  }
- function part(root,color,x,y,z,w,h,d){
-  const mesh=new Mesh(box,material(color));mesh.position.set(x,y,z);mesh.scale.set(w,h,d);root.add(mesh);return mesh;
+ function part(root,color,x,y,z,w,h,d,geo=box){
+  const mesh=new Mesh(geo,material(color));mesh.position.set(x,y,z);mesh.scale.set(w,h,d);root.add(mesh);return mesh;
  }
  function label(root,text,x,y,z){
   if(typeof document==='undefined')return;
@@ -50,6 +50,11 @@ export function createCollegeCampus(scene){
     part(root,0xffd88b,side*4.95,2.62,z,.36,.19,.36);
     part(root,0x466d57,side*5.1,.34,z+1.55,1.35,.65,1.5);
     part(root,0x7c9b58,side*5.1,.85,z+1.55,1.1,.45,1.25);
+    // Kodaikanal mountain pine trees & roadside guardrail posts
+    part(root,0x3d2e24,side*16.2,1.6,z,.45,3.2,.45);
+    part(root,0x214d43,side*16.2,4.4,z,2.3,3.8,2.3,pineCone);
+    part(root,0x2a6154,side*16.2,6.4,z,1.7,3.1,1.7,pineCone);
+    part(root,0x1f2937,side*5.32,.36,z,.14,.72,.14);
    }
   }
   // Bake small architectural details into a handful of meshes for mobile GPUs.
@@ -66,7 +71,8 @@ export function createCollegeCampus(scene){
    const item=slots[slot];item.root.visible=college;if(!college)continue;
    const anchor=campusAnchor(slot,state.distance),kind=campusKind(anchor);
    if(item.kind!==kind){item.root.clear();item.root.add(templates[kind].clone());item.kind=kind;}
-   item.root.position.z=state.distance-anchor;
+   item.root.position.set(curveRelX(anchor,state),curveRelY(anchor,state),state.distance-anchor);
+   item.root.rotation.y=-Math.atan(roadCurveSlope(anchor,'college'));
   }
  };
 }
