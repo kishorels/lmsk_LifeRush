@@ -1,11 +1,33 @@
-import {createSound} from './sound.js?v=3.0.0';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE} from './engine.js?v=3.0.0';
-import {createRenderer} from './renderer3d.js?v=3.0.0';
-import {createLiteRenderer} from './renderer-lite.js?v=3.0.0';
+import {createPowerControls} from './power-controls.js?v=3.1.8';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.2.2';
+import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.1.8';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE} from './engine.js?v=3.2.2';
+import {createRenderer} from './renderer3d.js?v=3.2.2';
+import {createLiteRenderer} from './renderer-lite.js?v=3.1.9';
 
+import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
+import {initializeBuildProfile} from './build-profile.js';
+initializeBuildProfile();
+const profile = {xp:0,collegeBest:0,collegeCoins:0,introduced:0};
 const $=id=>document.getElementById(id);
+
+const IC_COIN = '<img class="ui-coin-ic" width="14" height="14" src="assets/icons/coin.svg" alt="">';
+const IC_MAGNET = '<img class="ui-coin-ic" width="14" height="14" src="assets/icons/magnet.svg" alt="">';
+const IC_LOCK = '<svg class="ui-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-3.1 0H9.1V6a2.9 2.9 0 0 1 5.8 0v2z"/></svg>';
+const IC_CHECK = '<svg class="ui-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+const IC_BOLT = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>';
+const IC_FIRE = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.61 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg>';
+const IC_JUMP = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="m12 4-7 7h4v9h6v-9h4l-7-7z"/></svg>';
+const IC_RUN = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 6 6-6 6"/><path d="m13 6 6 6-6 6"/></svg>';
+const IC_SCHOOL = '<svg class="ui-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm-7 9.18v4L12 20l7-3.82v-4L12 16l-7-3.82z"/></svg>';
+const IC_COLLEGE = '<svg class="ui-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg>';
+const IC_ITPARK = '<svg class="ui-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M19 2H9a2 2 0 0 0-2 2v3H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>';
+const IC_SOUND_ON = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+const IC_SOUND_OFF = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>';
+const IC_REPLAY = '<svg class="ui-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+const IC_RUSH = '<svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 6 6-6 6"/><path d="m13 6 6 6-6 6"/></svg>';
 let canvas=$('world');
-let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false, audioUnlockedOnce = false;
+let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastLmskMask = -1, lastFeverOn = false, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false, audioUnlockedOnce = false;
 const nameModalEl = $('name-modal');
 const shopModalEl = $('shop-modal');
 const speedLinesEl = $('speed-lines');
@@ -88,6 +110,7 @@ function setupIntroVideo() {
     video.addEventListener('canplay', tryPlay, { once: true });
     tryPlay();
   }
+  setTimeout(() => { if (!introFinished) activateEnterButton(); }, 5500);
 }
 setupIntroVideo();
 
@@ -121,8 +144,14 @@ try{
   totalCoins=Math.max(0,Math.floor(Number(localStorage.getItem('runverse-total-coins'))||0));
   collegeDistDone=localStorage.getItem('runverse-college-dist-done')==='1' || best >= COLLEGE_UNLOCK_DISTANCE;
   collegeCoinsDone=localStorage.getItem('runverse-college-coins-done')==='1' || totalCoins >= COLLEGE_UNLOCK_COINS;
+  try {
+    const stored = JSON.parse(localStorage.getItem('runverse-progression'));
+    for (const key of Object.keys(profile)) {
+      if (Number.isSafeInteger(stored?.[key]) && stored[key] >= 0) profile[key] = stored[key];
+    }
+  } catch {}
   const savedChar=localStorage.getItem('runverse-character')||'male';
-  const savedMap=localStorage.getItem('runverse-map')==='college'?'college':'school';
+  const savedMap=parkOpen(profile) && localStorage.getItem('runverse-map')==='itpark' ? 'itpark' : localStorage.getItem('runverse-map')==='college'?'college':'school';
   if (!isCollegeUnlocked()) {
     selectedMap = 'school';
     equippedCharId = (savedChar === 'female' || savedChar === 'college-woman') ? 'female' : 'male';
@@ -202,6 +231,7 @@ if (introFinished) scheduleRendererInit();
 
 const save=()=>{
   try{
+    localStorage.setItem('runverse-progression',JSON.stringify(profile));
     localStorage.setItem('runverse-best',best);
     localStorage.setItem('runverse-total-coins',totalCoins);
     localStorage.setItem('runverse-college-dist-done',isDistGoalMet()?'1':'0');
@@ -238,10 +268,15 @@ document.querySelectorAll('[data-volume]').forEach(slider=>{
 });
 function soundButton(){
   effects.setEnabled(sound);
-  $('sound').textContent=sound?'♪ ON':'♪ OFF';
+  $('sound').innerHTML=sound?(IC_SOUND_ON+' ON'):(IC_SOUND_OFF+' OFF');
   $('sound').setAttribute('aria-label',sound?'Mute sound':'Enable sound');
 }
 soundButton();
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('button, [role="button"]');
+  if (!btn || btn.disabled || btn.id === 'btn-enter' || btn.id === 'sound' || btn.closest('#touch-controls')) return;
+  playUiClick(sound);
+}, { passive: true });
 $('sound').onclick=()=>{
   sound=!sound;
   soundButton();
@@ -270,15 +305,15 @@ function renderChecklistHtml() {
   return `
     <div class="unlock-goal ${distMet ? 'is-done' : ''}">
       <div class="unlock-goal-top">
-        <span>🏃 10,000m in 1 Play</span>
-        <span class="unlock-goal-status">${distMet ? '✅ OPEN!' : `${bestClamped.toLocaleString()} / 10,000m`}</span>
+        <span>${IC_RUN} 10,000m in 1 Play</span>
+        <span class="unlock-goal-status">${distMet ? `${IC_CHECK} OPEN` : `${bestClamped.toLocaleString()} / 10,000m`}</span>
       </div>
       <div class="unlock-bar-track"><div class="unlock-bar-fill" style="width:${distPct}%"></div></div>
     </div>
     <div class="unlock-goal ${coinsMet ? 'is-done' : ''}">
       <div class="unlock-goal-top">
-        <span>🪙 20,000 Coins Bank</span>
-        <span class="unlock-goal-status">${coinsMet ? '✅ OPEN!' : `${coinsClamped.toLocaleString()} / 20,000`}</span>
+        <span>${IC_COIN} 20,000 Coins Bank</span>
+        <span class="unlock-goal-status">${coinsMet ? `${IC_CHECK} OPEN` : `${coinsClamped.toLocaleString()} / 20,000`}</span>
       </div>
       <div class="unlock-bar-track"><div class="unlock-bar-fill" style="width:${coinsPct}%"></div></div>
     </div>
@@ -294,14 +329,32 @@ function pulseChecklist(el) {
 
 function updateUnlockUI() {
   const unlocked = isCollegeUnlocked();
-  const key = `${Math.floor(best)}:${Math.floor(totalCoins)}:${unlocked ? 1 : 0}`;
+  const key = `${profile.xp}/${profile.collegeBest}/${profile.collegeCoins}:${Math.floor(best)}:${Math.floor(totalCoins)}:${unlocked ? 1 : 0}`;
   if (key === lastUnlockUiKey) return;
   lastUnlockUiKey = key;
+  const level = playerLevel(profile.xp);
+  const next = powers.find(power => power.level > level);
+  if ($('player-progress')) {
+    $('player-progress').textContent = 'Level ' + level + ' · ' + profile.xp + (level < 50 ? '/' + xpForLevel(level+1) : '') + ' XP' +
+      (next ? ' · Next: ' + next.name + ' (Lv ' + next.level + ')' : ' · All powers open');
+  }
+  const park = document.querySelector('[data-map="itpark"]');
+  const open = parkOpen(profile);
+  if (park) {
+    park.classList.toggle('is-locked',!open);
+    park.setAttribute('aria-disabled',String(!open));
+  }
+  if ($('park-goals')) $('park-goals').textContent = open ? 'Glass towers · Office shuttles' : 'College goals';
+  if ($('park-badge')) $('park-badge').innerHTML = open ? IC_CHECK : IC_LOCK;
+  if ($('park-distance')) $('park-distance').value = profile.collegeBest;
+  if ($('park-coins')) $('park-coins').value = profile.collegeCoins;
+  if ($('park-distance-value')) $('park-distance-value').textContent = Math.min(15000,profile.collegeBest).toLocaleString();
+  if ($('park-coins-value')) $('park-coins-value').textContent = Math.min(40000,profile.collegeCoins).toLocaleString();
   const bankEl = $('hub-coin-bank');
   if (bankEl) {
-    bankEl.textContent = unlocked
-      ? `🪙 ${totalCoins.toLocaleString()} Coins · ★ College Open`
-      : `🪙 ${totalCoins.toLocaleString()} / 20,000`;
+    bankEl.innerHTML = unlocked
+      ? `${IC_COIN} ${totalCoins.toLocaleString()} Coins · College Open`
+      : `${IC_COIN} ${totalCoins.toLocaleString()} / 20,000`;
   }
   const collegeCard = document.querySelector('[data-map="college"]');
   if (collegeCard) {
@@ -309,13 +362,19 @@ function updateUnlockUI() {
     collegeCard.setAttribute('aria-disabled', String(!unlocked));
   }
   if ($('college-map-sub')) {
-    $('college-map-sub').textContent = unlocked ? 'Winding hills · scooties & cars' : '🔒 Complete 2 goals';
+    $('college-map-sub').textContent = unlocked ? 'Winding hills · scooties & cars' : 'Complete 2 goals';
   }
   if ($('college-map-badge')) {
-    $('college-map-badge').textContent = unlocked ? '✓' : '🔒';
+    $('college-map-badge').innerHTML = unlocked ? IC_CHECK : IC_LOCK;
   }
   const checklistHtml = renderChecklistHtml();
-  if ($('map-unlock-checklist')) $('map-unlock-checklist').innerHTML = checklistHtml;
+  if ($('map-unlock-checklist')) {
+    $('map-unlock-checklist').innerHTML = checklistHtml;
+    $('map-unlock-checklist').hidden = unlocked;
+  }
+  if ($('park-checklist')) {
+    $('park-checklist').hidden = open;
+  }
   if ($('char-unlock-checklist')) $('char-unlock-checklist').innerHTML = checklistHtml;
 }
 
@@ -327,9 +386,10 @@ function syncMapHeaderUI() {
   });
   const school=selectedMap==='school';
   if($('hub-map-name')) $('hub-map-name').textContent=school?'SCHOOL CAMPUS':'COLLEGE CAMPUS';
+  if(selectedMap==='itpark' && $('hub-map-name')) $('hub-map-name').textContent='IT PARK';
   if($('hub-outfit-name')) $('hub-outfit-name').textContent=school?'School uniform':'Casual outfit';
   const loc = document.querySelector('.hud-top-bar .location');
-  if(loc) loc.textContent=school?'🏫 RUNVERSE SCHOOL':'🎓 RUNVERSE COLLEGE';
+  if(loc) loc.innerHTML=selectedMap==='itpark'?(IC_ITPARK+' IT PARK'):school?(IC_SCHOOL+' RUNVERSE SCHOOL'):(IC_COLLEGE+' RUNVERSE COLLEGE');
 }
 
 function updateCarouselUI() {
@@ -340,7 +400,7 @@ function updateCarouselUI() {
   const lockPill = $('char-lock-pill');
   if (lockPill) {
     lockPill.classList.toggle('is-locked', !unlocked);
-    lockPill.textContent = unlocked ? '✓ UNLOCKED' : '🔒 LOCKED';
+    lockPill.innerHTML = unlocked ? `${IC_CHECK} UNLOCKED` : `${IC_LOCK} LOCKED`;
   }
   if ($('char-carousel-name')) $('char-carousel-name').textContent = entry.name;
   if ($('char-carousel-outfit')) $('char-carousel-outfit').textContent = entry.outfit;
@@ -354,10 +414,10 @@ function updateCarouselUI() {
     equipBtn.classList.remove('is-selected', 'is-locked');
     if (!unlocked) {
       equipBtn.classList.add('is-locked');
-      equipBtn.textContent = '🔒 LOCKED';
+      equipBtn.innerHTML = `${IC_LOCK} LOCKED`;
     } else if (equipped) {
       equipBtn.classList.add('is-selected');
-      equipBtn.textContent = '✓ SELECTED';
+      equipBtn.innerHTML = `${IC_CHECK} SELECTED`;
     } else {
       equipBtn.textContent = 'SELECT';
     }
@@ -415,7 +475,7 @@ function selectUnlockedCharacter(id) {
   equippedCharId = entry.id;
   activePreviewCharId = entry.id;
   character = entry.gender;
-  selectedMap = entry.map;
+  if (selectedMap !== 'itpark' || entry.map === 'school') selectedMap = entry.map;
   s.map = selectedMap;
   carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === entry.id));
   syncMapHeaderUI();
@@ -461,6 +521,7 @@ if ($('char-equip-btn')) {
 }
 
 function selectMap(map, fromUser = false){
+  if (map === 'itpark' && !parkOpen(profile)) { pulseChecklist($('park-checklist')); return; }
   if (map === 'college' && !isCollegeUnlocked()) {
     if (fromUser) {
       pulseChecklist($('map-unlock-checklist'));
@@ -468,9 +529,9 @@ function selectMap(map, fromUser = false){
     }
     return;
   }
-  selectedMap=map==='college'?'college':'school';
+  selectedMap=map==='itpark'?'itpark':map==='college'?'college':'school';
   s.map=selectedMap;
-  if (selectedMap === 'college') {
+  if (selectedMap !== 'school') {
     if (!equippedCharId.startsWith('college-')) {
       equippedCharId = character === 'female' ? 'college-woman' : 'college-man';
     }
@@ -596,35 +657,39 @@ if ($('btn-edit-player-name')) {
   $('btn-edit-player-name').onclick = () => showNameModal(true);
 }
 
+let enteredFromSplash = false;
 if($('btn-enter')){
   $('btn-enter').onclick=()=>{
-    setScreenMode('select');
-    showHub('home');
-    if (!playerName) {
-      showNameModal();
-    }
+    if (enteredFromSplash) return;
+    enteredFromSplash = true;
+    const btn = $('btn-enter');
+    btn?.classList.add('is-pressed');
+    playEnterSound(sound);
+    effects.setEnabled(sound);
+    effects.unlock();
+    try {
+      const v = $('intro-video');
+      if (v) v.pause();
+    } catch {}
     setTimeout(() => {
-      try {
-        const v = $('intro-video');
-        if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
-      } catch {}
-    }, 60);
-    if (!rendererStarted) {
-      setTimeout(ensureRenderer, 35);
-    }
-    setTimeout(() => {
-      effects.setEnabled(sound);
-      effects.unlock();
-      if (sound) effects.startBgm?.();
-    }, 240);
+      setScreenMode('select');
+      showHub('home');
+      if (!playerName) {
+        showNameModal();
+      }
+      if (!rendererStarted) {
+        setTimeout(ensureRenderer, 20);
+      }
+      if (sound) setTimeout(() => effects.startBgm?.(), 140);
+    }, 85);
   };
 }
 
 const UPGRADE_DEFS = [
-  { id: 'magnet', icon: '🧲', name: 'Magnet Duration', values: [12, 15, 18, 21, 25], unit: 's', costs: [500, 1200, 2500, 5000] },
-  { id: 'nitro', icon: '⚡', name: 'Nitro Rush Boost', values: [4.5, 5.5, 6.5, 7.5, 9], unit: 's', costs: [600, 1400, 2800, 5500] },
-  { id: 'shoes', icon: '👟', name: 'Super Jump Shoes', values: [9, 11, 13, 15, 18], unit: 's', costs: [500, 1200, 2400, 4800] },
-  { id: 'coinBoost', icon: '🪙', name: 'End-of-Run Coin Bonus', values: [0, 15, 30, 50, 75], unit: '%', costs: [800, 1800, 3500, 7000] }
+  { id: 'magnet', icon: IC_MAGNET, name: 'Magnet Duration', values: [12, 15, 18, 21, 25], unit: 's', costs: [500, 1200, 2500, 5000] },
+  { id: 'nitro', icon: IC_BOLT, name: 'Nitro Rush Boost', values: [4.5, 5.5, 6.5, 7.5, 9], unit: 's', costs: [600, 1400, 2800, 5500] },
+  { id: 'shoes', icon: IC_JUMP, name: 'Super Jump Shoes', values: [9, 11, 13, 15, 18], unit: 's', costs: [500, 1200, 2400, 4800] },
+  { id: 'coinBoost', icon: IC_COIN, name: 'End-of-Run Coin Bonus', values: [0, 15, 30, 50, 75], unit: '%', costs: [800, 1800, 3500, 7000] }
 ];
 const REVIVE_COST = 250;
 let upgrades = { magnet: 0, nitro: 0, shoes: 0, coinBoost: 0 };
@@ -638,13 +703,14 @@ const todayKey = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const MISSION_ICONS = { dist: IC_RUN, coins: IC_COIN, near: IC_FIRE };
 function freshMissions(day) {
   return {
     day,
     items: [
-      { id: 'dist', icon: '🏃', label: 'Run 1,500m total today', target: 1500, progress: 0, reward: 350, claimed: false },
-      { id: 'coins', icon: '🪙', label: 'Collect 150 coins today', target: 150, progress: 0, reward: 450, claimed: false },
-      { id: 'near', icon: '🔥', label: 'Pull off 8 Close Calls today', target: 8, progress: 0, reward: 600, claimed: false }
+      { id: 'dist', label: 'Run 1,500m total today', target: 1500, progress: 0, reward: 350, claimed: false },
+      { id: 'coins', label: 'Collect 150 coins today', target: 150, progress: 0, reward: 450, claimed: false },
+      { id: 'near', label: 'Pull off 8 Close Calls today', target: 8, progress: 0, reward: 600, claimed: false }
     ]
   };
 }
@@ -658,11 +724,6 @@ function saveMissionsAndUpgrades() {
     localStorage.setItem('runverse-upgrades', JSON.stringify(upgrades));
     localStorage.setItem('runverse-daily-missions', JSON.stringify(dailyMissions));
   } catch {}
-}
-function applyUpgradesToRun(state) {
-  state.magnetDuration = UPGRADE_DEFS[0].values[upgrades.magnet] || 12;
-  state.nitroDuration = UPGRADE_DEFS[1].values[upgrades.nitro] || 4.5;
-  state.shoesDuration = UPGRADE_DEFS[2].values[upgrades.shoes] || 9;
 }
 function recordRunMissions(runDist, runCoins, runCloseCalls) {
   if (dailyMissions.day !== todayKey()) dailyMissions = freshMissions(todayKey());
@@ -681,7 +742,7 @@ function updateShopBadge() {
 }
 let activeShopTab = 'missions';
 function renderShopModal() {
-  if ($('shop-coin-bank')) $('shop-coin-bank').textContent = `🪙 ${totalCoins.toLocaleString()} Coins`;
+  if ($('shop-coin-bank')) $('shop-coin-bank').innerHTML = `${IC_COIN} ${totalCoins.toLocaleString()} Coins`;
   const mList = $('shop-missions-list');
   const uList = $('shop-upgrades-list');
   if (mList) {
@@ -690,8 +751,9 @@ function renderShopModal() {
       const pct = Math.min(100, Math.round((m.progress / m.target) * 100));
       const ready = !m.claimed && m.progress >= m.target;
       const btnCls = m.claimed ? 'shop-action-btn is-done' : ready ? 'shop-action-btn is-claim' : 'shop-action-btn';
-      const btnTxt = m.claimed ? '✓ CLAIMED' : ready ? `CLAIM +${m.reward} 🪙` : `${m.progress}/${m.target}`;
-      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${m.icon} ${m.label}</strong><small>Reward: +${m.reward} Coins</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="${btnCls}" data-claim-mission="${m.id}" ${ready ? '' : 'disabled'}>${btnTxt}</button></div>`;
+      const btnTxt = m.claimed ? `${IC_CHECK} CLAIMED` : ready ? `CLAIM +${m.reward} ${IC_COIN}` : `${m.progress}/${m.target}`;
+      const ic = MISSION_ICONS[m.id] || IC_RUN;
+      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${ic} ${m.label}</strong><small>Reward: +${m.reward} Coins</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="${btnCls}" data-claim-mission="${m.id}" ${ready ? '' : 'disabled'}>${btnTxt}</button></div>`;
     }).join('');
     mList.querySelectorAll('[data-claim-mission]').forEach(btn => {
       btn.onclick = () => {
@@ -711,14 +773,16 @@ function renderShopModal() {
   }
   if (uList) {
     uList.hidden = activeShopTab !== 'upgrades';
-    uList.innerHTML = UPGRADE_DEFS.map(def => {
+    uList.innerHTML = UPGRADE_DEFS.filter(def => def.id === 'coinBoost').map(def => {
       const lv = upgrades[def.id] || 0;
+      const required = powerById[def.id]?.level;
+      if (required > playerLevel(profile.xp)) return '<div class="shop-item-row"><strong>'+def.name+'</strong><small>Unlock at Level '+required+'</small></div>';
       const maxed = lv >= def.values.length - 1;
       const cost = maxed ? 0 : def.costs[lv];
       const canBuy = !maxed && totalCoins >= cost;
       const curVal = def.values[lv], nextVal = maxed ? curVal : def.values[lv + 1];
       const pct = Math.round(((lv + 1) / def.values.length) * 100);
-      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name} · Lv.${lv + 1}</strong><small>${maxed ? `MAX (${curVal}${def.unit})` : `${curVal}${def.unit} → ${nextVal}${def.unit}`}</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="shop-action-btn ${maxed ? 'is-done' : ''}" data-buy-upgrade="${def.id}" ${canBuy ? '' : 'disabled'}>${maxed ? 'MAXED' : `${cost.toLocaleString()} 🪙`}</button></div>`;
+      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name} · Lv.${lv + 1}</strong><small>${maxed ? `MAX (${curVal}${def.unit})` : `${curVal}${def.unit} → ${nextVal}${def.unit}`}</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="shop-action-btn ${maxed ? 'is-done' : ''}" data-buy-upgrade="${def.id}" ${canBuy ? '' : 'disabled'}>${maxed ? 'MAXED' : `${cost.toLocaleString()} ${IC_COIN}`}</button></div>`;
     }).join('');
     uList.querySelectorAll('[data-buy-upgrade]').forEach(btn => {
       btn.onclick = () => {
@@ -790,7 +854,7 @@ async function shareReportCard(runDist, runCoins, grade, closeCalls) {
   ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3; ctx.strokeRect(38, 38, 644, 884);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#7dd3fc'; ctx.font = '900 28px system-ui, sans-serif';
-  ctx.fillText('★ LMSK LIFE RUSH ★', 360, 108);
+  ctx.fillText('LMSK LIFE RUSH', 360, 108);
   ctx.fillStyle = '#ffe268'; ctx.font = '900 54px system-ui, sans-serif';
   ctx.fillText('REPORT CARD', 360, 178);
   ctx.fillStyle = '#ffffff'; ctx.font = '800 32px system-ui, sans-serif';
@@ -802,8 +866,8 @@ async function shareReportCard(runDist, runCoins, grade, closeCalls) {
   const rows = [
     ['DISTANCE', `${runDist.toLocaleString()} m`],
     ['HIGHEST RECORD', `${best.toLocaleString()} m`],
-    ['COINS EARNED', `${runCoins.toLocaleString()} 🪙`],
-    ['CLOSE CALLS', `${closeCalls} 🔥`]
+    ['COINS EARNED', `${runCoins.toLocaleString()} Coins`],
+    ['CLOSE CALLS', `${closeCalls}`]
   ];
   rows.forEach(([k, v], i) => {
     const y = 480 + i * 86;
@@ -816,7 +880,7 @@ async function shareReportCard(runDist, runCoins, grade, closeCalls) {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#7dd3fc'; ctx.font = '800 26px system-ui, sans-serif';
   ctx.fillText('CAN YOU BEAT MY RECORD?!', 360, 868);
-  const shareText = `🏃 LMSK LifeRush Report Card — ${playerName || 'Student'} ran ${runDist}m (${grade})! Record: ${best}m. Can you beat me?!`;
+  const shareText = `LMSK LifeRush Report Card - ${playerName || 'Student'} ran ${runDist}m (${grade})! Record: ${best}m. Can you beat me?!`;
   try {
     const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
     const file = blob ? new File([blob], 'lmsk-liferush-score.png', { type: 'image/png' }) : null;
@@ -838,7 +902,21 @@ async function shareReportCard(runDist, runCoins, grade, closeCalls) {
   } catch {}
 }
 
+const powerControls = createPowerControls(() => s, index => usePower(s,index));
+function refreshPowerSettings(){
+  const el=$('settings-powers-current');if(!el)return;
+  const ids=availablePowers(playerLevel(profile.xp));
+  const cur=powerControls.current(ids);
+  el.textContent=!ids.length?'First power unlocks at Level 10':cur.length?cur.map(id=>powerById[id]?.name||id).join(' + '):'Pick 2 on your first run';
+  const btn=$('btn-change-powers');if(btn)btn.disabled=ids.length<=2;
+}
+if($('btn-change-powers'))$('btn-change-powers').onclick=()=>powerControls.edit(availablePowers(playerLevel(profile.xp)),refreshPowerSettings);
+hubButtons.forEach(button=>button.addEventListener('click',()=>{if(button.dataset.hub==='settings')refreshPowerSettings();}));
+refreshPowerSettings();
 function start(){
+  powerControls.choose(availablePowers(playerLevel(profile.xp)),beginRun);
+}
+function beginRun(chosen){
   if (!isCollegeUnlocked()) {
     selectedMap = 'school';
     equippedCharId = character === 'female' ? 'female' : 'male';
@@ -846,19 +924,26 @@ function start(){
     syncMapHeaderUI();
   }
   s=fresh();
-  applyUpgradesToRun(s);
+  s.level = playerLevel(profile.xp);
+  equipPowers(s,chosen);
+  s.enableForks = selectedMap === 'school' || selectedMap === 'itpark';
   s.map=selectedMap;
   s.turnTime = 0.65;
   s.mode = 'intro';
   s.styleAction = SWEEP_SECONDS;
   s.speed = 0;
   lastNearMissShown = 0;
+  lastEventBannerShown = 0;
+  lastLmskMask = -1;
+  lastFeverOn = false;
+  if ($('fever-veil')) $('fever-veil').hidden = true;
   runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
   if ($('btn-revive')) $('btn-revive').hidden = true;
   if ($('btn-share-score')) $('btn-share-score').hidden = true;
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
+  if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
   setScreenMode('running');
-  $('toast').textContent=selectedMap==='college'?'College rush · Find the next roof ramp':'School rush · Find the next roof ramp';
+  $('toast').textContent=selectedMap==='itpark'?'IT Park · Follow the shuttle roof ramp':selectedMap==='college'?'College rush · Find the next roof ramp':'School rush · Find the next roof ramp';
   effects.setEnabled(sound);
   effects.unlock();
   if(sound) effects.startBgm?.();
@@ -890,7 +975,7 @@ function resume(){
 function show(title,message,button,tag){
   $('title').textContent=title;
   $('message').textContent=message;
-  if($('btn-play-again')) $('btn-play-again').innerHTML=button+' <span>↗</span>';
+  if($('btn-play-again')) $('btn-play-again').innerHTML=button+' <span aria-hidden="true">'+IC_REPLAY+'</span>';
   $('tag').textContent=tag;
   if($('selection')) $('selection').hidden=true;
   if($('restart')) $('restart').hidden=s.mode!=='paused';
@@ -901,6 +986,7 @@ function show(title,message,button,tag){
 
 let runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
 function crash(){
+  if (s.map === 'college') profile.collegeBest = Math.max(profile.collegeBest,Math.floor(s.distance));
   const previousBest = best;
   const runDist = Math.floor(s.distance);
   const deltaDist = Math.max(0, runDist - runReported.dist);
@@ -917,6 +1003,7 @@ function crash(){
   save();
   recordRunMissions(deltaDist, deltaCoins + deltaBonus, deltaNear);
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
+  if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
   effects.play('over');
   setScreenMode('gameover');
   const isCol=selectedMap==='college';
@@ -930,7 +1017,7 @@ function crash(){
   }[s.cause]||'Keep practicing!';
   
   const totalScore = runDist + s.coins * 10;
-  const grade = totalScore >= 450 ? 'A+ 🌟' : totalScore >= 220 ? 'A 🥇' : 'B 🥈';
+  const grade = totalScore >= 450 ? 'A+' : totalScore >= 220 ? 'A' : 'B';
   if($('grade-badge')) $('grade-badge').textContent = grade;
   if($('report-grade')) $('report-grade').hidden = false;
 
@@ -948,14 +1035,14 @@ function crash(){
     if (previousBest > 0 && runDist < previousBest) {
       const gap = previousBest - runDist;
       challengeBanner.classList.add('is-loser-taunt');
-      challengeBanner.textContent = `😤 ARE YOU A LOSER?! You stopped ${gap}m short of your ${previousBest}m Highest Record (${pct}%) — try quick to achieve it!`;
+      challengeBanner.innerHTML = `<span class="challenge-headline">ARE YOU A LOSER?!</span><span class="challenge-sub">You stopped ${gap.toLocaleString()}m short of your ${previousBest.toLocaleString()}m record (${pct}%) - try again to beat it!</span>`;
     } else if (runDist > 0) {
       const nextTarget = Math.ceil((runDist + 250) / 100) * 100;
       challengeBanner.classList.add('is-new-record');
-      challengeBanner.textContent = `🏆 NEW HIGHEST RECORD: ${runDist}m! You smashed the record — try quick to reach ${nextTarget}m next!`;
+      challengeBanner.innerHTML = `<span class="challenge-headline">NEW HIGHEST RECORD: ${runDist.toLocaleString()}m!</span><span class="challenge-sub">You smashed the record - push for ${nextTarget.toLocaleString()}m next!</span>`;
     } else {
       challengeBanner.classList.add('is-loser-taunt');
-      challengeBanner.textContent = `😤 ARE YOU A LOSER?! 0m doesn't count — try quick to set a Highest Record!`;
+      challengeBanner.innerHTML = `<span class="challenge-headline">ARE YOU A LOSER?!</span><span class="challenge-sub">0m doesn't count - run now to set your Highest Record!</span>`;
     }
   }
   
@@ -988,7 +1075,7 @@ if ($('btn-revive')) {
     reviveRun(s);
     setScreenMode('running');
     effects.play('shield');
-    showCloseCallBanner('⚡ SAVED! SHIELD ACTIVE!', true);
+    showCloseCallBanner('SHIELD ACTIVE!', true);
   };
 }
 
@@ -1043,6 +1130,7 @@ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointe
 }));
 
 window.addEventListener('keydown',e=>{
+  if ($('power-picker')?.open) return;
   if(e.target?.closest?.('input, textarea, select')) return;
   if(s.mode!=='running'&&e.target?.closest?.('button')&&(e.key===' '||e.key==='Enter'))return;
   if(s.mode!=='running' && game.classList.contains('mode-select') && game.classList.contains('hub-characters')) {
@@ -1100,6 +1188,7 @@ function tick(t) {
   }
 
   step(s, dt);
+  powerControls.update();
   try { effects.update(s); } catch (err) { if (!loopErrorLogged) { loopErrorLogged = true; console.error('Sound update error:', err); } }
   
   if(old==='running' && s.mode==='falling') {
@@ -1120,6 +1209,19 @@ function tick(t) {
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) effects.play('laugh');
   if (old === 'captured' && captureBefore < CAPTURE_GESTURE_START && s.capture >= CAPTURE_GESTURE_START) effects.play('swag');
 
+  const metresXP = Math.floor(s.distance / 100) - Math.floor(distanceBefore / 100);
+  const earnedCoins = Math.max(0,s.coins - coinsBefore);
+  if (metresXP > 0 || earnedCoins || (s.map === 'college' && profile.collegeBest < 15000 && s.distance >= 15000)) {
+    profile.xp += Math.max(0,metresXP) + earnedCoins;
+    if (s.map === 'college') {
+      profile.collegeBest = Math.max(profile.collegeBest,Math.floor(s.distance));
+      profile.collegeCoins += earnedCoins;
+    }
+    const level = playerLevel(profile.xp);
+    if (level > s.level) showCloseCallBanner('LEVEL ' + level,true);
+    s.level = level;
+    if (!earnedCoins) save();
+  }
   if (s.coins > coinsBefore) {
     const gained = s.coins - coinsBefore;
     const wasUnlocked = isCollegeUnlocked();
@@ -1128,8 +1230,8 @@ function tick(t) {
       collegeCoinsDone = true;
       effects.play('bell');
       $('toast').textContent = isCollegeUnlocked()
-        ? '🎓 20,000 COINS SAVED · COLLEGE CAMPUS & CHARACTERS UNLOCKED!'
-        : '🪙 Goal 2 Complete: 20,000 Coins Saved! Reach 10,000m in 1 run to unlock College!';
+        ? '20,000 COINS SAVED · COLLEGE CAMPUS & CHARACTERS UNLOCKED!'
+        : 'Goal 2 Complete: 20,000 Coins Saved! Reach 10,000m in 1 run to unlock College!';
     }
     save();
     if (!wasUnlocked && isCollegeUnlocked()) updateUnlockUI();
@@ -1148,28 +1250,43 @@ function tick(t) {
   if (s.collectedPowerup === 'magnet') {
     effects.play('magnet');
     $('toast').textContent='Magnet active! Collect nearby gold coins.';
-    showCloseCallBanner(`🧲 MAGNET · ${Math.round(s.magnet)}s`, false);
+    showCloseCallBanner(`MAGNET · ${Math.round(s.magnet)}s`, false);
     s.collectedPowerup = null;
   } else if (s.collectedPowerup === 'shield') {
     effects.play('shield');
-    $('toast').textContent='Shield active! Protected from one hit.';
-    showCloseCallBanner('🛡️ SHIELD ACTIVE!', true);
+    $('toast').textContent='Shield active for 10 seconds.';
+    showCloseCallBanner('SHIELD ACTIVE!', true);
     s.collectedPowerup = null;
   } else if (s.collectedPowerup === 'nitro') {
     effects.play('nitro');
-    showCloseCallBanner(`⚡ NITRO RUSH · ${Math.ceil(s.nitro)}s!`, true);
+    showCloseCallBanner(`NITRO RUSH · ${Math.ceil(s.nitro)}s!`, true);
     s.collectedPowerup = null;
   } else if (s.collectedPowerup === 'shoes') {
     effects.play('shoes');
-    showCloseCallBanner(`👟 SUPER JUMP · ${Math.ceil(s.shoes)}s!`, false);
+    showCloseCallBanner(`SUPER JUMP · ${Math.ceil(s.shoes)}s!`, false);
     s.collectedPowerup = null;
   }
 
+  if (powerById[s.collectedPowerup]) {
+    showCloseCallBanner(powerById[s.collectedPowerup].name.toUpperCase(),true);
+    effects.play('magnet');
+    s.collectedPowerup = null;
+  }
   if (s.nearMissEvent && s.nearMissEvent.id !== lastNearMissShown) {
     lastNearMissShown = s.nearMissEvent.id;
     const ev = s.nearMissEvent;
     effects.play('nearMiss');
-    showCloseCallBanner(`${ev.label} +${ev.bonus} 🪙 · x${ev.combo}`, ev.label.includes('NITRO'));
+    showCloseCallBanner(`${ev.label} +${ev.bonus} Coins · x${ev.combo}`, ev.label.includes('NITRO'));
+  }
+  if (s.lastRoadSound) {
+    effects.play(s.lastRoadSound);
+    s.lastRoadSound = null;
+  }
+  if (s.eventBanner && s.eventBanner.id !== lastEventBannerShown) {
+    lastEventBannerShown = s.eventBanner.id;
+    const isHighlight = ['turbo', 'mystery', 'fever', 'skybridge', 'underpass'].includes(s.eventBanner.kind);
+    showCloseCallBanner(s.eventBanner.text, isHighlight);
+    $('toast').textContent = s.eventBanner.text;
   }
 
   if (s.shieldAbsorbed) {
@@ -1182,24 +1299,24 @@ function tick(t) {
   for (const m of [100, 250, 500]) {
     if (distanceBefore < m && s.distance >= m) {
       effects.play('bell');
-      $('toast').textContent = `🔔 School Bell Rang at ${m}m! Keep Rushing!`;
+      $('toast').textContent = `School Bell Rang at ${m}m! Keep Rushing!`;
     }
   }
   if (distanceBefore < 1000 && s.distance >= 1000) {
     effects.play('bell');
-    $('toast').textContent = '🏃 1,000m · NORMAL FAST SPEED!';
+    $('toast').textContent = '1,000m · NORMAL FAST SPEED!';
   }
   if (distanceBefore < 2000 && s.distance >= 2000) {
     effects.play('bell');
-    $('toast').textContent = '🔥 2,000m · HIGH SPEED & MORE OBSTACLES!';
+    $('toast').textContent = '2,000m · HIGH SPEED & MORE OBSTACLES!';
   }
   if (distanceBefore < 5000 && s.distance >= 5000) {
     effects.play('bell');
-    $('toast').textContent = '⚡ 5,000m · EXTRA SPEED & HEAVY OBSTACLES!';
+    $('toast').textContent = '5,000m · EXTRA SPEED & HEAVY OBSTACLES!';
   }
   if (distanceBefore < 8000 && s.distance >= 8000) {
     effects.play('bell');
-    $('toast').textContent = '🚀 8,000m · MORE MORE SPEED! 2X HYPER MODE!';
+    $('toast').textContent = '8,000m · MORE MORE SPEED! 2X HYPER MODE!';
   }
   if (distanceBefore < 10000 && s.distance >= 10000) {
     if (!collegeDistDone) {
@@ -1209,8 +1326,8 @@ function tick(t) {
     }
     effects.play('bell');
     $('toast').textContent = isCollegeUnlocked()
-      ? '🎓 10,000m REACHED · COLLEGE CAMPUS & CHARACTERS UNLOCKED!'
-      : '💀 10,000m · 10k Goal Open! Collect 20,000 Coins to unlock College!';
+      ? '10,000m REACHED · COLLEGE CAMPUS & CHARACTERS UNLOCKED!'
+      : '10,000m · 10k Goal Open! Collect 20,000 Coins to unlock College!';
   }
 
   if (s.mode === 'running' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
@@ -1220,7 +1337,7 @@ function tick(t) {
     $('toast').textContent = 'Roof route · Follow the coins and run off the far end';
   }
   if(s.mode==='running'&&s.items.some(o=>o.roofRide&&o.started&&o.lane===s.lane&&o.z-s.distance<20&&o.z+o.length>s.distance)){
-    $('toast').textContent=selectedMap==='college'?'Jump onto the moving campus SUV · Follow the roof coins':'Jump onto the moving bus · Follow the roof coins';
+    $('toast').textContent=selectedMap==='itpark'?'IT Park · Follow the shuttle roof ramp':selectedMap==='college'?'Jump onto the moving campus SUV · Follow the roof coins':'Jump onto the moving bus · Follow the roof coins';
   }
   
   if (firstHitBefore !== null && s.firstHitAt === null) {
@@ -1250,7 +1367,7 @@ function tick(t) {
     magPill.hidden = !magActive;
     if (magActive && $('magnet-timer')) $('magnet-timer').textContent = magSec + 's';
   }
-  const shieldActive = Boolean(s.shield);
+  const shieldActive = s.shield || s.slots?.some(slot => slot.id === 'shield' && slot.until > s.time);
   const shieldPill = $('shield-pill');
   if (shieldPill && shieldActive !== lastShield) {
     lastShield = shieldActive;
@@ -1277,11 +1394,24 @@ function tick(t) {
     comboPill.hidden = curCombo <= 1;
     if (curCombo > 1 && $('combo-val')) $('combo-val').textContent = 'x' + curCombo;
   }
-  const speedMode = s.mode !== 'running' ? 0 : s.nitro > 0 ? 2 : s.speed >= 42 ? 1 : 0;
+  const speedMode = s.mode !== 'running' ? 0 : (s.nitro > 0 || s.turboBoost > 0 || s.feverTimer > 0) ? 2 : s.speed >= 42 ? 1 : 0;
   if (speedLinesEl && speedMode !== lastSpeedMode) {
     lastSpeedMode = speedMode;
     speedLinesEl.hidden = speedMode === 0;
     speedLinesEl.classList.toggle('is-nitro', speedMode === 2);
+  }
+  const feverOn = s.mode === 'running' && s.feverTimer > 0;
+  if (feverOn !== lastFeverOn) {
+    lastFeverOn = feverOn;
+    if ($('fever-veil')) $('fever-veil').hidden = !feverOn;
+  }
+  const curMask = s.lmskMask || 0;
+  if (curMask !== lastLmskMask) {
+    lastLmskMask = curMask;
+    document.querySelectorAll('#lmsk-letters [data-lmsk]').forEach(el => {
+      const bit = Number(el.dataset.lmsk);
+      el.classList.toggle('is-lit', Boolean(curMask & (1 << bit)));
+    });
   }
 
   const cdSec = s.mode === 'countdown' ? Math.ceil(s.countdown) : -1;
@@ -1346,7 +1476,7 @@ function tick(t) {
       const label=failed?'Retry loading runner':"LET'S RUN";
       if(startButton.dataset.currentLabel!==label){
         startButton.dataset.currentLabel=label;
-        startButton.innerHTML=`<span>${label}</span> <span class="rush-arrow">🏃💨</span>`;
+        startButton.innerHTML=`<span>${label}</span> <span class="rush-arrow" aria-hidden="true">${IC_RUSH}</span>`;
       }
       startButton.dataset.loadError=String(failed);
     }

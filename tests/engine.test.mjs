@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import{fresh,action,step,hits,pattern,career,height,chaseRemaining,chasePose,capturePose,CAPTURE_DURATION,reviveRun}from'../dist/engine.js';
+import test from 'node:test';import assert from 'node:assert/strict';import{fresh,action,step,hits,pattern,career,height,chaseRemaining,chasePose,capturePose,CAPTURE_DURATION,reviveRun,PICKUP_TYPES,ROAD_EVENT_TYPES}from'../dist/engine.js';
 test('lane boundaries and pause input',()=>{const s=fresh(0);s.mode='running';for(let i=0;i<10;i++)action(s,'right');assert.equal(s.lane,1);for(let i=0;i<10;i++)action(s,'left');assert.equal(s.lane,-1);s.mode='paused';action(s,'right');assert.equal(s.lane,-1);});
 test('jump, slide and collision outcomes',()=>{const s=fresh(0);s.mode='running';assert.ok(hits(s,{lane:0,type:'jump'}));action(s,'jump');s.jump=.475;assert.equal(hits(s,{lane:0,type:'jump'}),false);assert.ok(hits(s,{lane:0,type:'block'}));s.jump=0;action(s,'slide');assert.equal(hits(s,{lane:0,type:'slide'}),false);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.slide,0);assert.ok(hits(s,{lane:0,type:'slide'}));});
 test('safe generated rows and reset',()=>{for(let i=0;i<1000;i++){const row=pattern(50);assert.equal(row.filter(x=>x.type!=='coin').length,1);assert.notEqual(row[0].lane,row[1].lane);}const s=fresh(0);s.skills[0]=100;s.distance=300;s.items.push({});const reset=fresh(0);assert.deepEqual(reset.skills,[0,0,0]);assert.equal(reset.distance,0);assert.equal(reset.items.length,0);});
@@ -248,7 +248,7 @@ test('all 3 lanes are never simultaneously blocked across low, mid, and high spe
         const nearZ = s.distance + s.speed * 0.55;
         const blocked = new Set();
         for (const o of s.items) {
-          if (o.done || ['coin','magnet','shield'].includes(o.type)) continue;
+          if (o.done || PICKUP_TYPES.has(o.type) || ROAD_EVENT_TYPES.has(o.type)) continue;
           if (o.encounter && !o.started) continue;
           const len = o.length || 2.5;
           if (nearZ >= o.z - 2 && nearZ <= o.z + len + 2) blocked.add(o.lane);

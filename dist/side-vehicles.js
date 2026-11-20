@@ -1,6 +1,7 @@
 import {Group,Mesh,MeshStandardMaterial,BoxGeometry,CylinderGeometry,SphereGeometry,TorusGeometry,Shape,ExtrudeGeometry,Vector3,BufferGeometry,Float32BufferAttribute} from './vendor/three.module.js';
 import {sideVehicleX} from './traffic-rules.js';
-import {curveRelX,curveRelY,roadCurveSlope} from './campus-layout.js';
+import {curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
+import {buildPorscheGT3RS,buildBugattiChiron,buildDucatiStreetfighter} from './itpark-models.js?v=3.0.3';
 const cube=new BoxGeometry(),sphere=new SphereGeometry(1,12,8),tyre=new TorusGeometry(.31,.065,8,24),arch=new TorusGeometry(.41,.035,6,18,Math.PI),rod=new CylinderGeometry(1,1,1,10),materials=new Map();
 function makeMat(c){
  if(materials.has(c))return materials.get(c);
@@ -49,7 +50,11 @@ function addAlloyWheel(g,x,y,z,scale=1,spokesCount=6){
  const hub=new Mesh(rod,makeMat(0xdbe6ef));hub.scale.set(.09*scale,.09*scale,.09*scale);hub.rotation.z=Math.PI/2;spokeGrp.add(hub);
  for(let i=0;i<spokesCount;i++){const sp=new Mesh(cube,makeMat(0xdbe6ef));sp.scale.set(.024,.035*scale,.26*scale);const a=i*Math.PI/spokesCount;sp.position.set(0,Math.cos(a)*.12*scale,Math.sin(a)*.12*scale);sp.rotation.x=a;spokeGrp.add(sp);}
 }
-export function buildSideVehicle(kind){const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];
+export function buildSideVehicle(kind){
+ if(kind==='porsche')return buildPorscheGT3RS(3.8,true);
+ if(kind==='bugatti')return buildBugattiChiron(3.8,true);
+ if(kind==='ducati')return buildDucatiStreetfighter(true,true);
+ const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];
  if(kind==='car'){
   const red=0xb91c1c,glass=0x172f3d,dark=0x141d26,silver=0xdbe6ef;
   part(g,red,0,0,0,1,1,1,carBody);
@@ -127,4 +132,4 @@ export function buildSideVehicle(kind){const g=new Group();g.userData.captureObs
  }
  return g;
 }
-export function createSideTraffic(scene){const models=new Map();return s=>{const live=new Set();for(const o of s.items){if(o.type!=='sideVehicle'||!o.started)continue;live.add(o);if(!models.has(o)){const g=buildSideVehicle(o.variant);scene.add(g);models.set(o,g);}const g=models.get(o),t=Math.max(0,Math.min(1,(s.time-o.startedAt)/.45));g.position.set(sideVehicleX(o,s.time)+curveRelX(o.z,s),.09+curveRelY(o.z,s),s.distance-o.z);g.rotation.y=-o.lane*Math.PI/2*(1-t)-Math.atan(roadCurveSlope(o.z,s.map));g.userData.wheels.forEach(w=>w.rotation.z=s.time*9*(1-t));}for(const [o,g]of models)if(!live.has(o)){scene.remove(g);models.delete(o);}};}
+export function createSideTraffic(scene){const models=new Map();return s=>{const live=new Set();for(const o of s.items){if(o.cleared||o.type!=='sideVehicle'||!o.started)continue;live.add(o);if(!models.has(o)){const g=buildSideVehicle(o.variant);scene.add(g);models.set(o,g);}const g=models.get(o),t=Math.max(0,Math.min(1,(s.time-o.startedAt)/.45));g.position.set(sideVehicleX(o,s.time)+curveRelX(o.z,s),.09+curveRelY(o.z,s),s.distance-o.z);g.rotation.y=-o.lane*Math.PI/2*(1-t)-Math.atan(curveSlopeAt(o.z,s));g.userData.wheels.forEach(w=>{if(o.variant==='porsche'||o.variant==='bugatti'||o.variant==='ducati')w.rotation.x=-s.time*14*(1-t);else w.rotation.z=s.time*9*(1-t);});}for(const [o,g]of models)if(!live.has(o)){scene.remove(g);models.delete(o);}};}

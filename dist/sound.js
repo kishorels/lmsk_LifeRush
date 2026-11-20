@@ -178,7 +178,7 @@ export function createSound() {
  }
 
  function play(name, cause, character = 'male') {
-  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',nitro:'powerups',shoes:'powerups',nearMiss:'coins',upgrade:'coins',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement'})[name]||'movement';
+  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',nitro:'powerups',shoes:'powerups',nearMiss:'coins',upgrade:'coins',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement',tap:'movement'})[name]||'movement';
   if (name === 'jump') tone(240, 730, 0.19, 0.10, 'triangle');
   else if (name === 'slide') tone(410, 65, 0.20, 0.10, 'sawtooth');
   else if (name === 'roofCoin') {
@@ -198,6 +198,9 @@ export function createSound() {
   else if (name === 'horn') {
    tone(185, 180, 0.30, 0.10, 'sawtooth');
    tone(247, 240, 0.30, 0.07, 'triangle');
+  }
+  else if (name === 'tap') {
+   tone(540, 1080, 0.08, 0.12, 'triangle');
   }
   else if (name === 'start') {
    for (let i = 0; i < 3; i++) tone(440 * 2 ** (i / 4), 440 * 2 ** (i / 4), 0.13, 0.1, 'triangle', i * 0.10);
@@ -240,6 +243,26 @@ export function createSound() {
    tone(660, 880, 0.12, 0.12, 'triangle', 0.08);
    tone(880, 1180, 0.18, 0.13, 'sine', 0.16);
   }
+  else if (name === 'turbo') {
+   tone(340, 1420, 0.22, 0.14, 'sawtooth');
+   tone(680, 1780, 0.18, 0.11, 'triangle', 0.05);
+  }
+  else if (name === 'launch') {
+   tone(240, 1120, 0.26, 0.15, 'triangle');
+   tone(480, 1520, 0.20, 0.10, 'sine', 0.07);
+  }
+  else if (name === 'mystery') {
+   tone(523, 659, 0.10, 0.13, 'triangle');
+   tone(659, 784, 0.10, 0.13, 'triangle', 0.08);
+   tone(784, 1046, 0.20, 0.15, 'sine', 0.16);
+  }
+  else if (name === 'letter') {
+   tone(698, 1046, 0.12, 0.13, 'sine');
+   tone(1046, 1396, 0.15, 0.11, 'triangle', 0.07);
+  }
+  else if (name === 'fever') {
+   for (let i = 0; i < 4; i++) tone(440 + i * 165, 660 + i * 220, 0.14, 0.14, 'triangle', i * 0.07);
+  }
   else if (name === 'book') {
    tone(620, 980, 0.12, 0.11, 'triangle');
    tone(980, 1470, 0.14, 0.10, 'sine', 0.06);
@@ -276,4 +299,64 @@ export function createSound() {
    }
   }
  };
+}
+
+let globalUiCtx = null;
+function uiAudioContext() {
+  const AudioCtx = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext));
+  if (!AudioCtx) return null;
+  if (!globalUiCtx) globalUiCtx = new AudioCtx();
+  if (globalUiCtx.state === 'suspended') {
+    try { globalUiCtx.resume().catch(() => {}); } catch {}
+  }
+  return globalUiCtx;
+}
+
+export function playUiClick(enabled = true) {
+  if (!enabled) return;
+  try {
+    const ctx = uiAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(620, now);
+    osc.frequency.exponentialRampToValueAtTime(1180, now + 0.055);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.24, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.095);
+  } catch {}
+}
+
+export function playEnterSound(enabled = true) {
+  if (!enabled) return;
+  try {
+    const ctx = uiAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const notes = [
+      { f0: 440, f1: 660, t: 0, dur: 0.11, vol: 0.24, type: 'triangle' },
+      { f0: 660, f1: 990, t: 0.055, dur: 0.14, vol: 0.22, type: 'sine' },
+      { f0: 880, f1: 1320, t: 0.11, dur: 0.18, vol: 0.18, type: 'triangle' }
+    ];
+    for (const n of notes) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = n.type;
+      osc.frequency.setValueAtTime(n.f0, now + n.t);
+      osc.frequency.exponentialRampToValueAtTime(n.f1, now + n.t + n.dur);
+      gain.gain.setValueAtTime(0.0001, now + n.t);
+      gain.gain.linearRampToValueAtTime(n.vol, now + n.t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + n.t + n.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + n.t);
+      osc.stop(now + n.t + n.dur + 0.01);
+    }
+  } catch {}
 }

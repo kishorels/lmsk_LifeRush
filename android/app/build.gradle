@@ -17,6 +17,12 @@ android {
         }
     }
     buildTypes {
+        level50 {
+            initWith debug
+            applicationIdSuffix ".level50"
+            versionNameSuffix "-level50"
+            matchingFallbacks = ['debug']
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

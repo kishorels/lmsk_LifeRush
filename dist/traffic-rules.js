@@ -45,7 +45,7 @@ export function routeSegment(seed=0,index=0){
 export function coinTrail(z,lane,count=4){return Array.from({length:count},(_,i)=>({z:z+i*4,lane,type:'coin',done:false}));}
 export function repeatedVans(distance,seed=0){
   const stride=seed?248:160,start=Math.max(0,Math.floor((distance-segmentBase(seed,0))/stride)-2),vans=[];
-  for(let i=start;i<start+5;i++){
+  for(let i=start;i<start+6;i++){
     const p=routeSegment(seed,i);if(p.kind!=='roof')continue;
     const base=p.base,lane=p.roofLane;
     vans.push({id:`van-${i}`,lane,ramp:base+12,rear:base+22,front:base+42,roof:1.72,width:1.94});
@@ -54,14 +54,15 @@ export function repeatedVans(distance,seed=0){
   return vans;
 }
 export function trafficPattern(base,index,seed=0,map='school'){
-  const p=routeSegment(seed,index),items=[],lane=p.trafficLane,isCollege=map==='college';
-  const sideVar=isCollege?(['scooty','car','scooty','bike'][(index+(seed&3))%4]):p.vehicle;
-  const cKind1=isCollege?((index%2)?'scooty':'car'):undefined;
-  const cKind2=isCollege?((index%2)?'car':'scooty'):undefined;
+  const p=routeSegment(seed,index),items=[],lane=p.trafficLane,isPark=map==='itpark',isCollege=map==='college'||isPark;
+  const sideVar=isPark?(['porsche','ducati','bugatti'][(Math.floor(index/2)+(seed&3))%3]):isCollege?(['scooty','car','scooty','bike'][(index+(seed&3))%4]):p.vehicle;
+  const parkPool=['porsche','bugatti','ducati','semi'];
+  const cKind1=isPark?parkPool[(index+(seed&3))%4]:isCollege?((index%2)?'scooty':'car'):undefined;
+  const cKind2=isPark?parkPool[(index+2+(seed&3))%4]:isCollege?((index%2)?'car':'scooty'):undefined;
   const mkTraffic=(z,tLane,vel,extra={})=>{
     const ck=extra.collegeKind;
-    const len=isCollege?(ck==='scooty'?2.6:4.6):10;
-    const rf=isCollege?(ck==='scooty'?1.65:1.45):2.8;
+    const len=isCollege?(ck==='semi'?10.5:(ck==='scooty'||ck==='ducati')?2.6:4.6):10;
+    const rf=isCollege?(ck==='semi'?2.8:(ck==='scooty'||ck==='ducati')?1.65:1.45):2.8;
     return {z,lane:tLane,type:'bus',velocity:vel,length:len,roof:rf,done:false,...extra};
   };
   if(p.kind==='encounter'){

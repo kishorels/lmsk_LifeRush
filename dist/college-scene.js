@@ -1,7 +1,8 @@
 import {BoxGeometry,CanvasTexture,Group,Mesh,MeshStandardMaterial,RepeatWrapping,SphereGeometry,SRGBColorSpace,TextureLoader} from './vendor/three.module.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {roadsideTree} from './street-materials.js';
-import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,roadCurveSlope} from './campus-layout.js';
+import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
+import {branchForkClearance} from './road-events.js';
 
 // A separate modern campus set; it uses the same collision-safe road and route plan.
 export function createCollegeCampus(scene){
@@ -100,6 +101,7 @@ export function createCollegeCampus(scene){
   const root=new Group();
   building(root,-1,kind);building(root,1,(kind+3)%6);
   for(const side of [-1,1]){
+   part(root,C.concrete,side*13.8,-3.75,0,18.8,7.6,32.4);
    part(root,C.stone,side*4.43,.10,0,1.65,.17,32);
    part(root,C.concrete,side*5.35,.21,0,.18,.34,32);
    for(const z of [-12,0,12]){
@@ -126,11 +128,14 @@ export function createCollegeCampus(scene){
  return state=>{
   const college=state.map==='college';
   for(let slot=0;slot<slots.length;slot++){
-   const item=slots[slot];item.root.visible=college;if(!college)continue;
-   const anchor=campusAnchor(slot,state.distance),kind=campusKind(anchor);
+   const item=slots[slot];
+   if(!college){item.root.visible=false;continue;}
+   const anchor=campusAnchor(slot,state.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,state);
+   if(clr.hide){item.root.visible=false;continue;}
+   item.root.visible=true;
    if(item.kind!==kind){item.root.clear();item.root.add(templates[kind].clone());item.kind=kind;}
-   item.root.position.set(curveRelX(anchor,state),curveRelY(anchor,state),state.distance-anchor);
-   item.root.rotation.y=-Math.atan(roadCurveSlope(anchor,'college'));
+   item.root.position.set(curveRelX(anchor,state),curveRelY(anchor,state)+clr.dropY,state.distance-anchor);
+   item.root.rotation.y=-Math.atan(curveSlopeAt(anchor,state));
   }
  };
 }

@@ -1,5 +1,7 @@
 import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase,routeSegment} from './traffic-rules.js';
-export {trafficPattern};
+import {pickupTypes as PICKUP_TYPES, powerById, runPickup} from './progression.js';
+import {ROAD_EVENT_TYPES,updateRoadEvents,triggerRoadEvent,forkPlanAt,branchElevationAt,branchOffsetXAt,roadHillY,LMSK_LETTERS} from './road-events.js';
+export {trafficPattern, PICKUP_TYPES, ROAD_EVENT_TYPES, LMSK_LETTERS, powerById, forkPlanAt, branchElevationAt, branchOffsetXAt, roadHillY};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95, INJURED_DURATION = 10;
 export const MAGNET_RADIUS = 18, CAPTURE_GESTURE_START = 2.55;
@@ -21,9 +23,14 @@ export function fresh(seed=newRunSeed()) {
     damage: 0, injured: false, injuredUntil: 0, hit: 0, fall: 0, capture: 0, items: [], next: segmentBase(seed,0),
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
+    level: 1, doubleCoins: 0, doubleJump: 0, slow: 0, ghost: 0, airJumpUsed: false,
     magnet: 0, shield: false, nitro: 0, shoes: 0,
     magnetDuration: 12, nitroDuration: 4.5, shoesDuration: 9,
     combo: 1, comboTimer: 0, nearMissCount: 0, nearMissEvent: null, nearMissId: 0, jumpsOver: 0, revivedOnce: false,
+    turboBoost: 0, launchBoost: 0, feverTimer: 0, lmskMask: 0,
+    activeBranch: null, branchElevation: 0, branchOffsetX: 0, branchCoinMult: 1, branchStart: 0, branchEnd: 0,
+    activeForkIndex: -1, forkWarnedIndex: -1, eventBanner: null, eventBannerId: 0, lastRoadSound: null, mysteryCount: 0,
+    nextTurboPad: 140, nextJumpPad: 195, nextMysteryCrate: 175, nextLetterAt: 105,
     books: 0, styleAction: 0, collectedPowerup: null, coinFlights: [],
     nextMidObstacle: 2000,
     nextLaneObstacle: 5000,
@@ -36,11 +43,19 @@ export function action(s, input) {
   if (input === 'right') s.lane = clamp(s.lane + 1, -1, 1);
   if (s.hit) return;
   if (input === 'jump') {
+    if (s.jump && s.doubleJump > 0 && !s.airJumpUsed) {
+      s.floor = height(s);
+      s.jump = JUMP_DURATION;
+      s.airJumpUsed = true;
+      s.motionId++;
+      return;
+    }
     if(s.jump || s.drop || (s.fallSpeed && !s.roofGrace)) {
       // Queue near-landing inputs without granting an unlimited midair jump.
       s.jumpBuffer=.18;
       return;
     }
+    s.airJumpUsed=false;
     s.slide=s.roll=0;
     s.fallSpeed=s.roofGrace=0;s.jump=JUMP_DURATION;s.jumpBuffer=0;s.motionId++;
     s.lastGroundDown=-Infinity;
@@ -67,7 +82,7 @@ export function action(s, input) {
 
 export function height(s) {
   if (s.drop) return s.drop.start * (s.drop.remaining / s.drop.duration);
-  const jumpApex = s.shoes > 0 ? 3.35 : 2.3;
+  const jumpApex = s.activeBranch === 'underpass' && s.map !== 'itpark' ? 2.3 : s.launchBoost ? 3.55 : s.shoes > 0 ? 3.35 : 2.3;
   return s.floor + (s.jump ? Math.sin(Math.PI * (1 - s.jump / JUMP_DURATION)) * jumpApex : 0);
 }
 
@@ -114,7 +129,7 @@ function advanceCoinFlights(s,dt) {
   for(const flight of s.coinFlights)flight.elapsed+=dt;
   s.coinFlights=s.coinFlights.filter(flight=>{
     if(flight.elapsed<flight.duration)return true;
-    s.coins++;return false;
+    s.coins += (s.doubleCoins > 0 ? 2 : 1) * (s.branchCoinMult || 1);return false;
   });
 }
 
@@ -176,13 +191,13 @@ function updateElevation(s, dt) {
     for(let n=0;n<4;n++) {
       const z=van.rear+2+n*4,id=van.id+':'+n;
       if(Math.abs(s.distance-z)<.9 && Math.abs(s.x-van.lane)<.34 && height(s)>=van.roof-.12 && height(s)<van.roof+1.2 && !s.collected.includes(id)) {
-        s.collected.push(id);s.coins++;
+        s.collected.push(id);s.coins += s.doubleCoins > 0 ? 2 : 1;
       }
     }
   }
   for(const bus of s.items){if(!bus.roofRide||!bus.started)continue;
    for(let i=0;i<4;i++){const id=bus.id+':'+i,z=bus.z+4+i*4;
-    if(!s.collected.includes(id)&&Math.abs(s.distance-z)<1.2&&Math.abs(s.x-bus.lane)<.34&&height(s)>=bus.roof-.12&&height(s)<bus.roof+1.1){s.collected.push(id);s.coins++;}
+    if(!s.collected.includes(id)&&Math.abs(s.distance-z)<1.2&&Math.abs(s.x-bus.lane)<.34&&height(s)>=bus.roof-.12&&height(s)<bus.roof+1.1){s.collected.push(id);s.coins += s.doubleCoins > 0 ? 2 : 1;}
    }
   }
   s.entryCoins.forEach((distance,index) => {
@@ -191,7 +206,7 @@ function updateElevation(s, dt) {
     const elevation = height(s);
     if (elevation < s.entryVan.roof-.12 || elevation > s.entryVan.roof+.84) return;
     s.roofCoins |= 1<<index;
-    s.coins++;
+    s.coins += s.doubleCoins > 0 ? 2 : 1;
   });
 }
 
@@ -245,6 +260,7 @@ export function pattern(z, random = Math.random) {
 }
 
 export function hits(s, obstacle) {
+  if (s.ghost > 0) return false;
   const lane=obstacle.type==='sideVehicle'?sideVehicleX(obstacle,s.time)/2.2:obstacle.lane;
   if (Math.abs(s.x - lane) > .48) return false;
   if (obstacle.type === 'jump') return height(s) < 1.05;
@@ -263,7 +279,7 @@ export function recoverFromBus(s) {
   const horizon=s.speed*1.15;
   const vans=routeVans(s.distance,s.runSeed);
   const candidates=[-1,0,1].filter(lane=>!vans.some(v=>v.lane===lane && v.front>s.distance && v.ramp<s.distance+horizon));
-  const blocked=(lane)=>s.items.filter(o=>!PICKUP_TYPES.has(o.type) && o.lane===lane && o.z+(o.length||0)>s.distance-1 && o.z<s.distance+horizon+(o.velocity||0)*1.15);
+  const blocked=(lane)=>s.items.filter(o=>!PICKUP_TYPES.has(o.type) && !ROAD_EVENT_TYPES.has(o.type) && o.lane===lane && o.z+(o.length||0)>s.distance-1 && o.z<s.distance+horizon+(o.velocity||0)*1.15);
   candidates.sort((a,b)=>blocked(a).length-blocked(b).length || Math.abs(a-s.x)-Math.abs(b-s.x));
   const lane=candidates[0]??0;
   // In a fully crowded recovery window, clear just the landing corridor.
@@ -272,6 +288,9 @@ export function recoverFromBus(s) {
 }
 
 function takeHit(s, type) {
+  if (s.slots?.some(slot => slot.id === 'shield' && slot.until > s.time)) {
+    s.shieldAbsorbed = true; s.hit = .45; return;
+  }
   if (s.shield) {
     s.shield = false;
     s.shieldAbsorbed = true;
@@ -304,7 +323,7 @@ function takeHit(s, type) {
 
 export const SWEEP_SECONDS = 27 / 24;
 
-const PICKUP_TYPES = new Set(['coin', 'magnet', 'shield', 'nitro', 'shoes']);
+
 
 function awardNearMiss(s, kind) {
   s.nearMissCount = (s.nearMissCount || 0) + 1;
@@ -313,11 +332,11 @@ function awardNearMiss(s, kind) {
   const bonus = 5 * s.combo;
   s.coins += bonus;
   s.nearMissId = (s.nearMissId || 0) + 1;
-  const label = kind === 'nitro' ? '⚡ NITRO SMASH!'
-    : kind === 'vehicle' ? '🔥 CLOSE CALL!'
-    : kind === 'clean-jump' ? '⚡ CLEAN JUMP!'
-    : kind === 'clean-slide' ? '💨 SLICK SLIDE!'
-    : '🔥 NEAR MISS!';
+  const label = kind === 'nitro' ? 'NITRO SMASH!'
+    : kind === 'vehicle' ? 'CLOSE CALL!'
+    : kind === 'clean-jump' ? 'CLEAN JUMP!'
+    : kind === 'clean-slide' ? 'SLICK SLIDE!'
+    : 'NEAR MISS!';
   s.nearMissEvent = { id: s.nearMissId, label, bonus, combo: s.combo };
 }
 
@@ -364,7 +383,7 @@ function predictedBlockedLanesAt(s, targetZ, reactionSec = 0.95) {
     }
   }
   for (const o of s.items) {
-    if (o.done || PICKUP_TYPES.has(o.type)) continue;
+    if (o.done || PICKUP_TYPES.has(o.type) || ROAD_EVENT_TYPES.has(o.type)) continue;
     let predZ = o.z;
     if (o.velocity) {
       if (o.encounter && !o.started) {
@@ -392,7 +411,8 @@ function predictedBlockedLanesAt(s, targetZ, reactionSec = 0.95) {
 function enforceOpenEscapeLane(s) {
   if (s.next >= 90000) return;
   const speed = Math.max(24, s.speed || 28);
-  for (const t of [0.55, 0.85, 1.15, 1.45]) {
+  // Check far horizon FIRST (220..340m out in horizon fog) so 3-lane conflicts clear BEFORE the player ever sees them!
+  for (const t of [8.5, 7.2, 6.0, 4.8, 3.6, 2.5, 1.45, 1.15, 0.85, 0.55]) {
     const targetZ = s.distance + speed * t;
     const padZ = Math.max(9, speed * 0.38);
     const vanLanes = new Set();
@@ -401,7 +421,7 @@ function enforceOpenEscapeLane(s) {
     }
     const byLane = new Map([[-1, []], [0, []], [1, []]]);
     for (const o of s.items) {
-      if (o.done || PICKUP_TYPES.has(o.type)) continue;
+      if (o.done || PICKUP_TYPES.has(o.type) || ROAD_EVENT_TYPES.has(o.type)) continue;
       if (o.encounter && !o.started) continue;
       let predZ = o.z;
       if (o.velocity) {
@@ -425,9 +445,56 @@ function enforceOpenEscapeLane(s) {
     pool.sort((a, b) => Math.abs(a - s.lane) - Math.abs(b - s.lane));
     for (const o of byLane.get(pool[0])) {
       o.done = true;
+      o.cleared = true;
       o.z = s.distance - 100;
     }
   }
+}
+
+export function availablePowers(level) {
+  // Magnet & Shield are road collectibles only — never part of the power list.
+  return Object.values(powerById).filter(p => p.level <= level).map(p => p.id);
+}
+
+export function equipPowers(s, ids) {
+  const available = availablePowers(s.level);
+  s.slots = [...new Set(ids)].filter(id => available.includes(id)).slice(0,2)
+    .map(id => ({id,readyAt:0,until:0,nextPulse:0}));
+}
+
+function pulsePower(s,type) {
+  if (type === 'trail') {
+    const lane = s.lane;
+    for (let offset=4; offset<=32; offset+=4) {
+      const z = s.distance + offset;
+      const blocked = s.items.some(item => !item.done && !PICKUP_TYPES.has(item.type) &&
+        item.lane === lane && item.z < z+2 && item.z+(item.length||0) > z-2);
+      if (!blocked) s.items.push({type:'coin',lane,z,done:false});
+    }
+  } else if (type === 'wave') {
+    const hazards = s.items.filter(item => !item.done && !item.roofRide &&
+      !PICKUP_TYPES.has(item.type) && item.z >= s.distance);
+    const first = Math.min(...hazards.map(item => item.z));
+    for (const item of hazards) if (item.z <= first+2) { item.done = true; item.cleared = true; }
+  }
+}
+
+export function usePower(s,index) {
+  const slot = s.slots?.[index];
+  if (!slot || s.mode !== 'running' || s.distance < slot.readyAt || s.time < slot.until) return false;
+  slot.readyAt = s.distance + 1000;
+  slot.until = s.time + 10;
+  const id = slot.id;
+  if (id === 'wave' || id === 'trail') {
+    pulsePower(s,id);
+    slot.nextPulse = s.time + 1;
+  } else if (id === 'rush') {
+    s.nitro = s.magnet = 10;
+  } else if (id !== 'shield') {
+    s[id] = 10;
+  }
+  s.collectedPowerup = id;
+  return true;
 }
 
 export function step(s, dt, random = Math.random) {
@@ -458,6 +525,12 @@ export function step(s, dt, random = Math.random) {
   if (s.mode !== 'running') return;
 
   s.time += dt;
+  for (const slot of s.slots || []) {
+    if (slot.nextPulse && s.time < slot.until && s.time >= slot.nextPulse) {
+      pulsePower(s,slot.id);
+      slot.nextPulse += 1;
+    }
+  }
   advanceCoinFlights(s,dt);
   // End the chase before resolving any collisions on this frame.
   if (s.firstHitAt !== null && chaseRemaining(s) === 0) {
@@ -468,6 +541,8 @@ export function step(s, dt, random = Math.random) {
   if (s.injured && s.time >= s.injuredUntil) {
     s.injured = false;
   }
+  for (const timer of ['doubleCoins','doubleJump','slow','ghost']) s[timer] = Math.max(0,s[timer]-dt);
+  const trafficRate = s.slow > 0 ? .5 : 1;
   const d = s.distance;
   if (d <= 180) s.speed = 28;
   else if (d <= 1000) s.speed = 28 + ((d - 180) / 820) * 6;
@@ -477,7 +552,10 @@ export function step(s, dt, random = Math.random) {
   else if (d <= 10000) s.speed = 78 + ((d - 8000) / 2000) * 18;
   else s.speed = 96 + (d - 10000) * 0.02;
   if (s.nitro > 0) s.speed = Math.max(s.speed * 1.45, 56);
+  if (s.turboBoost > 0) s.speed = Math.max(s.speed + 13, 46);
+  s.speed *= trafficRate;
   s.distance += s.speed * dt;
+  updateRoadEvents(s, dt, vanSurface);
   s.x += (s.lane - s.x) * (1-Math.exp(-18*dt));
   s.chaserX += (s.x - s.chaserX) * (1-Math.exp(-5*dt));
   s.slide = Math.max(0, s.slide - dt);
@@ -491,20 +569,32 @@ export function step(s, dt, random = Math.random) {
     s.comboTimer = Math.max(0, s.comboTimer - dt);
     if (s.comboTimer === 0) s.combo = 1;
   }
-  if(s.distance+120>s.next) {
+  while (s.distance + 340 > s.next) {
     const index=s.trafficIndex++;
     const newItems=trafficPattern(s.next,index,s.runSeed,s.map);
+    const pickup = newItems.find(item => item.type !== 'coin' && PICKUP_TYPES.has(item.type));
+    if (pickup) pickup.type = runPickup(s.level,s.runSeed,index,s.featured);
     const safeLane=newItems.find(o=>o.type==='coin')?.lane??0;
     if(!s.runSeed)for(let i=0;i<3;i++)newItems.push({z:s.next+28+i*4,lane:safeLane,type:'coin',done:false});
     if(!s.runSeed&&s.trafficIndex%4===1) newItems.push({z:s.next+52,lane:safeLane,type:'magnet',done:false});
     else if(!s.runSeed&&s.trafficIndex%4===3) newItems.push({z:s.next+52,lane:safeLane,type:'shield',done:false});
-    s.items.push(...newItems);s.next=s.runSeed?segmentBase(s.runSeed,s.trafficIndex):s.next+160;
+    const pushed = s.slots ? newItems.filter(item => item.type === 'coin' || !PICKUP_TYPES.has(item.type)) : newItems;
+    if (s.activeBranch === 'underpass') {
+      for (const o of pushed) {
+        if (o.type === 'bus' && o.z >= s.branchStart && o.z < s.branchEnd) {
+          o.metro = true;
+          if (!o.roofRide) { o.length = Math.max(o.length || 12, 12); o.roof = Math.max(o.roof || 2.8, 2.8); }
+        }
+      }
+    }
+    s.items.push(...pushed);
+    s.next=s.runSeed?segmentBase(s.runSeed,s.trafficIndex):s.next+160;
   }
   if (s.distance >= 2000 && s.distance < 5000 && s.next < 90000) {
     if (!s.nextMidObstacle || s.nextMidObstacle < s.distance + 40) {
-      s.nextMidObstacle = Math.max(2000, s.distance + 40);
+      s.nextMidObstacle = Math.max(2000, s.distance + 240);
     }
-    while (s.distance + 120 >= s.nextMidObstacle && s.nextMidObstacle < 5000) {
+    while (s.distance + 340 >= s.nextMidObstacle && s.nextMidObstacle < 5000) {
       const targetZ = s.nextMidObstacle;
       const unsafeSegLanes = new Set([s.lane, Math.round(s.x)]);
       const baseIdx = Math.max(0, s.trafficIndex - 2);
@@ -533,9 +623,9 @@ export function step(s, dt, random = Math.random) {
   }
   if (s.distance >= 5000) {
     if (!s.nextLaneObstacle || s.nextLaneObstacle < s.distance + 40) {
-      s.nextLaneObstacle = Math.max(5000, s.distance + 40);
+      s.nextLaneObstacle = Math.max(5000, s.distance + 240);
     }
-    while (s.distance + 120 >= s.nextLaneObstacle) {
+    while (s.distance + 340 >= s.nextLaneObstacle) {
       const targetZ = s.nextLaneObstacle;
       const targetLane = s.lane;
       const vanHitCheck = vanSurface(targetZ, targetLane, s.runSeed) > 0;
@@ -559,17 +649,19 @@ export function step(s, dt, random = Math.random) {
               type = 'bus';
             }
             if (type === 'bus') {
-              const isCol=s.map==='college';
-              const cKind=isCol?((seedHash%2)?'scooty':'car'):undefined;
+              const isPark=s.map==='itpark',isCol=s.map==='college'||isPark;
+              const cKind=isPark?['porsche','bugatti','ducati','semi'][seedHash%4]:isCol?((seedHash%2)?'scooty':'car'):undefined;
+              const inCave = s.activeBranch === 'underpass' && targetZ + 15 >= s.branchStart && targetZ + 15 < s.branchEnd;
               s.items.push({
                 z: targetZ + 15,
                 lane: targetLane,
                 type: 'bus',
                 collegeKind: cKind,
+                metro: inCave || undefined,
                 velocity: 18,
                 activate: targetZ - 30,
-                length: isCol ? (cKind==='scooty'?2.6:4.6) : 10,
-                roof: isCol ? (cKind==='scooty'?1.65:1.45) : 2.8,
+                length: inCave ? 12 : (isCol ? (cKind==='semi'?10.5:(cKind==='scooty'||cKind==='ducati')?2.6:4.6) : 10),
+                roof: inCave ? 2.8 : (isCol ? (cKind==='semi'?2.8:(cKind==='scooty'||cKind==='ducati')?1.65:1.45) : 2.8),
                 done: false,
               });
             } else {
@@ -609,7 +701,7 @@ export function step(s, dt, random = Math.random) {
       item.z=s.distance+(s.speed+(item.velocity||0))*1.45;
       s.warning={until:s.time+1.45,side:item.type==='sideVehicle'?item.lane:s.warning?.side};
     }
-    if(item.velocity && ((item.encounter||item.roofRide)?item.started:s.distance>=item.activate))item.z-=item.velocity*dt;
+    if(item.velocity && ((item.encounter||item.roofRide)?item.started:s.distance>=item.activate))item.z-=item.velocity*dt*trafficRate;
   }
   enforceOpenEscapeLane(s);
 
@@ -617,6 +709,7 @@ export function step(s, dt, random = Math.random) {
   updateElevation(s, dt);
   if(s.jumpBuffer>0 && !s.jump && !s.drop && !s.fallSpeed && !s.hit)action(s,'jump');
   for(const van of routeVans(s.distance,s.runSeed)) {
+    if(s.ghost > 0) continue;
     if(s.distance>=van.rear && s.distance<van.front && Math.abs(s.x-van.lane)*2.2<=van.width/2 && height(s)<van.roof-.18) {
       if (s.nitro > 0) {
         s.floor = van.roof;
@@ -655,7 +748,9 @@ export function step(s, dt, random = Math.random) {
     if (obstacle.done || obstacle.z > s.distance + 1.1) continue;
     obstacle.done = true;
     if (obstacle.type === 'coin') {
-      if (Math.abs(s.x - obstacle.lane) < .65) s.coins++;
+      if (Math.abs(s.x - obstacle.lane) < .65) s.coins += (s.doubleCoins > 0 ? 2 : 1) * (s.branchCoinMult || 1);
+    } else if (ROAD_EVENT_TYPES.has(obstacle.type)) {
+      triggerRoadEvent(s, obstacle, JUMP_DURATION);
     } else if (obstacle.type === 'magnet') {
       if (Math.abs(s.x - obstacle.lane) < .65) { s.magnet = s.magnetDuration || 12; s.collectedPowerup = 'magnet'; }
     } else if (obstacle.type === 'shield') {
@@ -664,7 +759,21 @@ export function step(s, dt, random = Math.random) {
       if (Math.abs(s.x - obstacle.lane) < .65) { s.nitro = s.nitroDuration || 4.5; s.shield = true; s.speed = Math.max(s.speed * 1.45, 56); s.collectedPowerup = 'nitro'; }
     } else if (obstacle.type === 'shoes') {
       if (Math.abs(s.x - obstacle.lane) < .65) { s.shoes = s.shoesDuration || 9; s.collectedPowerup = 'shoes'; }
+    } else if (powerById[obstacle.type]) {
+      if (Math.abs(s.x - obstacle.lane) >= .65) continue;
+      const type = obstacle.type;
+      s.collectedPowerup = type;
+      if (type === 'trail' || type === 'wave') {
+        pulsePower(s,type);
+      } else if (type === 'rush') {
+        s.nitro = s.nitroDuration;
+        s.magnet = s.magnetDuration;
+        s.shield = true;
+      } else {
+        s[type] = type === 'ghost' || type === 'slow' ? 6 : 10;
+      }
     } else if (s.nitro > 0 && Math.abs(s.x - obstacle.lane) < .7) {
+      obstacle.smashed = true;
       awardNearMiss(s, 'nitro');
     } else if (!s.hit && hits(s, obstacle)) {
       takeHit(s, obstacle.type);
@@ -676,13 +785,13 @@ export function step(s, dt, random = Math.random) {
         awardNearMiss(s, 'clean-jump');
       } else if (obstacle.type === 'slide' && dx < .55 && (s.slide > 0 || s.roll > 0)) {
         awardNearMiss(s, 'clean-slide');
-      } else if (obstacle.type === 'block' && dx >= .72 && dx <= 1.35) {
+      } else if (obstacle.type === 'block' && !obstacle.isForkDivider && dx >= .72 && dx <= 1.35) {
         awardNearMiss(s, 'block');
       }
     }
   }
   collectMagnetCoins(s);
-  s.items = s.items.filter(o => o.z > s.distance - (o.length || 8)-4);
+  s.items = s.items.filter(o => o.z > s.distance - (o.length || 8) - 10);
 }
 
 export function career(skills) {

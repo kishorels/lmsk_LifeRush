@@ -184,7 +184,7 @@ export function createGuardEffect(runner) {
   return function updateGuard(s,model){
     const time=s.time,reset=time<previousTime||time===0;
     if(reset){previousShield=false;activation=impact=-10;root.visible=false;}
-    const active=Boolean(s.shield);
+    const active=Boolean(s.shield || s.slots?.some(slot => slot.id === 'shield' && slot.until > s.time));
     if(active&&!previousShield){activation=time;impact=-10;}
     // UI consumes shieldAbsorbed before render; preserve the hit through the transition.
     if(!reset&&previousShield&&!active&&s.hit>0){

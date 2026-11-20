@@ -1,28 +1,32 @@
 import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
 import {createPickupModels} from './pickup-models.js?v=3.0.0';
 import {createGuardEffect} from './guard-effect.js?v=3.0.0';
-import {streetSurfaces,curveRelX,curveRelY,roadCurveSlope} from './street-materials.js?v=3.0.0';
-import {createSideTraffic} from './side-vehicles.js?v=3.0.0';
+import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.1';
+import {createSideTraffic} from './side-vehicles.js?v=3.2.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.0.0';
-import {createCampus} from './campus-scene.js?v=3.0.0';
-import {createCollegeCampus} from './college-scene.js?v=3.0.0';
-import {createTraffic} from './traffic-scene.js?v=3.0.0';
+import {createSky} from './sky-scene.js?v=3.1.8';
+import {createCampus} from './campus-scene.js?v=3.2.2';
+import {createCollegeCampus} from './college-scene.js?v=3.2.2';
+import {createItParkCampus} from './itpark-scene.js?v=3.2.2';
+import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.0.3';
+import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.1.1';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.2.2';
+import {createTraffic} from './traffic-scene.js?v=3.2.1';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=3.0.0';
+import {createSchoolEntrance} from './school-scene.js?v=3.0.3';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
 import {loadChaserModel} from './chaser-model.js?v=3.0.0';
 import {loadRunnerModel} from './runner-model.js?v=3.0.0';
-import {height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.0.0';
+import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.2.2';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});}
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
  let contextLost=false;canvas.addEventListener?.('webglcontextlost',()=>{contextLost=true;},false);canvas.addEventListener?.('webglcontextrestored',()=>{contextLost=false;},false);
  const isTouchDevice=typeof navigator!=='undefined'&&navigator.maxTouchPoints>0;
- renderer.setPixelRatio(Math.min(devicePixelRatio||1,isTouchDevice?1.15:1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;
- const scene=new T.Scene();scene.background=new T.Color('#a5c9dc');scene.fog=new T.Fog('#b9d0d5',85,175);
- const camera=new T.PerspectiveCamera(57,1,.1,180);camera.position.set(0,1.52,3.65);camera.lookAt(0,.98,0);
- const ambient=new T.HemisphereLight(0xe5edf7,0x9b8b77,2.1);scene.add(ambient);const sun=new T.DirectionalLight(0xffead0,3.2);sun.position.set(-15,26,15);sun.castShadow=true;const sm=isTouchDevice?512:1024;sun.shadow.mapSize.set(sm,sm);Object.assign(sun.shadow.camera,{left:-20,right:20,top:22,bottom:-26,near:1,far:80});sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
+ renderer.setPixelRatio(Math.min(devicePixelRatio||1,isTouchDevice?1.15:1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.18;
+ const scene=new T.Scene();scene.background=new T.Color('#64d6ff');scene.fog=new T.Fog('#78dcff',150,325);
+ const camera=new T.PerspectiveCamera(57,1,.1,375);camera.position.set(0,1.52,3.65);camera.lookAt(0,.98,0);
+ const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);const sun=new T.DirectionalLight(0xfff4d6,3.55);sun.position.set(-15,26,15);sun.castShadow=true;const sm=isTouchDevice?512:1024;sun.shadow.mapSize.set(sm,sm);Object.assign(sun.shadow.camera,{left:-20,right:20,top:22,bottom:-26,near:1,far:80});sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
  const mats=new Map();function mat(c){if(!mats.has(c))mats.set(c,new T.MeshStandardMaterial({color:c,roughness:.78}));return mats.get(c);}
  const cube=new T.BoxGeometry(1,1,1),sphere=new T.SphereGeometry(1,12,8),cyl=new T.CylinderGeometry(1,1,1,8),cone=new T.ConeGeometry(1,1,7),ringGeometry=new T.TorusGeometry(.32,.075,6,16);
  function mesh(g,c,parent,x,y,z,sx=1,sy=1,sz=1,shadow=false){const m=new T.Mesh(g,mat(c));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=shadow;m.receiveShadow=true;parent.add(m);return m;}
@@ -31,6 +35,13 @@ export function createRenderer(canvas, callbacks = {}){
  const updateStreet=streetSurfaces(scene,box);
  let updateCampus=null;
  let updateCollege=null;
+ let updateItPark=null;
+ function updatePark(state, weather) {
+   if (!updateItPark && state.map === 'itpark') {
+     updateItPark = createItParkCampus(scene);
+   }
+   if (updateItPark) updateItPark(state, weather);
+ }
  const updateSky=createSky(scene,sun,ambient);
  const runner=new T.Group();scene.add(runner);const body=new T.Group();runner.add(body);
  const podiumCyl=new T.CylinderGeometry(1,1,1,32);
@@ -50,6 +61,7 @@ export function createRenderer(canvas, callbacks = {}){
  let compiled = false;
  const capture=createCaptureScene(scene);
  const updateSchool=createSchoolEntrance(scene);
+ const updateRoadEvents=createRoadEventsScene(scene);
  const updateMagnetCoins=createMagnetCoins(scene);const updateTraffic=createTraffic(scene);const updateSideTraffic=createSideTraffic(scene);const stage=createCaptureStage(scene);
  const torso=ball(body,0xffcb38,0,1.25,0,.33,.46,.23,true);box(body,0x17a4a3,0,1.22,.22,.4,.47,.15,true);box(body,0x86ead6,0,1.23,.31,.24,.24,.05);box(body,0xffe67a,0,1.27,.35,.16,.06,.025);for(const side of [-1,1])box(body,0x16857f,side*.21,1.34,.17,.055,.55,.07);const head=ball(body,0xd9986f,0,1.91,0,.255,.28,.24,true);ball(body,0x273455,0,2.07,-.01,.27,.16,.25,true);const cap=ball(body,0xf65d78,0,2.16,0,.29,.11,.27,true);box(body,0xf65d78,0,2.11,-.22,.4,.045,.25);const pony=ball(body,0x273455,0,1.95,.28,.12,.26,.14,true);
  // Front details for the lightweight character mesh used by the female option.
@@ -61,7 +73,7 @@ export function createRenderer(canvas, callbacks = {}){
  ball(body,0x813c40,0,1.835,-.226,.042,.014,.012);
  const legs=[],arms=[];for(const side of [-1,1]){const leg=new T.Group();leg.position.set(side*.17,.88,0);body.add(leg);mesh(cyl,0x283962,leg,0,-.21,0,.12,.45,.12,true);const knee=new T.Group();knee.position.y=-.42;leg.add(knee);mesh(cyl,0x344771,knee,0,-.18,0,.10,.38,.1,true);box(knee,0xffffff,0,-.4,-.08,.25,.17,.42,true);box(knee,0xf66d7d,0,-.35,-.1,.26,.05,.26);legs.push({leg,knee});const arm=new T.Group();arm.position.set(side*.36,1.53,0);body.add(arm);mesh(cyl,0xffcb38,arm,0,-.12,0,.115,.26,.115,true);mesh(cyl,0xd9986f,arm,0,-.35,0,.085,.3,.085,true);ball(arm,0xe7ae84,0,-.52,0,.09);arms.push(arm);}
  // Pooled obstacles / pickup models: no geometry allocation during a run.
- const pool=[];for(let i=0;i<64;i++){const root=new T.Group();root.userData.captureObstacle=true;scene.add(root);root.visible=false;pool.push(root);}
+ const pool=[];for(let i=0;i<240;i++){const root=new T.Group();root.userData.captureObstacle=true;scene.add(root);root.visible=false;pool.push(root);}
  const obsTexMats=new Map();
  function canvasObsMat(key,w,h,paintFn,rough=.45,metal=.1,emissiveInt=.18){
   if(obsTexMats.has(key))return obsTexMats.get(key);
@@ -238,7 +250,56 @@ export function createRenderer(canvas, callbacks = {}){
    }
   }
  }
- function obstacle(g,o,map='school',blockKind=0){clear(g);if(['coin','magnet','shield','nitro','shoes'].includes(o.type)){ensurePickups().add(g,o.type);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
+ function getRoboticsBannerMat(){
+  return canvasObsMat('robotics',512,160,(ctx,w,h)=>{
+   const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#091426');g.addColorStop(.5,'#112a46');g.addColorStop(1,'#091426');
+   ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+   ctx.fillStyle='#22ff55';ctx.fillRect(0,0,w,12);ctx.fillRect(0,h-12,w,12);
+   ctx.strokeStyle='#38bdf8';ctx.lineWidth=4;ctx.strokeRect(10,20,w-20,h-40);
+   ctx.fillStyle='#f8fafc';ctx.font='900 42px system-ui, sans-serif';ctx.textAlign='center';
+   ctx.fillText('LMSK IT PARK · AI ZONE',w/2,84,465);
+   ctx.fillStyle='#4ade80';ctx.font='700 22px system-ui, sans-serif';
+   ctx.fillText('ROBOTICS & AUTONOMOUS TECH DISTRICT',w/2,126,460);
+  },.28,.35,.40)||mat(0x0f1f36);
+ }
+ function itParkObstacle(g,o,blockKind){
+  g.userData.waveArm=null;g.userData.serverScan=null;g.userData.papers=null;g.userData.swivel=null;g.userData.holoPanel=null;
+  if(o.type==='jump'){
+   const jKind=blockKind%5;
+   if(jKind===0){g.add(buildCableBarrier());}
+   else if(jKind===1){g.add(buildLaptopDesk());}
+   else if(jKind===2){const bot=buildHumanoidRobot('seated');g.add(bot);g.userData.waveArm=bot.userData.waveArm||null;}
+   else if(jKind===3){g.add(buildMeetingTable());}
+   else{const ch=buildOfficeChair();g.add(ch);g.userData.swivel=ch.userData.swivel||null;}
+  }else if(o.type==='slide'){
+   if(blockKind%2===0){
+    // Badge Turnstile Gate & Hologram Overhead Arch (Image 5 #9!)
+    g.add(buildTurnstileGate());
+   }else{
+    // Futuristic IT Park AI Robotics Archway with twin glossy-white green-eyed Robot Heads on top
+    for(const x of [-.92,.92]){
+     box(g,0x1e293b,x,.10,0,.40,.20,.54,true);
+     box(g,0xf1f5f9,x,1.34,0,.20,2.56,.34,true);
+     box(g,0x22ff55,x-(x<0?-.11:.11),1.34,.14,.04,2.10,.05);
+     const head=buildHumanoidRobot('head');head.scale.setScalar(.62);head.position.set(x,2.80,0);g.add(head);
+    }
+    box(g,0x0f172a,0,2.16,0,2.06,.94,.20,true);
+    texturedPanel(g,getRoboticsBannerMat(),0,2.16,.12,1.96,.84,.03,0x0f1f36);
+    texturedPanel(g,getRoboticsBannerMat(),0,2.16,-.12,1.96,.84,.03,0x0f1f36);
+    box(g,0xf1f5f9,0,2.67,0,2.12,.10,.30);
+   }
+  }else if(o.type==='block'){
+   const bKind=blockKind%7;
+   if(bKind===0){const bot=buildHumanoidRobot('wave');g.add(bot);g.userData.waveArm=bot.userData.waveArm||null;}
+   else if(bKind===1){const sr=buildServerRack();g.add(sr);g.userData.serverScan=sr.userData.serverScan||null;}
+   else if(bKind===2){g.add(buildGlassOfficePod());}
+   else if(bKind===3){g.add(buildWifiRouterTower());}
+   else if(bKind===4){const hl=buildCodeHologram();g.add(hl);g.userData.holoPanel=hl.userData.holoPanel||null;}
+   else if(bKind===5){const db=buildDocumentBoxes();g.add(db);g.userData.papers=db.userData.papers||null;}
+   else{const bike=buildDucatiStreetfighter(true,false);bike.rotation.y=Math.PI/2.6;g.add(bike);}
+  }
+ }
+ function obstacle(g,o,map='school',blockKind=0){clear(g);g.userData.waveArm=null;g.userData.rotors=null;g.userData.crate=null;g.userData.spinBadge=null;g.userData.serverScan=null;g.userData.papers=null;g.userData.swivel=null;g.userData.holoPanel=null;if(PICKUP_TYPES.has(o.type)){ensurePickups().add(g,o.type);return;}if(ROAD_EVENT_TYPES.has(o.type)){const ev=buildRoadEventMesh(o.type,o);g.add(ev);g.userData.rotors=ev.userData.rotors||null;g.userData.crate=ev.userData.crate||null;g.userData.spinBadge=ev.userData.spinBadge||null;return;}if(map==='itpark'){itParkObstacle(g,o,blockKind);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
 
  const particles=[];for(let i=0;i<30;i++){const m=ball(scene,0xffdf62,0,0,0,.065);m.visible=false;particles.push({m,life:0,v:new T.Vector3()});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
  function resize(){const r=canvas.getBoundingClientRect();const rw=Math.round(r.width),rh=Math.round(r.height);if(!rw||!rh||(rw===lastCanvasW&&rh===lastCanvasH))return;lastCanvasW=rw;lastCanvasH=rh;renderer.setSize(rw,rh,false);camera.aspect=rw/rh;baseFov=rw/rh<.8?64:58;camera.fov=baseFov;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
@@ -248,7 +309,7 @@ export function createRenderer(canvas, callbacks = {}){
  if(podiumChanged){
    lastOnPodium=onPodium;
    sun.castShadow=!onPodium;
-   camera.far=onPodium?68:180;
+   camera.far=onPodium?68:375;
    camera.updateProjectionMatrix();
    if(onPodium){
      trackCameraY=0;
@@ -257,35 +318,72 @@ export function createRenderer(canvas, callbacks = {}){
    }
  }
  updateSchool(s);if(!onPodium||podiumChanged){updateTraffic(s);updateSideTraffic(s);updateMagnetCoins(s);}
- const weather=updateSky(s);updateStreet(s.distance,weather,s.map);
+ const weather=updateSky(s);
+ const branchCovering=(s.activeBranch&&s.distance>=s.branchStart+1&&s.distance<=s.branchEnd)?s.activeBranch:null;
+ updateStreet(s.distance,weather,s.map,branchCovering,s);
+ updateRoadEvents(s,weather);
+ updatePark(s,weather);
  if(s.map==='college'){if(!updateCollege)updateCollege=createCollegeCampus(scene);updateCollege(s);if(updateCampus)updateCampus(s,weather);}
- else{if(!onPodium||podiumChanged){if(!updateCampus&&!onPodium)updateCampus=createCampus(scene);if(updateCampus)updateCampus(s,weather);}if(updateCollege)updateCollege(s);}
+ else{if(!onPodium||podiumChanged){if(!updateCampus&&!onPodium&&s.map!=='itpark')updateCampus=createCampus(scene);if(updateCampus)updateCampus(s,weather);}if(updateCollege)updateCollege(s);}
  updateChaserModel(s);
  podium.position.set(0,.09,s.distance);
  podium.visible=onPodium;
  const fallRecoil = s.mode==='falling' ? Math.sin(Math.min(1,(1-s.fall/FALL_DURATION)/.38)*Math.PI)*.45 : 0;
  runner.position.set(s.x*2.2,height(s)+(onPodium?.04:0),fallRecoil);const rawChar=String(character||'male');const desiredKey=['male','female','college-male','college-woman','college-man'].includes(rawChar)?(rawChar.startsWith('college-')?rawChar:(s.map==='college'?(rawChar==='female'?'college-woman':'college-male'):rawChar)):'male';const altKey=desiredKey==='college-woman'?'female':(desiredKey.startsWith('college-')?'male':`college-${desiredKey}`);const isFemaleBody=desiredKey.includes('female')||desiredKey.includes('woman'),isCollegeBody=desiredKey.startsWith('college-')||s.map==='college';if(!heroModels[desiredKey]?.model)heroModels[desiredKey]?.(s,desiredKey,frameDt);const modelKey=onPodium?desiredKey:(heroModels[desiredKey]?.model?desiredKey:heroModels[altKey]?.model?altKey:desiredKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleBody?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleBody;cap.visible=!isFemaleBody;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
  updateGuard(s,selectedModel?.model);
- let n=0;if(!onPodium){const pk=ensurePickups();for(const o of s.items){if(o.type==='bus'||o.type==='sideVehicle')continue;const z=o.z-s.distance;if(o.done||z< -3||z>125)continue;const g=pool[n++];if(!g)break;const blockKind=Math.abs(Math.floor(o.z)+o.lane)%4;const key=(s.map==='college'?'col:':'sch:')+o.type+':'+o.skill+':'+o.variant+':'+(o.type==='block'?blockKind:0);if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;}g.visible=true;const cx=curveRelX(o.z,s),cy=curveRelY(o.z,s);const isFloat=['coin','magnet','shield','nitro','shoes'].includes(o.type);g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy,-z);g.rotation.y=isFloat?0:-Math.atan(roadCurveSlope(o.z,s.map));if(isFloat){pk.animate(g,o.type,s.time,o.z);}}}for(;n<pool.length;n++)pool[n].visible=false;
- const count=s.coins;if(count>total||(s.nitro>0&&s.mode==='running'&&burst<=0)){burst=s.nitro>0?.08:.22;for(const p of particles){p.life=.42+Math.random()*.28;p.m.visible=true;p.m.position.set(s.x*2.2+(Math.random()-.5)*.45,height(s)+.7,s.nitro>0?.5:0);p.v.set((Math.random()-.5)*4,Math.random()*3.5,s.nitro>0?8:(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
+ let n=0;if(!onPodium){const pk=ensurePickups();
+ // Render solid obstacles & pads FIRST (priority over coins) so pool limits NEVER hide a slide/jump/block barrier!
+ // Keep solid obstacles visible even after `o.done` until completely behind the camera (`z < -10`) — ZERO disappearing in front of you!
+ const drawItem=o=>{
+  const z=o.z-s.distance;
+  if(o.cleared||o.smashed||z<-10||z>340)return;
+  const isCollectible=PICKUP_TYPES.has(o.type)||o.type==='mysteryCrate'||o.type==='letter';
+  if(o.done&&isCollectible)return;
+  const g=pool[n++];if(!g)return;
+  const blockKind=Math.abs(Math.floor(o.z)+o.lane)%7;
+  const key=(s.map==='itpark'?'itp:':s.map==='college'?'col:':'sch:')+o.type+':'+(o.letter||o.skill)+':'+o.variant+':'+((o.type==='block'||o.type==='jump'||o.type==='slide')?blockKind:0);
+  if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;}
+  g.visible=true;const cx=curveRelX(o.z,s),cy=curveRelY(o.z,s);const isFloat=PICKUP_TYPES.has(o.type);
+  g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy,-z);
+  g.rotation.y=isFloat?0:-Math.atan(curveSlopeAt(o.z,s));
+  if(isFloat){pk.animate(g,o.type,s.time,o.z);}else if(g.userData.waveArm){g.userData.waveArm.rotation.z=Math.sin(s.time*6.5+o.z)*.24;}
+  if(g.userData.rotors){for(const r of g.userData.rotors)r.rotation.y=s.time*26;if(g.userData.crate)g.userData.crate.position.y=1.05+Math.sin(s.time*4+o.z)*.12;}
+  if(g.userData.spinBadge){g.userData.spinBadge.rotation.y=s.time*2.6+o.z;g.userData.spinBadge.position.y=1.25+Math.sin(s.time*3.5+o.z)*.12;}
+  if(g.userData.serverScan){g.userData.serverScan.position.y=1.16+Math.sin(s.time*3.8+o.z)*.74;}
+  if(g.userData.holoPanel){g.userData.holoPanel.position.y=1.36+Math.sin(s.time*3.2+o.z)*.10;}
+  if(g.userData.swivel){g.userData.swivel.rotation.y=Math.sin(s.time*2.4+o.z)*.42;}
+  if(g.userData.papers){for(let pi=0;pi<g.userData.papers.length;pi++){const sh=g.userData.papers[pi];sh.position.y=sh.userData.baseY+Math.sin(s.time*4.2+o.z+pi*1.7)*.09;sh.rotation.z=Math.sin(s.time*3.4+pi)*.35;}}
+ };
+ for(const o of s.items){if(o.type==='bus'||o.type==='sideVehicle'||o.type==='coin')continue;drawItem(o);if(n>=pool.length)break;}
+ for(const o of s.items){if(o.type!=='coin')continue;drawItem(o);if(n>=pool.length)break;}
+ }for(;n<pool.length;n++)pool[n].visible=false;
+ const count=s.coins;if(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0)){burst=(s.nitro>0||s.turboBoost>0)?.08:.22;for(const p of particles){p.life=.42+Math.random()*.28;p.m.visible=true;p.m.position.set(s.x*2.2+(Math.random()-.5)*.45,height(s)+.7,(s.nitro>0||s.turboBoost>0)?.5:0);p.v.set((Math.random()-.5)*4,Math.random()*3.5,(s.nitro>0||s.turboBoost>0)?8:(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
  const inSelect=s.mode==='ready'||s.mode==='select'||s.mode==='intro';
- const targetFov=inSelect?baseFov:baseFov+Math.min(11,Math.max(0,(s.speed-30)/65)*11)+(s.nitro>0?7:0);
+ const targetFov=inSelect?baseFov:baseFov+Math.min(11,Math.max(0,(s.speed-30)/65)*11)+(s.nitro>0?7:s.turboBoost>0?6:0)+(s.feverTimer>0?4:0);
  if(Math.abs(targetFov-camera.fov)>.12){camera.fov+=(targetFov-camera.fov)*Math.min(1,(dt||.016)*6);camera.updateProjectionMatrix();}
- const collegeRun=!inSelect&&s.map==='college';
- const camCurveX=collegeRun?curveRelX(Math.max(0,s.distance-6.8),s):0;
- const camCurveY=collegeRun?curveRelY(Math.max(0,s.distance-6.8),s):0;
- const bendX=collegeRun?curveRelX(s.distance+12,s)*.35:0;
- const bendY=collegeRun?curveRelY(s.distance+12,s)*.35:0;
- if(collegeRun)runner.rotation.z=-Math.atan(roadCurveSlope(s.distance,'college'))*.22;
+ const collegeRun=!inSelect&&s.map==='college'&&!s.activeBranch;
+ const branchCurved=!inSelect&&(s.activeBranch==='skybridge'||s.activeBranch==='underpass');
+ const curvedRun=collegeRun||branchCurved;
+ const camCurveX=curvedRun?curveRelX(Math.max(0,s.distance-6.8),s):0;
+ const camCurveY=curvedRun?curveRelY(Math.max(0,s.distance-6.8),s):0;
+ const bendX=curvedRun?curveRelX(s.distance+(branchCurved?16:12),s)*(branchCurved?.40:.35):0;
+ const bendY=curvedRun?curveRelY(s.distance+(branchCurved?16:12),s)*.35:0;
+ const curSlope=curvedRun?curveSlopeAt(s.distance,s):0;
+ if(curvedRun&&s.mode==='running'){runner.rotation.z=-Math.atan(curSlope)*.24-(s.lane-s.x)*.16;runner.rotation.x=branchCurved?-.08:0;}
+ else if(!inSelect&&s.mode==='running'){runner.rotation.z=-(s.lane-s.x)*.18;runner.rotation.x=-.08;}
+ const yTurnProgress=s.activeBranch?Math.max(0,Math.min(1,(s.distance-s.branchStart)/18)):0;
+ const yTurnBank=s.activeBranch?Math.sin(yTurnProgress*Math.PI)*(s.activeBranch==='skybridge'?0.055:-0.055):0;
+ const curveBank=branchCurved?-Math.atan(curveSlopeAt(s.distance+12,s))*.26:0;
+ const laneBank=inSelect?0:-(s.lane-s.x)*.038;
  const targetCamX=s.mode==='intro'?.48:inSelect?0:camCurveX+s.x*.65;
- const targetCamY=inSelect?1.52:(collegeRun?4.25+camCurveY*.8:3.8)+trackCameraY;
+ const targetCamY=inSelect?1.52:(collegeRun?4.25+camCurveY*.8:3.8+camCurveY*.75)+trackCameraY;
  const targetCamZ=inSelect?3.65:6.8;
  const targetLookX=inSelect?0:s.x*(collegeRun?.42:.37*.65)+bendX;
  const targetLookY=inSelect?.98:(collegeRun?1.02:1.35)+trackCameraY+bendY;
  const targetLookZ=inSelect?0:collegeRun?-7.5:-12;
- const camBlend=1-Math.exp(-(collegeRun?8.5:5.5)*Math.min(.05,dt||.016));
+ const camBlend=1-Math.exp(-(curvedRun?7.5:5.5)*Math.min(.05,dt||.016));
  camera.position.x+=(targetCamX-camera.position.x)*camBlend;
  camera.position.y+=(targetCamY-camera.position.y)*camBlend;
  camera.position.z+=(targetCamZ-camera.position.z)*camBlend;
@@ -302,6 +400,7 @@ export function createRenderer(canvas, callbacks = {}){
    camera.position.y+=Math.cos(s.time*75)*shake*.5;
  }
  camera.lookAt(inSelect?camera.position.x*.37:currentLookX,currentLookY,currentLookZ);
+ if(!inSelect&&!isCapture(s))camera.rotation.z+=yTurnBank+laneBank+curveBank;
  if(isCapture(s)){
 
    if(body.visible){

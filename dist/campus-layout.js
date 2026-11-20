@@ -1,4 +1,4 @@
-export const CAMPUS_SPACING=32,CAMPUS_SLOTS=9,CAMPUS_START=64;
+export const CAMPUS_SPACING=32,CAMPUS_SLOTS=10,CAMPUS_START=64;
 // A slot moves continuously until its whole section is behind the camera.
 export function campusAnchor(slot,distance) {
  const first=CAMPUS_START+slot*CAMPUS_SPACING,span=CAMPUS_SLOTS*CAMPUS_SPACING;
@@ -21,18 +21,71 @@ export function roadCurveY(distance, map = 'school') {
  return ease * (0.65 * Math.sin(distance * 0.013));
 }
 
+function smootherstep(t) {
+ const c = Math.max(0, Math.min(1, t));
+ return c * c * c * (c * (6 * c - 15) + 10);
+}
+
+// Sweeping C2-continuous "curly bend" S-curve for Glass Sea-Bridge & Railway Cave entry/exit transitions.
+// Value & slope smoothly vanish at branchStart and branchEnd so straight city road joins seamlessly!
+export function branchCurveX(worldZ, state) {
+ const b = state?.activeBranch;
+ if (b !== 'skybridge' && b !== 'underpass') return 0;
+ const start = Number.isFinite(state.branchStart) ? state.branchStart : 220;
+ const end = Number.isFinite(state.branchEnd) ? state.branchEnd : start + 1000;
+ if (worldZ <= start || worldZ >= end) return 0;
+ const len = Math.max(1, end - start);
+ const u = (worldZ - start) / len;
+ const env = smootherstep((worldZ - start) / 145) * smootherstep((end - worldZ) / 155);
+ if (b === 'skybridge') {
+  return env * (-11.5 * Math.sin(u * Math.PI) - 6.8 * Math.sin(u * Math.PI * 3));
+ }
+ return env * (9.2 * Math.sin(u * Math.PI) + 5.0 * Math.sin(u * Math.PI * 3));
+}
+
+export function branchCurveY(worldZ, state) {
+ const b = state?.activeBranch;
+ if (b !== 'skybridge' && b !== 'underpass') return 0;
+ const start = Number.isFinite(state.branchStart) ? state.branchStart : 220;
+ const end = Number.isFinite(state.branchEnd) ? state.branchEnd : start + 1000;
+ if (worldZ <= start || worldZ >= end) return 0;
+ const len = Math.max(1, end - start);
+ const u = (worldZ - start) / len;
+ const env = smootherstep((worldZ - start) / 145) * smootherstep((end - worldZ) / 155);
+ if (b === 'skybridge') {
+  return env * (1.85 * Math.sin(u * Math.PI) + 0.45 * Math.sin(u * Math.PI * 3));
+ }
+ return env * (-0.45 * Math.sin(u * Math.PI));
+}
+
 export function roadCurveSlope(distance, map = 'school') {
  if (map !== 'college') return 0;
  const dx = 0.25;
  return (roadCurveX(distance + dx, map) - roadCurveX(distance - dx, map)) / (2 * dx);
 }
 
+export function curveSlopeAt(worldZ, state) {
+ if (state?.activeBranch === 'skybridge' || state?.activeBranch === 'underpass') {
+  const dx = 0.5;
+  return (branchCurveX(worldZ + dx, state) - branchCurveX(worldZ - dx, state)) / (2 * dx);
+ }
+ return roadCurveSlope(worldZ, state?.map || 'school');
+}
+
 export function curveRelX(worldZ, state) {
- if (!state || state.map !== 'college') return 0;
+ if (!state) return 0;
+ if (state.activeBranch === 'skybridge' || state.activeBranch === 'underpass') {
+  return branchCurveX(worldZ, state) - branchCurveX(state.distance || 0, state);
+ }
+ if (state.map !== 'college') return 0;
  return roadCurveX(worldZ, 'college') - roadCurveX(state.distance || 0, 'college');
 }
 
 export function curveRelY(worldZ, state) {
- if (!state || state.map !== 'college') return 0;
+ if (!state) return 0;
+ if (state.activeBranch === 'skybridge' || state.activeBranch === 'underpass') {
+  return branchCurveY(worldZ, state) - branchCurveY(state.distance || 0, state);
+ }
+ if (state.map !== 'college') return 0;
  return roadCurveY(worldZ, 'college') - roadCurveY(state.distance || 0, 'college');
 }

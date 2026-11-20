@@ -1,8 +1,27 @@
+import {powerById} from './progression.js';
 import * as T from './vendor/three.module.js';
 import {coinReflections,makeCoin,makePickupGlint,spinCoin} from './coin.js';
 import {createGuardPickup} from './guard-effect.js';
 
 export function createPickupModels() {
+  const badges = new Map();
+  function badgeMaterial(type) {
+    if (badges.has(type)) return badges.get(type);
+    const material = new T.SpriteMaterial({color:0xffffff});
+    if (typeof document !== 'undefined') {
+      const badge = document.createElement('canvas');
+      badge.width = badge.height = 96;
+      const ctx = badge.getContext('2d');
+      ctx.fillStyle='#124759';ctx.beginPath();ctx.arc(48,48,43,0,2*Math.PI);ctx.fill();
+      ctx.strokeStyle='#93ece6';ctx.lineWidth=5;ctx.stroke();
+      ctx.fillStyle='white';ctx.font='bold 44px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(powerById[type].icon,48,49);
+      material.map = new T.CanvasTexture(badge);
+      material.map.colorSpace = T.SRGBColorSpace;
+    }
+    badges.set(type,material);
+    return material;
+  }
   const chrome=new T.MeshStandardMaterial({color:0xcbd4df,metalness:.95,roughness:.19,envMap:coinReflections(),envMapIntensity:.65});
   const red=new T.MeshStandardMaterial({color:0x970d10,metalness:.62,roughness:.23,envMap:coinReflections(),envMapIntensity:.35});
   const body=new T.Shape();
@@ -57,6 +76,11 @@ export function createPickupModels() {
       shoes.userData.fields=[ring];shoes.userData.glint=glint;
       parent.userData.pickupVisual=shoes;return;
     }
+    if (powerById[type]) {
+      const marker = new T.Sprite(badgeMaterial(type));
+      marker.position.y=1.25;parent.add(marker);
+      return;
+    }
     if(type!=='magnet')return;
     const magnet=new T.Group();magnet.name='magnet-pickup';magnet.position.y=1.25;parent.add(magnet);
     const shell=new T.Mesh(bodyGeometry,red);shell.castShadow=true;magnet.add(shell);
@@ -99,6 +123,10 @@ export function drawLitePowerup(ctx,p,type,time) {
     ctx.fillStyle='#22c55e';ctx.fillRect(-.34*k,-.16*k,.68*k,.30*k);
     ctx.fillStyle='#fde047';ctx.fillRect(-.36*k,.12*k,.74*k,.12*k);
     ctx.fillStyle='#ffffff';ctx.beginPath();ctx.moveTo(-.34*k,-.16*k);ctx.lineTo(-.52*k,-.38*k);ctx.lineTo(-.16*k,-.22*k);ctx.closePath();ctx.fill();
+  }else if(powerById[type]){
+    ctx.fillStyle='#124759';ctx.beginPath();ctx.arc(0,0,k*.46,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#bafffb';ctx.font='bold '+k*.54+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(powerById[type].icon,0,0);
   }else{
     const shieldPath=()=>{ctx.beginPath();ctx.moveTo(0,-.46*k);ctx.lineTo(.38*k,-.28*k);ctx.quadraticCurveTo(.39*k,.24*k,0,.5*k);ctx.quadraticCurveTo(-.39*k,.24*k,-.38*k,-.28*k);ctx.closePath();};
     ctx.fillStyle=shine;shieldPath();ctx.fill();

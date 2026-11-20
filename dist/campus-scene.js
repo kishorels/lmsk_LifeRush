@@ -2,7 +2,8 @@ import {campusMaterial, roadsideTree} from './street-materials.js';
 import {buildBus} from './bus-model.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {Group,Mesh,BoxGeometry,SphereGeometry,CylinderGeometry,MeshStandardMaterial,CanvasTexture,SRGBColorSpace} from './vendor/three.module.js';
-import {campusAnchor,campusKind,CAMPUS_SLOTS} from './campus-layout.js';
+import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
+import {branchForkClearance} from './road-events.js';
 export function createCampus(scene) {
  const cube=new BoxGeometry(),sphere=new SphereGeometry(1,10,7),cyl=new CylinderGeometry(1,1,1,10),mats=new Map(),signs=new Map();
  function part(g,c,x,y,z,w,h,d,geo=cube){if(!mats.has(c))mats.set(c,campusMaterial(c));const m=new Mesh(geo,mats.get(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.receiveShadow=true;g.add(m);return m;}
@@ -91,7 +92,7 @@ export function createCampus(scene) {
    part(g,0x9ea98d,side*4.9,.24,0,.25,.48,32);part(g,0x476d59,side*4.9,1.03,0,.06,.07,32);
    for(let i=0;i<4;i++){part(g,0xe9e3ca,side*1.1,.105,12-i*8,.06,.018,3.5);}
   }
-  for(const side of [-1,1]){for(let i=0;i<16;i++){const z=15-i*2;part(g,0xcac9b3,side*4.3,.177,z,1.25,.008,.025);}for(const z of [-8,8]){part(g,0x455b52,side*4.65,2.1,z,.07,4.2,.07);part(g,0xf3ead2,side*4.4,4.2,z,.65,.12,.35);}}
+  for(const side of [-1,1]){part(g,0x9b8e75,side*14.0,-3.75,0,19.4,7.6,32.4);for(let i=0;i<16;i++){const z=15-i*2;part(g,0xcac9b3,side*4.3,.177,z,1.25,.008,.025);}for(const z of [-8,8]){part(g,0x455b52,side*4.65,2.1,z,.07,4.2,.07);part(g,0xf3ead2,side*4.4,4.2,z,.65,.12,.35);}}
   if(kind===0){building(g,-1,'CLASSROOM BLOCK');courtyard(g,1);}
   if(kind===1){field(g,-1);building(g,1,'SCIENCE LAB',1);}
   if(kind===2){building(g,-1,'SCHOOL LIBRARY',2);field(g,1);}
@@ -112,8 +113,11 @@ export function createCampus(scene) {
  const slots=Array.from({length:CAMPUS_SLOTS},(_,slot)=>{const root=new Group();scene.add(root);return{slot,root,kind:-1};});
  const cache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
  const glazing=mats.get(0x276fa0);
- return (s,weather)=>{if(glazing)glazing.emissiveIntensity=(weather?.night||0)*.38;for(const item of slots){item.root.visible=s.map!=='college';if(!item.root.visible)continue;const anchor=campusAnchor(item.slot,s.distance),kind=campusKind(anchor);
+ return (s,weather)=>{if(glazing)glazing.emissiveIntensity=(weather?.night||0)*.38;for(const item of slots){const baseVis=s.map!=='college' && s.map!=='itpark';if(!baseVis){item.root.visible=false;continue;}const anchor=campusAnchor(item.slot,s.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,s);
+  if(clr.hide){item.root.visible=false;continue;}
+  item.root.visible=true;
   if(item.kind!==kind){item.root.clear();if(!cache[item.slot].has(kind))cache[item.slot].set(kind,templates[kind].clone());item.root.add(cache[item.slot].get(kind));item.kind=kind;}
-  item.root.position.z=s.distance-anchor;
+  item.root.position.set(curveRelX(anchor,s),curveRelY(anchor,s)+clr.dropY,s.distance-anchor);
+  item.root.rotation.y=s.activeBranch?-Math.atan(curveSlopeAt(anchor,s)):0;
  }};
 }
