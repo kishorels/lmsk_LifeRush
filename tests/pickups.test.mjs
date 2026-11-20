@@ -42,6 +42,11 @@ test('metallic powerup models animate deterministically and share geometry',()=>
   const shield=new Group();models.add(shield,'shield');models.animate(shield,'shield',2);
   assert.ok(shield.getObjectByName('shield-pickup').userData.glint);
   shield.updateMatrixWorld(true);shield.traverse(o=>assert.ok(o.matrixWorld.elements.every(Number.isFinite)));
+  for(const kind of ['nitro','shoes']){
+    const g=new Group();models.add(g,kind);models.animate(g,kind,2,.4);
+    assert.ok(g.getObjectByName(kind+'-pickup'));
+    g.updateMatrixWorld(true);g.traverse(o=>assert.ok(o.matrixWorld.elements.every(Number.isFinite)));
+  }
 });
 
 test('magnet pulls road, parked-roof and moving-roof coins across lanes and heights exactly once',()=>{

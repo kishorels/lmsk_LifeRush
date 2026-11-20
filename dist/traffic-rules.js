@@ -40,7 +40,7 @@ export function routeSegment(seed=0,index=0){
     barrierAt:kind==='roof'?158+pick(19):145+pick(16),triggerAt:38+pick(15),
     vehicle:['cycle','bike','car'][pick(3)],extraBus:random()>.3,lateBus:random()>.2,
     coinAt:25+pick(15),coinCount:3+pick(3),lateCoinAt:(kind==='roof'?82:122)+pick(13),
-    pickupAt:49+pick(25),powerup:((index%2)^(hash(seed,Math.floor(index/2),151)%2))?'shield':'magnet'};
+    pickupAt:49+pick(25),powerup:['shield','magnet','nitro','shoes'][(index+(hash(seed,Math.floor(index/4),151)%4))%4]};
 }
 export function coinTrail(z,lane,count=4){return Array.from({length:count},(_,i)=>({z:z+i*4,lane,type:'coin',done:false}));}
 export function repeatedVans(distance,seed=0){

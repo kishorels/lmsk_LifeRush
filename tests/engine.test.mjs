@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import{fresh,action,step,hits,pattern,career,height,chaseRemaining,chasePose,capturePose,CAPTURE_DURATION}from'../dist/engine.js';
+import test from 'node:test';import assert from 'node:assert/strict';import{fresh,action,step,hits,pattern,career,height,chaseRemaining,chasePose,capturePose,CAPTURE_DURATION,reviveRun}from'../dist/engine.js';
 test('lane boundaries and pause input',()=>{const s=fresh(0);s.mode='running';for(let i=0;i<10;i++)action(s,'right');assert.equal(s.lane,1);for(let i=0;i<10;i++)action(s,'left');assert.equal(s.lane,-1);s.mode='paused';action(s,'right');assert.equal(s.lane,-1);});
 test('jump, slide and collision outcomes',()=>{const s=fresh(0);s.mode='running';assert.ok(hits(s,{lane:0,type:'jump'}));action(s,'jump');s.jump=.475;assert.equal(hits(s,{lane:0,type:'jump'}),false);assert.ok(hits(s,{lane:0,type:'block'}));s.jump=0;action(s,'slide');assert.equal(hits(s,{lane:0,type:'slide'}),false);for(let i=0;i<20;i++)step(s,.05);assert.equal(s.slide,0);assert.ok(hits(s,{lane:0,type:'slide'}));});
 test('safe generated rows and reset',()=>{for(let i=0;i<1000;i++){const row=pattern(50);assert.equal(row.filter(x=>x.type!=='coin').length,1);assert.notEqual(row[0].lane,row[1].lane);}const s=fresh(0);s.skills[0]=100;s.distance=300;s.items.push({});const reset=fresh(0);assert.deepEqual(reset.skills,[0,0,0]);assert.equal(reset.distance,0);assert.equal(reset.items.length,0);});
@@ -257,4 +257,47 @@ test('all 3 lanes are never simultaneously blocked across low, mid, and high spe
       }
     }
   }
+});
+
+test('near-miss close calls award combo bonuses, nitro smashes obstacles, super shoes boost jump, and revive clears hazards', () => {
+  const s = fresh(0);
+  s.mode = 'running';
+  s.next = 100000;
+  s.lane = s.x = 0;
+  // Adjacent block triggers Near Miss + combo x2 + 10 bonus coins
+  s.items = [{ z: 1, lane: 1, type: 'block', done: false }];
+  step(s, .05);
+  assert.equal(s.nearMissCount, 1);
+  assert.equal(s.combo, 2);
+  assert.equal(s.coins, 10);
+
+  // Super Jump Shoes raise jump apex above 3m (clearing 2.8m bus roofs)
+  s.items = [{ z: s.distance + 0.5, lane: 0, type: 'shoes', done: false }];
+  step(s, .05);
+  assert.ok(s.shoes > 8);
+  action(s, 'jump');
+  let maxH = 0;
+  for (let i = 0; i < 20; i++) { step(s, .04); maxH = Math.max(maxH, height(s)); }
+  assert.ok(maxH > 3.1, `Super Shoes jump apex should clear bus roofs, got ${maxH}`);
+
+  // Nitro Rush boosts speed and smashes right through a block without damage
+  s.items = [{ z: s.distance + 0.5, lane: 0, type: 'nitro', done: false }];
+  step(s, .05);
+  assert.ok(s.nitro > 4);
+  assert.ok(s.speed >= 56);
+  s.items = [{ z: s.distance + 0.5, lane: 0, type: 'block', done: false }];
+  const beforeDamage = s.damage;
+  step(s, .05);
+  assert.equal(s.damage, beforeDamage, 'Nitro smashes obstacle without taking damage');
+
+  // Revive clears ahead obstacles, restores shield, and enters countdown
+  s.nitro = 0; s.damage = 2; s.mode = 'crashed'; s.injured = true;
+  s.items = [{ z: s.distance + 15, lane: 0, type: 'block', done: false }];
+  reviveRun(s);
+  assert.equal(s.mode, 'countdown');
+  assert.equal(s.damage, 0);
+  assert.equal(s.injured, false);
+  assert.equal(s.shield, true);
+  assert.equal(s.revivedOnce, true);
+  assert.equal(s.items[0].done, true);
 });

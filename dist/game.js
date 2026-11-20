@@ -1,12 +1,15 @@
-import {createSound} from './sound.js?v=2.9.8';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,SCHOOL_GATE} from './engine.js?v=2.9.8';
-import {createRenderer} from './renderer3d.js?v=2.9.8';
-import {createLiteRenderer} from './renderer-lite.js?v=2.9.8';
+import {createSound} from './sound.js?v=3.0.0';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE} from './engine.js?v=3.0.0';
+import {createRenderer} from './renderer3d.js?v=3.0.0';
+import {createLiteRenderer} from './renderer-lite.js?v=3.0.0';
 
 const $=id=>document.getElementById(id);
 let canvas=$('world');
-let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false, audioUnlockedOnce = false;
+let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false, audioUnlockedOnce = false;
 const nameModalEl = $('name-modal');
+const shopModalEl = $('shop-modal');
+const speedLinesEl = $('speed-lines');
+const closeCallEl = $('close-call-pop');
 // Remove controls from a cached older HTML shell as well.
 document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
 let assetsReady = false;
@@ -617,6 +620,224 @@ if($('btn-enter')){
   };
 }
 
+const UPGRADE_DEFS = [
+  { id: 'magnet', icon: '🧲', name: 'Magnet Duration', values: [12, 15, 18, 21, 25], unit: 's', costs: [500, 1200, 2500, 5000] },
+  { id: 'nitro', icon: '⚡', name: 'Nitro Rush Boost', values: [4.5, 5.5, 6.5, 7.5, 9], unit: 's', costs: [600, 1400, 2800, 5500] },
+  { id: 'shoes', icon: '👟', name: 'Super Jump Shoes', values: [9, 11, 13, 15, 18], unit: 's', costs: [500, 1200, 2400, 4800] },
+  { id: 'coinBoost', icon: '🪙', name: 'End-of-Run Coin Bonus', values: [0, 15, 30, 50, 75], unit: '%', costs: [800, 1800, 3500, 7000] }
+];
+const REVIVE_COST = 250;
+let upgrades = { magnet: 0, nitro: 0, shoes: 0, coinBoost: 0 };
+try {
+  const savedUpg = JSON.parse(localStorage.getItem('runverse-upgrades') || '{}');
+  for (const def of UPGRADE_DEFS) {
+    upgrades[def.id] = Math.max(0, Math.min(def.values.length - 1, Math.floor(Number(savedUpg[def.id]) || 0)));
+  }
+} catch {}
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+function freshMissions(day) {
+  return {
+    day,
+    items: [
+      { id: 'dist', icon: '🏃', label: 'Run 1,500m total today', target: 1500, progress: 0, reward: 350, claimed: false },
+      { id: 'coins', icon: '🪙', label: 'Collect 150 coins today', target: 150, progress: 0, reward: 450, claimed: false },
+      { id: 'near', icon: '🔥', label: 'Pull off 8 Close Calls today', target: 8, progress: 0, reward: 600, claimed: false }
+    ]
+  };
+}
+let dailyMissions = freshMissions(todayKey());
+try {
+  const raw = JSON.parse(localStorage.getItem('runverse-daily-missions') || 'null');
+  if (raw && raw.day === todayKey() && Array.isArray(raw.items) && raw.items.length === 3) dailyMissions = raw;
+} catch {}
+function saveMissionsAndUpgrades() {
+  try {
+    localStorage.setItem('runverse-upgrades', JSON.stringify(upgrades));
+    localStorage.setItem('runverse-daily-missions', JSON.stringify(dailyMissions));
+  } catch {}
+}
+function applyUpgradesToRun(state) {
+  state.magnetDuration = UPGRADE_DEFS[0].values[upgrades.magnet] || 12;
+  state.nitroDuration = UPGRADE_DEFS[1].values[upgrades.nitro] || 4.5;
+  state.shoesDuration = UPGRADE_DEFS[2].values[upgrades.shoes] || 9;
+}
+function recordRunMissions(runDist, runCoins, runCloseCalls) {
+  if (dailyMissions.day !== todayKey()) dailyMissions = freshMissions(todayKey());
+  const byId = Object.fromEntries(dailyMissions.items.map(m => [m.id, m]));
+  if (byId.dist) byId.dist.progress = Math.min(byId.dist.target, byId.dist.progress + Math.max(0, Math.floor(runDist)));
+  if (byId.coins) byId.coins.progress = Math.min(byId.coins.target, byId.coins.progress + Math.max(0, Math.floor(runCoins)));
+  if (byId.near) byId.near.progress = Math.min(byId.near.target, byId.near.progress + Math.max(0, Math.floor(runCloseCalls)));
+  saveMissionsAndUpgrades();
+  updateShopBadge();
+}
+function updateShopBadge() {
+  const dot = $('shop-badge-dot');
+  if (!dot) return;
+  const hasClaim = dailyMissions.items.some(m => !m.claimed && m.progress >= m.target);
+  dot.hidden = !hasClaim;
+}
+let activeShopTab = 'missions';
+function renderShopModal() {
+  if ($('shop-coin-bank')) $('shop-coin-bank').textContent = `🪙 ${totalCoins.toLocaleString()} Coins`;
+  const mList = $('shop-missions-list');
+  const uList = $('shop-upgrades-list');
+  if (mList) {
+    mList.hidden = activeShopTab !== 'missions';
+    mList.innerHTML = dailyMissions.items.map(m => {
+      const pct = Math.min(100, Math.round((m.progress / m.target) * 100));
+      const ready = !m.claimed && m.progress >= m.target;
+      const btnCls = m.claimed ? 'shop-action-btn is-done' : ready ? 'shop-action-btn is-claim' : 'shop-action-btn';
+      const btnTxt = m.claimed ? '✓ CLAIMED' : ready ? `CLAIM +${m.reward} 🪙` : `${m.progress}/${m.target}`;
+      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${m.icon} ${m.label}</strong><small>Reward: +${m.reward} Coins</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="${btnCls}" data-claim-mission="${m.id}" ${ready ? '' : 'disabled'}>${btnTxt}</button></div>`;
+    }).join('');
+    mList.querySelectorAll('[data-claim-mission]').forEach(btn => {
+      btn.onclick = () => {
+        const m = dailyMissions.items.find(x => x.id === btn.dataset.claimMission);
+        if (!m || m.claimed || m.progress < m.target) return;
+        m.claimed = true;
+        totalCoins += m.reward;
+        if (!collegeCoinsDone && totalCoins >= COLLEGE_UNLOCK_COINS) collegeCoinsDone = true;
+        save();
+        saveMissionsAndUpgrades();
+        effects.play('upgrade');
+        updateUnlockUI();
+        updateShopBadge();
+        renderShopModal();
+      };
+    });
+  }
+  if (uList) {
+    uList.hidden = activeShopTab !== 'upgrades';
+    uList.innerHTML = UPGRADE_DEFS.map(def => {
+      const lv = upgrades[def.id] || 0;
+      const maxed = lv >= def.values.length - 1;
+      const cost = maxed ? 0 : def.costs[lv];
+      const canBuy = !maxed && totalCoins >= cost;
+      const curVal = def.values[lv], nextVal = maxed ? curVal : def.values[lv + 1];
+      const pct = Math.round(((lv + 1) / def.values.length) * 100);
+      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name} · Lv.${lv + 1}</strong><small>${maxed ? `MAX (${curVal}${def.unit})` : `${curVal}${def.unit} → ${nextVal}${def.unit}`}</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="shop-action-btn ${maxed ? 'is-done' : ''}" data-buy-upgrade="${def.id}" ${canBuy ? '' : 'disabled'}>${maxed ? 'MAXED' : `${cost.toLocaleString()} 🪙`}</button></div>`;
+    }).join('');
+    uList.querySelectorAll('[data-buy-upgrade]').forEach(btn => {
+      btn.onclick = () => {
+        const def = UPGRADE_DEFS.find(x => x.id === btn.dataset.buyUpgrade);
+        if (!def) return;
+        const lv = upgrades[def.id] || 0;
+        if (lv >= def.values.length - 1) return;
+        const cost = def.costs[lv];
+        if (totalCoins < cost) return;
+        totalCoins -= cost;
+        upgrades[def.id] = lv + 1;
+        save();
+        saveMissionsAndUpgrades();
+        effects.play('upgrade');
+        updateUnlockUI();
+        renderShopModal();
+      };
+    });
+  }
+  updateShopBadge();
+}
+if ($('btn-open-shop')) {
+  $('btn-open-shop').onclick = () => {
+    if (!shopModalEl) return;
+    renderShopModal();
+    shopModalEl.hidden = false;
+  };
+}
+if ($('btn-close-shop')) {
+  $('btn-close-shop').onclick = () => {
+    if (shopModalEl) shopModalEl.hidden = true;
+    menuNeedsFrame = true;
+  };
+}
+document.querySelectorAll('[data-shop-tab]').forEach(tab => {
+  tab.onclick = () => {
+    activeShopTab = tab.dataset.shopTab === 'upgrades' ? 'upgrades' : 'missions';
+    document.querySelectorAll('[data-shop-tab]').forEach(b => {
+      const on = b.dataset.shopTab === activeShopTab;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    renderShopModal();
+  };
+});
+updateShopBadge();
+
+function showCloseCallBanner(text, isNitro = false) {
+  if (!closeCallEl) return;
+  closeCallEl.textContent = text;
+  closeCallEl.classList.toggle('is-nitro', Boolean(isNitro));
+  closeCallEl.hidden = false;
+  closeCallEl.style.animation = 'none';
+  void closeCallEl.offsetWidth;
+  closeCallEl.style.animation = '';
+  clearTimeout(closeCallHideTimer);
+  closeCallHideTimer = setTimeout(() => { if (closeCallEl) closeCallEl.hidden = true; }, 740);
+}
+
+async function shareReportCard(runDist, runCoins, grade, closeCalls) {
+  const cv = document.createElement('canvas');
+  cv.width = 720; cv.height = 960;
+  const ctx = cv.getContext('2d');
+  if (!ctx) return;
+  const bg = ctx.createLinearGradient(0, 0, 0, 960);
+  bg.addColorStop(0, '#0a1f42'); bg.addColorStop(0.55, '#123366'); bg.addColorStop(1, '#071429');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 720, 960);
+  ctx.strokeStyle = '#ffd754'; ctx.lineWidth = 10; ctx.strokeRect(24, 24, 672, 912);
+  ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3; ctx.strokeRect(38, 38, 644, 884);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#7dd3fc'; ctx.font = '900 28px system-ui, sans-serif';
+  ctx.fillText('★ LMSK LIFE RUSH ★', 360, 108);
+  ctx.fillStyle = '#ffe268'; ctx.font = '900 54px system-ui, sans-serif';
+  ctx.fillText('REPORT CARD', 360, 178);
+  ctx.fillStyle = '#ffffff'; ctx.font = '800 32px system-ui, sans-serif';
+  ctx.fillText(`STUDENT: ${(playerName || 'Student').toUpperCase()}`, 360, 240);
+  ctx.fillStyle = 'rgba(255,215,84,0.16)'; ctx.fillRect(190, 280, 340, 130);
+  ctx.strokeStyle = '#ffd754'; ctx.lineWidth = 4; ctx.strokeRect(190, 280, 340, 130);
+  ctx.fillStyle = '#fde68a'; ctx.font = '900 72px system-ui, sans-serif';
+  ctx.fillText(grade, 360, 370);
+  const rows = [
+    ['DISTANCE', `${runDist.toLocaleString()} m`],
+    ['HIGHEST RECORD', `${best.toLocaleString()} m`],
+    ['COINS EARNED', `${runCoins.toLocaleString()} 🪙`],
+    ['CLOSE CALLS', `${closeCalls} 🔥`]
+  ];
+  rows.forEach(([k, v], i) => {
+    const y = 480 + i * 86;
+    ctx.fillStyle = 'rgba(8,22,48,0.85)'; ctx.fillRect(88, y - 48, 544, 68);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#9ec8ee'; ctx.font = '800 24px system-ui, sans-serif';
+    ctx.fillText(k, 118, y - 6);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#ffe268'; ctx.font = '900 30px system-ui, sans-serif';
+    ctx.fillText(v, 602, y - 4);
+  });
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#7dd3fc'; ctx.font = '800 26px system-ui, sans-serif';
+  ctx.fillText('CAN YOU BEAT MY RECORD?!', 360, 868);
+  const shareText = `🏃 LMSK LifeRush Report Card — ${playerName || 'Student'} ran ${runDist}m (${grade})! Record: ${best}m. Can you beat me?!`;
+  try {
+    const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+    const file = blob ? new File([blob], 'lmsk-liferush-score.png', { type: 'image/png' }) : null;
+    if (file && navigator.canShare?.({ files: [file] }) && navigator.share) {
+      await navigator.share({ title: 'LMSK LifeRush Score', text: shareText, files: [file] });
+      return;
+    }
+    if (navigator.share) {
+      await navigator.share({ title: 'LMSK LifeRush Score', text: shareText });
+      return;
+    }
+    if (blob) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'lmsk-liferush-score.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+  } catch {}
+}
+
 function start(){
   if (!isCollegeUnlocked()) {
     selectedMap = 'school';
@@ -625,11 +846,17 @@ function start(){
     syncMapHeaderUI();
   }
   s=fresh();
+  applyUpgradesToRun(s);
   s.map=selectedMap;
   s.turnTime = 0.65;
   s.mode = 'intro';
   s.styleAction = SWEEP_SECONDS;
   s.speed = 0;
+  lastNearMissShown = 0;
+  runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
+  if ($('btn-revive')) $('btn-revive').hidden = true;
+  if ($('btn-share-score')) $('btn-share-score').hidden = true;
+  if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
   setScreenMode('running');
   $('toast').textContent=selectedMap==='college'?'College rush · Find the next roof ramp':'School rush · Find the next roof ramp';
   effects.setEnabled(sound);
@@ -646,6 +873,8 @@ function pause(){
   if($('report-grade')) $('report-grade').hidden = true;
   if($('report-records')) $('report-records').hidden = true;
   if($('report-challenge-banner')) $('report-challenge-banner').hidden = true;
+  if($('btn-revive')) $('btn-revive').hidden = true;
+  if($('btn-share-score')) $('btn-share-score').hidden = true;
   setScreenMode('gameover');
   show('Take a breath.','Your school run will be right here.','RESUME RUN','PAUSED');
 }
@@ -670,13 +899,24 @@ function show(title,message,button,tag){
   $('overlay').hidden=false;
 }
 
+let runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
 function crash(){
   const previousBest = best;
   const runDist = Math.floor(s.distance);
+  const deltaDist = Math.max(0, runDist - runReported.dist);
+  const deltaCoins = Math.max(0, s.coins - runReported.coins);
+  const deltaNear = Math.max(0, (s.nearMissCount || 0) - runReported.nearMiss);
+  const coinBoostPct = UPGRADE_DEFS[3].values[upgrades.coinBoost] || 0;
+  const deltaBonus = coinBoostPct > 0 ? Math.round(deltaCoins * (coinBoostPct / 100)) : 0;
+  if (deltaBonus > 0) totalCoins += deltaBonus;
+  const bonusCoins = runReported.bonus + deltaBonus;
+  runReported = { dist: runDist, coins: s.coins, nearMiss: s.nearMissCount || 0, bonus: bonusCoins };
   best=Math.max(best, runDist);
   if (runDist >= COLLEGE_UNLOCK_DISTANCE) collegeDistDone = true;
   if (totalCoins >= COLLEGE_UNLOCK_COINS) collegeCoinsDone = true;
   save();
+  recordRunMissions(deltaDist, deltaCoins + deltaBonus, deltaNear);
+  if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
   effects.play('over');
   setScreenMode('gameover');
   const isCol=selectedMap==='college';
@@ -721,11 +961,35 @@ function crash(){
   
   show(
     'ACADEMIC REPORT CARD',
-    runDist+' m | '+s.coins+' coins. '+hint,
+    runDist+' m | '+(s.coins + bonusCoins)+' coins'+(bonusCoins ? ` (+${bonusCoins} bonus)` : '')+(s.nearMissCount ? ` · ${s.nearMissCount} close calls` : '')+'. '+hint,
     'RUN AGAIN',
     'REPORT CARD'
   );
-  $('tip').textContent=`Coins: ${s.coins} | Bank: ${totalCoins.toLocaleString()} | Grade: ${grade}`;
+  if ($('btn-revive')) {
+    const canRevive = !s.revivedOnce && totalCoins >= REVIVE_COST;
+    $('btn-revive').hidden = !canRevive;
+  }
+  if ($('btn-share-score')) {
+    $('btn-share-score').hidden = false;
+    $('btn-share-score').onclick = () => shareReportCard(runDist, s.coins + bonusCoins, grade, s.nearMissCount || 0);
+  }
+  $('tip').textContent=`Coins: ${s.coins + bonusCoins} | Bank: ${totalCoins.toLocaleString()} | Grade: ${grade}`;
+}
+
+if ($('btn-revive')) {
+  $('btn-revive').onclick = () => {
+    if (s.revivedOnce || totalCoins < REVIVE_COST) return;
+    totalCoins -= REVIVE_COST;
+    save();
+    updateUnlockUI();
+    $('overlay').hidden = true;
+    $('btn-revive').hidden = true;
+    if ($('btn-share-score')) $('btn-share-score').hidden = true;
+    reviveRun(s);
+    setScreenMode('running');
+    effects.play('shield');
+    showCloseCallBanner('⚡ SAVED! SHIELD ACTIVE!', true);
+  };
 }
 
 if($('start')) $('start').onclick=e=>{
@@ -884,11 +1148,28 @@ function tick(t) {
   if (s.collectedPowerup === 'magnet') {
     effects.play('magnet');
     $('toast').textContent='Magnet active! Collect nearby gold coins.';
+    showCloseCallBanner(`🧲 MAGNET · ${Math.round(s.magnet)}s`, false);
     s.collectedPowerup = null;
   } else if (s.collectedPowerup === 'shield') {
     effects.play('shield');
     $('toast').textContent='Shield active! Protected from one hit.';
+    showCloseCallBanner('🛡️ SHIELD ACTIVE!', true);
     s.collectedPowerup = null;
+  } else if (s.collectedPowerup === 'nitro') {
+    effects.play('nitro');
+    showCloseCallBanner(`⚡ NITRO RUSH · ${Math.ceil(s.nitro)}s!`, true);
+    s.collectedPowerup = null;
+  } else if (s.collectedPowerup === 'shoes') {
+    effects.play('shoes');
+    showCloseCallBanner(`👟 SUPER JUMP · ${Math.ceil(s.shoes)}s!`, false);
+    s.collectedPowerup = null;
+  }
+
+  if (s.nearMissEvent && s.nearMissEvent.id !== lastNearMissShown) {
+    lastNearMissShown = s.nearMissEvent.id;
+    const ev = s.nearMissEvent;
+    effects.play('nearMiss');
+    showCloseCallBanner(`${ev.label} +${ev.bonus} 🪙 · x${ev.combo}`, ev.label.includes('NITRO'));
   }
 
   if (s.shieldAbsorbed) {
@@ -975,6 +1256,33 @@ function tick(t) {
     lastShield = shieldActive;
     shieldPill.hidden = !shieldActive;
   }
+  const nitroSec = s.nitro > 0 ? Math.ceil(s.nitro) : 0;
+  const nitroPill = $('nitro-pill');
+  if (nitroPill && nitroSec !== lastNitroSec) {
+    lastNitroSec = nitroSec;
+    nitroPill.hidden = nitroSec <= 0;
+    if (nitroSec > 0 && $('nitro-timer')) $('nitro-timer').textContent = nitroSec + 's';
+  }
+  const shoesSec = s.shoes > 0 ? Math.ceil(s.shoes) : 0;
+  const shoesPill = $('shoes-pill');
+  if (shoesPill && shoesSec !== lastShoesSec) {
+    lastShoesSec = shoesSec;
+    shoesPill.hidden = shoesSec <= 0;
+    if (shoesSec > 0 && $('shoes-timer')) $('shoes-timer').textContent = shoesSec + 's';
+  }
+  const curCombo = (s.mode === 'running' && s.combo > 1 && s.comboTimer > 0) ? s.combo : 1;
+  const comboPill = $('combo-pill');
+  if (comboPill && curCombo !== lastComboVal) {
+    lastComboVal = curCombo;
+    comboPill.hidden = curCombo <= 1;
+    if (curCombo > 1 && $('combo-val')) $('combo-val').textContent = 'x' + curCombo;
+  }
+  const speedMode = s.mode !== 'running' ? 0 : s.nitro > 0 ? 2 : s.speed >= 42 ? 1 : 0;
+  if (speedLinesEl && speedMode !== lastSpeedMode) {
+    lastSpeedMode = speedMode;
+    speedLinesEl.hidden = speedMode === 0;
+    speedLinesEl.classList.toggle('is-nitro', speedMode === 2);
+  }
 
   const cdSec = s.mode === 'countdown' ? Math.ceil(s.countdown) : -1;
   if (cdSec !== lastCountdown) {
@@ -983,9 +1291,9 @@ function tick(t) {
     if (cdSec >= 0) $('countdown').textContent = cdSec;
   }
 
-  // Pause 3D WebGL rendering completely while static overlay pages (Maps/Settings/Name modal) are open
+  // Pause 3D WebGL rendering completely while static overlay pages (Maps/Settings/Name/Shop modals) are open
   // (after warming up 1 ready frame behind the name modal so clicking Start Adventure is 0ms instant)
-  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'maps' || currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden));
+  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'maps' || currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden) || (shopModalEl && !shopModalEl.hidden));
   if (staticOverlayOpen && assetsReady && warmedFirstFrame) {
     if (!menuNeedsFrame) return;
     menuNeedsFrame = false;

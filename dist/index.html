@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH — School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=2.9.8">
+  <link rel="stylesheet" href="style.css?v=3.0.0">
 </head>
 <body>
 <header>
@@ -42,6 +42,8 @@
   <section class="game mode-splash" id="game-container" aria-label="LMSK Life Rush game">
     <audio id="bgm-player" src="assets/bgm.mp3" loop preload="auto"></audio>
     <canvas id="world"></canvas>
+    <div id="speed-lines" class="speed-lines" hidden aria-hidden="true"></div>
+    <div id="close-call-pop" class="close-call-pop" hidden aria-live="polite"></div>
 
     <!-- IN-GAME TOP BAR (Visible only during running / gameplay) -->
     <div class="hud-top-bar" id="hud-top-bar">
@@ -60,10 +62,13 @@
       <div class="counters">
         <div class="counters-row-1">
           <span class="coins" aria-label="Gold coins"><img class="pickup-icon gold-icon" src="assets/icons/coin.svg" alt=""> <b id="coins">0</b></span>
+          <span id="combo-pill" class="power-pill combo" hidden>🔥 <b id="combo-val">x2</b></span>
         </div>
         <div class="counters-row-2">
           <span id="magnet-pill" class="power-pill magnet" hidden><img class="pickup-icon magnet-icon" src="assets/icons/magnet.svg" alt="Magnet"> <b id="magnet-timer">12s</b></span>
           <span id="shield-pill" class="power-pill shield" hidden><img class="pickup-icon shield-icon" src="assets/icons/shield.svg" alt=""> SHIELD</span>
+          <span id="nitro-pill" class="power-pill nitro" hidden>⚡ NITRO <b id="nitro-timer">5s</b></span>
+          <span id="shoes-pill" class="power-pill shoes" hidden>👟 JUMP <b id="shoes-timer">9s</b></span>
         </div>
       </div>
 
@@ -115,6 +120,10 @@
         <div class="select-brand">
           <img src="assets/lmsk-logo.jpg" alt="LMSK LifeRush" class="select-logo-img">
         </div>
+        <button type="button" id="btn-open-shop" class="btn-missions-shop" aria-label="Daily Missions and Upgrades Shop">
+          <span>🎁 Missions &amp; Shop</span>
+          <span id="shop-badge-dot" class="shop-badge-dot" hidden></span>
+        </button>
       </div>
 
       <div class="hub-top-right">
@@ -236,6 +245,25 @@
       </div>
     </div>
 
+    <!-- MISSIONS & UPGRADES SHOP MODAL -->
+    <div id="shop-modal" class="shop-modal-overlay" hidden>
+      <div class="shop-modal-card">
+        <div class="shop-modal-head">
+          <div>
+            <div class="shop-modal-title">🎁 MISSIONS &amp; SHOP</div>
+            <div class="shop-modal-bank" id="shop-coin-bank">🪙 0 Coins</div>
+          </div>
+          <button type="button" id="btn-close-shop" class="shop-close-btn" aria-label="Close Missions and Shop">✕</button>
+        </div>
+        <div class="shop-tabs" role="tablist">
+          <button type="button" class="shop-tab active" data-shop-tab="missions" role="tab" aria-selected="true">🎯 Daily Missions</button>
+          <button type="button" class="shop-tab" data-shop-tab="upgrades" role="tab" aria-selected="false">⚡ Powerup Shop</button>
+        </div>
+        <div id="shop-missions-list" class="shop-list"></div>
+        <div id="shop-upgrades-list" class="shop-list" hidden></div>
+      </div>
+    </div>
+
     <!-- PAUSE / GAME OVER REPORT CARD OVERLAY -->
     <div id="overlay" class="overlay" hidden>
       <div class="panel">
@@ -264,7 +292,9 @@
           STUDENT: <strong id="report-player-name">Student</strong>
         </div>
         <p id="message">Swipe. Jump. Slide. Make your own story.</p>
+        <button id="btn-revive" class="btn-revive" type="button" hidden>⚡ SAVE ME · 250 🪙 <span>▶</span></button>
         <button id="btn-play-again" class="primary">RUN AGAIN <span>↺</span></button>
+        <button id="btn-share-score" class="btn-share-score" type="button" hidden>📸 SHARE REPORT CARD</button>
         <button id="restart" class="secondary" hidden>Restart from start</button>
         <button id="btn-change-char" class="secondary">Change Character <span>👤</span></button>
         <p class="tip" id="tip">Each new run starts from zero.</p>
@@ -290,6 +320,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=2.9.8-offline"></script>
+<script type="module" src="boot.js?v=3.0.0-offline"></script>
 </body>
 </html>

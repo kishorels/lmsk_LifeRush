@@ -21,12 +21,13 @@ test('seeded buses, barriers and rewards share one layout and always leave a gro
   for(let seed=1;seed<=100;seed++)for(let index=0;index<24;index++){
     const p=routeSegment(seed,index),items=trafficPattern(p.base,index,seed);
     assert.deepEqual(items,trafficPattern(p.base,index,seed),'re-reading a segment must not reroll it');
-    const hazards=items.filter(o=>!['coin','magnet','shield'].includes(o.type));
+    const pickupTypes=['coin','magnet','shield','nitro','shoes'];
+    const hazards=items.filter(o=>!pickupTypes.includes(o.type));
     assert.ok(hazards.every(o=>o.lane!==p.safeLane));
-    assert.ok(items.filter(o=>['coin','magnet','shield'].includes(o.type)).every(o=>o.lane===p.safeLane));
+    assert.ok(items.filter(o=>pickupTypes.includes(o.type)).every(o=>o.lane===p.safeLane));
     const gap=segmentBase(seed,index+1)-p.base;
     assert.ok(gap>=220&&gap<=276);gaps.add(gap);
-    const pickup=items.find(o=>o.type==='magnet'||o.type==='shield');
+    const pickup=items.find(o=>['magnet','shield','nitro','shoes'].includes(o.type));
     powerups.add(pickup.type);pickupDistances.add(pickup.z-p.base);
     if(p.kind==='roof'){
       const vans=repeatedVans(p.base+30,seed).filter(v=>v.id==='van-'+index||v.id==='roof-'+index);
@@ -37,9 +38,9 @@ test('seeded buses, barriers and rewards share one layout and always leave a gro
       assert.ok([-1,1].includes(vehicle.lane));variants.add(vehicle.variant);
       assert.notEqual(vehicle.lane,items.find(o=>o.type==='bus').lane);
     }
-    if(index%2===0)assert.notEqual(p.powerup,routeSegment(seed,index+1).powerup,'each pair offers both powerups');
+    if(index%2===0)assert.notEqual(p.powerup,routeSegment(seed,index+1).powerup,'each pair offers distinct powerups');
   }
-  assert.equal(variants.size,3);assert.equal(powerups.size,2);assert.ok(gaps.size>20);assert.ok(pickupDistances.size>15);
+  assert.equal(variants.size,3);assert.equal(powerups.size,4);assert.ok(gaps.size>20);assert.ok(pickupDistances.size>15);
 });
 
 test('random routes remain escapable through lane changes at low and maximum speed',()=>{

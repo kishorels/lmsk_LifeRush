@@ -178,7 +178,7 @@ export function createSound() {
  }
 
  function play(name, cause, character = 'male') {
-  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement'})[name]||'movement';
+  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',nitro:'powerups',shoes:'powerups',nearMiss:'coins',upgrade:'coins',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement'})[name]||'movement';
   if (name === 'jump') tone(240, 730, 0.19, 0.10, 'triangle');
   else if (name === 'slide') tone(410, 65, 0.20, 0.10, 'sawtooth');
   else if (name === 'roofCoin') {
@@ -222,6 +222,23 @@ export function createSound() {
   }
   else if (name === 'shield') {
    playSample('shield', 0.85);
+  }
+  else if (name === 'nitro') {
+   tone(260, 1280, 0.28, 0.14, 'sawtooth');
+   tone(520, 1640, 0.24, 0.11, 'triangle', 0.06);
+  }
+  else if (name === 'shoes') {
+   tone(320, 920, 0.14, 0.12, 'triangle');
+   tone(480, 1180, 0.16, 0.11, 'sine', 0.08);
+  }
+  else if (name === 'nearMiss') {
+   tone(760, 1180, 0.09, 0.09, 'sine');
+   tone(1180, 1520, 0.11, 0.08, 'triangle', 0.05);
+  }
+  else if (name === 'upgrade') {
+   tone(520, 660, 0.10, 0.12, 'triangle');
+   tone(660, 880, 0.12, 0.12, 'triangle', 0.08);
+   tone(880, 1180, 0.18, 0.13, 'sine', 0.16);
   }
   else if (name === 'book') {
    tone(620, 980, 0.12, 0.11, 'triangle');

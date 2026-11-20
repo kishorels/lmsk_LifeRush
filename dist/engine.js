@@ -21,7 +21,10 @@ export function fresh(seed=newRunSeed()) {
     damage: 0, injured: false, injuredUntil: 0, hit: 0, fall: 0, capture: 0, items: [], next: segmentBase(seed,0),
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
-    magnet: 0, shield: false, books: 0, styleAction: 0, collectedPowerup: null, coinFlights: [],
+    magnet: 0, shield: false, nitro: 0, shoes: 0,
+    magnetDuration: 12, nitroDuration: 4.5, shoesDuration: 9,
+    combo: 1, comboTimer: 0, nearMissCount: 0, nearMissEvent: null, nearMissId: 0, jumpsOver: 0, revivedOnce: false,
+    books: 0, styleAction: 0, collectedPowerup: null, coinFlights: [],
     nextMidObstacle: 2000,
     nextLaneObstacle: 5000,
   };
@@ -64,7 +67,8 @@ export function action(s, input) {
 
 export function height(s) {
   if (s.drop) return s.drop.start * (s.drop.remaining / s.drop.duration);
-  return s.floor + (s.jump ? Math.sin(Math.PI * (1 - s.jump / JUMP_DURATION)) * 2.3 : 0);
+  const jumpApex = s.shoes > 0 ? 3.35 : 2.3;
+  return s.floor + (s.jump ? Math.sin(Math.PI * (1 - s.jump / JUMP_DURATION)) * jumpApex : 0);
 }
 
 // Range ignores elevation so a magnet works from the road and from any roof.
@@ -259,7 +263,7 @@ export function recoverFromBus(s) {
   const horizon=s.speed*1.15;
   const vans=routeVans(s.distance,s.runSeed);
   const candidates=[-1,0,1].filter(lane=>!vans.some(v=>v.lane===lane && v.front>s.distance && v.ramp<s.distance+horizon));
-  const blocked=(lane)=>s.items.filter(o=>!['coin','magnet','shield'].includes(o.type) && o.lane===lane && o.z+(o.length||0)>s.distance-1 && o.z<s.distance+horizon+(o.velocity||0)*1.15);
+  const blocked=(lane)=>s.items.filter(o=>!PICKUP_TYPES.has(o.type) && o.lane===lane && o.z+(o.length||0)>s.distance-1 && o.z<s.distance+horizon+(o.velocity||0)*1.15);
   candidates.sort((a,b)=>blocked(a).length-blocked(b).length || Math.abs(a-s.x)-Math.abs(b-s.x));
   const lane=candidates[0]??0;
   // In a fully crowded recovery window, clear just the landing corridor.
@@ -300,6 +304,55 @@ function takeHit(s, type) {
 
 export const SWEEP_SECONDS = 27 / 24;
 
+const PICKUP_TYPES = new Set(['coin', 'magnet', 'shield', 'nitro', 'shoes']);
+
+function awardNearMiss(s, kind) {
+  s.nearMissCount = (s.nearMissCount || 0) + 1;
+  s.combo = Math.min(5, (s.comboTimer > 0 ? (s.combo || 1) : 1) + 1);
+  s.comboTimer = 4.5;
+  const bonus = 5 * s.combo;
+  s.coins += bonus;
+  s.nearMissId = (s.nearMissId || 0) + 1;
+  const label = kind === 'nitro' ? '⚡ NITRO SMASH!'
+    : kind === 'vehicle' ? '🔥 CLOSE CALL!'
+    : kind === 'clean-jump' ? '⚡ CLEAN JUMP!'
+    : kind === 'clean-slide' ? '💨 SLICK SLIDE!'
+    : '🔥 NEAR MISS!';
+  s.nearMissEvent = { id: s.nearMissId, label, bonus, combo: s.combo };
+}
+
+export function reviveRun(s) {
+  if (!s) return false;
+  s.damage = 0;
+  s.injured = false;
+  s.injuredUntil = 0;
+  s.firstHitAt = null;
+  s.chaseReentered = false;
+  s.hit = 0;
+  s.fall = 0;
+  s.capture = 0;
+  s.jump = s.slide = s.roll = s.fallSpeed = 0;
+  s.drop = null;
+  s.floor = 0;
+  s.shield = true;
+  s.revivedOnce = true;
+  s.mode = 'countdown';
+  s.countdown = 3;
+  // Clear all hazards near and ahead of the player so the revived restart is 100% fair
+  for (const o of s.items) {
+    if (!PICKUP_TYPES.has(o.type) && o.z >= s.distance - 15 && o.z <= s.distance + 58) {
+      o.done = true;
+      o.z = s.distance - 100;
+    }
+  }
+  const safeLanes = [-1, 0, 1].filter(l => vanSurface(s.distance, l, s.runSeed) === 0 && vanSurface(s.distance + 12, l, s.runSeed) === 0);
+  if (safeLanes.length && !safeLanes.includes(s.lane)) {
+    s.lane = safeLanes[0];
+    s.x = s.lane;
+  }
+  return true;
+}
+
 function predictedBlockedLanesAt(s, targetZ, reactionSec = 0.95) {
   const blocked = new Set();
   const speed = Math.max(24, s.speed || 28);
@@ -311,7 +364,7 @@ function predictedBlockedLanesAt(s, targetZ, reactionSec = 0.95) {
     }
   }
   for (const o of s.items) {
-    if (o.done || o.type === 'coin' || o.type === 'magnet' || o.type === 'shield') continue;
+    if (o.done || PICKUP_TYPES.has(o.type)) continue;
     let predZ = o.z;
     if (o.velocity) {
       if (o.encounter && !o.started) {
@@ -348,7 +401,7 @@ function enforceOpenEscapeLane(s) {
     }
     const byLane = new Map([[-1, []], [0, []], [1, []]]);
     for (const o of s.items) {
-      if (o.done || o.type === 'coin' || o.type === 'magnet' || o.type === 'shield') continue;
+      if (o.done || PICKUP_TYPES.has(o.type)) continue;
       if (o.encounter && !o.started) continue;
       let predZ = o.z;
       if (o.velocity) {
@@ -423,6 +476,7 @@ export function step(s, dt, random = Math.random) {
   else if (d < 8000) s.speed = 48 + ((d - 5000) / 3000) * 24;
   else if (d <= 10000) s.speed = 78 + ((d - 8000) / 2000) * 18;
   else s.speed = 96 + (d - 10000) * 0.02;
+  if (s.nitro > 0) s.speed = Math.max(s.speed * 1.45, 56);
   s.distance += s.speed * dt;
   s.x += (s.lane - s.x) * (1-Math.exp(-18*dt));
   s.chaserX += (s.x - s.chaserX) * (1-Math.exp(-5*dt));
@@ -431,6 +485,12 @@ export function step(s, dt, random = Math.random) {
   s.hit = Math.max(0, s.hit - dt);
   s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
   s.magnet=Math.max(0,s.magnet-dt);
+  s.nitro=Math.max(0,(s.nitro||0)-dt);
+  s.shoes=Math.max(0,(s.shoes||0)-dt);
+  if (s.comboTimer > 0) {
+    s.comboTimer = Math.max(0, s.comboTimer - dt);
+    if (s.comboTimer === 0) s.combo = 1;
+  }
   if(s.distance+120>s.next) {
     const index=s.trafficIndex++;
     const newItems=trafficPattern(s.next,index,s.runSeed,s.map);
@@ -558,6 +618,12 @@ export function step(s, dt, random = Math.random) {
   if(s.jumpBuffer>0 && !s.jump && !s.drop && !s.fallSpeed && !s.hit)action(s,'jump');
   for(const van of routeVans(s.distance,s.runSeed)) {
     if(s.distance>=van.rear && s.distance<van.front && Math.abs(s.x-van.lane)*2.2<=van.width/2 && height(s)<van.roof-.18) {
+      if (s.nitro > 0) {
+        s.floor = van.roof;
+        s.jump = s.fallSpeed = 0;
+        s.drop = null;
+        continue;
+      }
       s.lane=van.lane===0?-1:0;s.x=van.lane+(s.lane-van.lane)*.55;
       if(!s.vanHits.includes(van.id) && !s.hit)takeHit(s,'van');
       if(!s.vanHits.includes(van.id))s.vanHits.push(van.id);
@@ -571,7 +637,18 @@ export function step(s, dt, random = Math.random) {
     if(obstacle.type==='bus'||obstacle.type==='sideVehicle') {
       const relative=obstacle.z-s.distance;
       if(!obstacle.done && relative<=1.1 && relative>=-obstacle.length && hits(s,obstacle)) {
+        if (s.nitro > 0) {
+          obstacle.done = true;
+          awardNearMiss(s, 'nitro');
+          continue;
+        }
         obstacle.done=true;if(!s.hit){takeHit(s,obstacle.type);if(s.mode==='running')recoverFromBus(s);}if(s.mode!=='running')break;
+      } else if (!obstacle.done && !obstacle.nearMissed && !obstacle.roofRide && relative < -0.6 && relative > -obstacle.length - 3) {
+        const dx = Math.abs(s.x - obstacle.lane);
+        if (dx >= 0.68 && dx <= 1.38 && s.floor < 1) {
+          obstacle.nearMissed = true;
+          awardNearMiss(s, 'vehicle');
+        }
       }
       continue;
     }
@@ -580,12 +657,28 @@ export function step(s, dt, random = Math.random) {
     if (obstacle.type === 'coin') {
       if (Math.abs(s.x - obstacle.lane) < .65) s.coins++;
     } else if (obstacle.type === 'magnet') {
-      if (Math.abs(s.x - obstacle.lane) < .65) { s.magnet = 12; s.collectedPowerup = 'magnet'; }
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.magnet = s.magnetDuration || 12; s.collectedPowerup = 'magnet'; }
     } else if (obstacle.type === 'shield') {
       if (Math.abs(s.x - obstacle.lane) < .65) { s.shield = true; s.collectedPowerup = 'shield'; }
+    } else if (obstacle.type === 'nitro') {
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.nitro = s.nitroDuration || 4.5; s.shield = true; s.speed = Math.max(s.speed * 1.45, 56); s.collectedPowerup = 'nitro'; }
+    } else if (obstacle.type === 'shoes') {
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.shoes = s.shoesDuration || 9; s.collectedPowerup = 'shoes'; }
+    } else if (s.nitro > 0 && Math.abs(s.x - obstacle.lane) < .7) {
+      awardNearMiss(s, 'nitro');
     } else if (!s.hit && hits(s, obstacle)) {
       takeHit(s, obstacle.type);
       if (s.mode !== 'running') break;
+    } else if (!s.hit && s.mode === 'running') {
+      const dx = Math.abs(s.x - obstacle.lane);
+      if (obstacle.type === 'jump' && dx < .55 && height(s) > .65) {
+        s.jumpsOver = (s.jumpsOver || 0) + 1;
+        awardNearMiss(s, 'clean-jump');
+      } else if (obstacle.type === 'slide' && dx < .55 && (s.slide > 0 || s.roll > 0)) {
+        awardNearMiss(s, 'clean-slide');
+      } else if (obstacle.type === 'block' && dx >= .72 && dx <= 1.35) {
+        awardNearMiss(s, 'block');
+      }
     }
   }
   collectMagnetCoins(s);
