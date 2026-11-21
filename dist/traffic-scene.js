@@ -7,7 +7,20 @@ import {repeatedVans} from './traffic-rules.js';
 import {curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
 export function createTraffic(scene) {
  let lastSeed,lastMap;
- const cube=new BoxGeometry(),mats=new Map(),parked=new Map(),moving=new Map();
+ const cube=new BoxGeometry(),mats=new Map(),parked=new Map(),moving=new Map(),vanPool=new Map(),movingPool=new Map();
+ function takePool(poolMap,key,factory){
+  const list=poolMap.get(key);
+  if(list&&list.length){const g=list.pop();scene.add(g);return g;}
+  return factory();
+ }
+ function releasePool(poolMap,g){
+  scene.remove(g);
+  const key=g.userData.poolKey;
+  if(!key)return;
+  let list=poolMap.get(key);
+  if(!list){list=[];poolMap.set(key,list);}
+  list.push(g);
+ }
  function part(g,color,x,y,z,w,h,d,geo=cube) {
   if(!mats.has(color))mats.set(color,new MeshStandardMaterial({color,roughness:.62}));
   const m=new Mesh(geo,mats.get(color));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;g.add(m);return m;
@@ -44,19 +57,25 @@ export function createTraffic(scene) {
   const map=s.map||'school';
   const isCollege=map==='college'||map==='itpark';
   const onCave=s.activeBranch==='underpass';
-  if(s.runSeed!==lastSeed||lastMap!==map){for(const g of parked.values())scene.remove(g);for(const g of moving.values())scene.remove(g);parked.clear();moving.clear();lastSeed=s.runSeed;lastMap=map;}
+  if(s.runSeed!==lastSeed||lastMap!==map){for(const g of parked.values())scene.remove(g);for(const g of moving.values())scene.remove(g);parked.clear();moving.clear();vanPool.clear();movingPool.clear();lastSeed=s.runSeed;lastMap=map;}
   const visible=new Set();
   for(const v of repeatedVans(s.distance,s.runSeed)) {
    if(v.ramp>s.distance+345||v.front<s.distance-15)continue;
    const vanInCave=onCave&&v.rear>=s.branchStart-4&&v.rear<s.branchEnd;
+   const vanKey=`${map}:${vanInCave}:${v.front-v.rear}:${v.roof}:${v.rear-v.ramp}`;
    visible.add(v.id);
-   if(parked.has(v.id)&&Boolean(parked.get(v.id).userData.inCave)!==vanInCave){scene.remove(parked.get(v.id));parked.delete(v.id);}
-   if(!parked.has(v.id))parked.set(v.id,vanModel(v,map,vanInCave));
+   if(parked.has(v.id)&&parked.get(v.id).userData.poolKey!==vanKey){releasePool(vanPool,parked.get(v.id));parked.delete(v.id);}
+   if(!parked.has(v.id)){
+    const g=takePool(vanPool,vanKey,()=>{const m=vanModel(v,map,vanInCave);m.userData.poolKey=vanKey;return m;});
+    g.userData.routeVanId=v.id;
+    g.userData.inCave=vanInCave;
+    parked.set(v.id,g);
+   }
    const g=parked.get(v.id);g.position.set(v.lane*2.2+curveRelX(v.rear,s),.09+curveRelY(v.rear,s),s.distance-v.rear);
    g.rotation.y=-Math.atan(curveSlopeAt(v.rear,s));
    g.userData.coins.forEach((c,i)=>{c.visible=!s.collected.includes(v.id+':'+i);spinCoin(c,s.time,i,v.roof+.6);});
   }
-  for(const [id,g]of parked)if(!visible.has(id)){scene.remove(g);parked.delete(id);}
+  for(const [id,g]of parked)if(!visible.has(id)){releasePool(vanPool,g);parked.delete(id);}
   const live=new Set();
   const runSpd=Math.max(24,s.speed||28);
   for(const o of s.items){
@@ -65,16 +84,21 @@ export function createTraffic(scene) {
    const visZ=(o.encounter&&!o.started)?(o.trigger+(runSpd+(o.velocity||0))*1.45+(o.velocity||0)*Math.max(0,(o.trigger-s.distance)/runSpd)):o.z;
    if(visZ-s.distance>345||visZ+(o.length||12)<s.distance-12)continue;
    live.add(o);
-   if(o.metro && moving.has(o) && moving.get(o).name!=='metro-train'){scene.remove(moving.get(o));moving.delete(o);}
-   if(!moving.has(o)){
-   let model;
    const vIdx=Math.abs(Math.floor(o.z)+(o.lane||0))%3;
-   if(o.metro) model=metroCar(o);
-   else if(o.roofRide){model=new Group();model.userData.captureObstacle=true;const v=map==='itpark'?buildFreightSemiTruck(o.length,o.roof,vIdx):map==='college'?buildCollegeVehicle('van',o.length,o.roof,false):buildBus(o.length,o.roof,false);v.rotation.y=Math.PI;v.position.z=-o.length;model.add(v);model.userData.wheels=v.userData.wheels;model.userData.coins=[];
-    for(let i=0;i<4;i++){model.userData.coins.push(makeCoin(model,0,o.roof+.6,-4-i*4));}scene.add(model);
-   }else model=vehicle(o.length,o.roof||(isCollege?1.45:2.8),true,map,o.collegeKind||'car',vIdx);
-   moving.set(o,model);
-  }const g=moving.get(o);g.position.set(o.lane*2.2+curveRelX(visZ,s),.09+curveRelY(visZ,s),s.distance-visZ);g.rotation.y=-Math.atan(curveSlopeAt(visZ,s));g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);spinCoin(c,s.time,i,o.roof+.6);});}
-  for(const [o,g]of moving)if(!live.has(o)){scene.remove(g);moving.delete(o);}
+   const movKey=`${map}:${Boolean(o.metro)}:${Boolean(o.roofRide)}:${o.collegeKind||'car'}:${o.length}:${o.roof}:${vIdx}`;
+   if(moving.has(o)&&moving.get(o).userData.poolKey!==movKey){releasePool(movingPool,moving.get(o));moving.delete(o);}
+   if(!moving.has(o)){
+    const model=takePool(movingPool,movKey,()=>{
+     let m;
+     if(o.metro) m=metroCar(o);
+     else if(o.roofRide){m=new Group();m.userData.captureObstacle=true;const v=map==='itpark'?buildFreightSemiTruck(o.length,o.roof,vIdx):map==='college'?buildCollegeVehicle('van',o.length,o.roof,false):buildBus(o.length,o.roof,false);v.rotation.y=Math.PI;v.position.z=-o.length;m.add(v);m.userData.wheels=v.userData.wheels;m.userData.coins=[];
+      for(let i=0;i<4;i++){m.userData.coins.push(makeCoin(m,0,o.roof+.6,-4-i*4));}scene.add(m);
+     }else m=vehicle(o.length,o.roof||(isCollege?1.45:2.8),true,map,o.collegeKind||'car',vIdx);
+     m.userData.poolKey=movKey;
+     return m;
+    });
+    moving.set(o,model);
+   }const g=moving.get(o);g.position.set(o.lane*2.2+curveRelX(visZ,s),.09+curveRelY(visZ,s),s.distance-visZ);g.rotation.y=-Math.atan(curveSlopeAt(visZ,s));g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);spinCoin(c,s.time,i,o.roof+.6);});}
+  for(const [o,g]of moving)if(!live.has(o)){releasePool(movingPool,g);moving.delete(o);}
  };
 }

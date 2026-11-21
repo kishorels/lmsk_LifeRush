@@ -4,14 +4,14 @@ import {createGuardEffect} from './guard-effect.js?v=3.0.0';
 import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.6';
 import {createSideTraffic} from './side-vehicles.js?v=3.2.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.4.1';
+import {createSky} from './sky-scene.js?v=3.4.2';
 import {createCampus} from './campus-scene.js?v=3.2.6';
 import {createCollegeCampus} from './college-scene.js?v=3.2.6';
 import {createItParkCampus} from './itpark-scene.js?v=3.2.6';
-import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.0.3';
+import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.4.2';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.1.1';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.4.1';
-import {createTraffic} from './traffic-scene.js?v=3.2.1';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.4.2';
+import {createTraffic} from './traffic-scene.js?v=3.4.2';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.0.3';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
@@ -99,8 +99,9 @@ export function createRenderer(canvas, callbacks = {}){
  }
  ball(body,0x813c40,0,1.835,-.226,.042,.014,.012);
  const legs=[],arms=[];for(const side of [-1,1]){const leg=new T.Group();leg.position.set(side*.17,.88,0);body.add(leg);mesh(cyl,0x283962,leg,0,-.21,0,.12,.45,.12,true);const knee=new T.Group();knee.position.y=-.42;leg.add(knee);mesh(cyl,0x344771,knee,0,-.18,0,.10,.38,.1,true);box(knee,0xffffff,0,-.4,-.08,.25,.17,.42,true);box(knee,0xf66d7d,0,-.35,-.1,.26,.05,.26);legs.push({leg,knee});const arm=new T.Group();arm.position.set(side*.36,1.53,0);body.add(arm);mesh(cyl,0xffcb38,arm,0,-.12,0,.115,.26,.115,true);mesh(cyl,0xd9986f,arm,0,-.35,0,.085,.3,.085,true);ball(arm,0xe7ae84,0,-.52,0,.09);arms.push(arm);}
- // Pooled obstacles / pickup models: no geometry allocation during a run.
+ // Pooled obstacles / pickup models: persistent item-to-slot binding + key-matched free pool for 0 domino rebuilds during gameplay.
  const pool=[];for(let i=0;i<240;i++){const root=new T.Group();root.userData.captureObstacle=true;scene.add(root);root.visible=false;pool.push(root);}
+ const freePool=[...pool],itemPoolMap=new Map(),visItems=[],activeItemSet=new Set();
  const obsTexMats=new Map();
  function canvasObsMat(key,w,h,paintFn,rough=.45,metal=.1,emissiveInt=.18){
   if(obsTexMats.has(key))return obsTexMats.get(key);
@@ -365,33 +366,80 @@ export function createRenderer(canvas, callbacks = {}){
  const fallRecoil = s.mode==='falling' ? Math.sin(Math.min(1,(1-s.fall/FALL_DURATION)/.38)*Math.PI)*.45 : 0;
  runner.position.set(s.x*2.2,height(s)+(onPodium?.04:0),fallRecoil);const rawChar=String(character||'male');const selectedKey=rawChar==='aged-elder'?'aged-elder':rawChar.startsWith('college-')?rawChar:(rawChar.includes('female')||rawChar.includes('woman'))?'female':'male';const altKey=selectedKey==='aged-elder'?'male':selectedKey==='college-woman'?'female':(selectedKey.startsWith('college-')?'male':`college-${selectedKey}`);const isFemaleMesh=selectedKey.includes('female')||selectedKey.includes('woman'),isCollegeBody=selectedKey.startsWith('college-')||s.map==='college';if(!heroModels[selectedKey]?.model)heroModels[selectedKey]?.(s,selectedKey,frameDt);const modelKey=onPodium?selectedKey:(heroModels[selectedKey]?.model?selectedKey:heroModels[altKey]?.model?altKey:selectedKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleMesh?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleMesh;cap.visible=!isFemaleMesh;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
  updateGuard(s,selectedModel?.model);
- let n=0;if(!onPodium){const pk=ensurePickups();
- // Render solid obstacles & pads FIRST (priority over coins) so pool limits NEVER hide a slide/jump/block barrier!
- // Keep solid obstacles visible even after `o.done` until completely behind the camera (`z < -10`) — ZERO disappearing in front of you!
- const drawItem=o=>{
-  const z=o.z-s.distance;
-  if(o.cleared||o.smashed||o.isForkDivider||z<-10||z>340)return;
-  const isCollectible=PICKUP_TYPES.has(o.type)||o.type==='mysteryCrate'||o.type==='letter';
-  if(o.done&&isCollectible)return;
-  const g=pool[n++];if(!g)return;
-  const blockKind=Math.abs(Math.floor(o.z)+o.lane)%7;
-  const key=(s.map==='itpark'?'itp:':s.map==='college'?'col:':'sch:')+o.type+':'+(o.letter||o.skill)+':'+o.variant+':'+((o.type==='block'||o.type==='jump'||o.type==='slide')?blockKind:0);
-  if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;}
-  g.visible=true;const cx=curveRelX(o.z,s),cy=curveRelY(o.z,s);const isFloat=PICKUP_TYPES.has(o.type);
-  g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy,-z);
-  g.rotation.y=isFloat?0:-Math.atan(curveSlopeAt(o.z,s));
-  if(isFloat){pk.animate(g,o.type,s.time,o.z);}else if(g.userData.waveArm){g.userData.waveArm.rotation.z=Math.sin(s.time*6.5+o.z)*.24;}
-  if(g.userData.rotors){for(const r of g.userData.rotors)r.rotation.y=s.time*26;if(g.userData.crate)g.userData.crate.position.y=1.05+Math.sin(s.time*4+o.z)*.12;}
-  if(g.userData.spinBadge){g.userData.spinBadge.rotation.y=s.time*2.6+o.z;g.userData.spinBadge.position.y=1.25+Math.sin(s.time*3.5+o.z)*.12;}
-  if(g.userData.serverScan){g.userData.serverScan.position.y=1.16+Math.sin(s.time*3.8+o.z)*.74;}
-  if(g.userData.holoPanel){g.userData.holoPanel.position.y=1.36+Math.sin(s.time*3.2+o.z)*.10;}
-  if(g.userData.swivel){g.userData.swivel.rotation.y=Math.sin(s.time*2.4+o.z)*.42;}
-  if(g.userData.papers){for(let pi=0;pi<g.userData.papers.length;pi++){const sh=g.userData.papers[pi];sh.position.y=sh.userData.baseY+Math.sin(s.time*4.2+o.z+pi*1.7)*.09;sh.rotation.z=Math.sin(s.time*3.4+pi)*.35;}}
- };
- for(const o of s.items){if(o.type==='bus'||o.type==='sideVehicle'||o.type==='coin')continue;drawItem(o);if(n>=pool.length)break;}
- const coinFar=isTouchDevice?220:265;
- for(const o of s.items){if(o.type!=='coin'||o.z-s.distance>coinFar)continue;drawItem(o);if(n>=pool.length)break;}
- }for(;n<pool.length;n++)pool[n].visible=false;
+ visItems.length=0;activeItemSet.clear();
+ if(!onPodium){
+  const pk=ensurePickups();
+  const coinFar=isTouchDevice?155:230;
+  // Render solid obstacles & pads FIRST (priority over coins) so pool limits NEVER hide a slide/jump/block barrier!
+  // Keep solid obstacles visible even after `o.done` until completely behind the camera (`z < -10`) — ZERO disappearing in front of you!
+  for(const o of s.items){
+   if(o.type==='bus'||o.type==='sideVehicle'||o.type==='coin')continue;
+   const z=o.z-s.distance;
+   if(o.cleared||o.smashed||o.isForkDivider||z<-10||z>340)continue;
+   const isCollectible=PICKUP_TYPES.has(o.type)||o.type==='mysteryCrate'||o.type==='letter';
+   if(o.done&&isCollectible)continue;
+   visItems.push(o);activeItemSet.add(o);
+   if(visItems.length>=pool.length)break;
+  }
+  if(visItems.length<pool.length){
+   for(const o of s.items){
+    if(o.type!=='coin'||o.done||o.cleared)continue;
+    const z=o.z-s.distance;
+    if(z<-10||z>coinFar)continue;
+    visItems.push(o);activeItemSet.add(o);
+    if(visItems.length>=pool.length)break;
+   }
+  }
+  for(const [item,grp] of itemPoolMap){
+   if(!activeItemSet.has(item)){
+    grp.visible=false;
+    itemPoolMap.delete(item);
+    freePool.push(grp);
+   }
+  }
+  for(let vi=0;vi<visItems.length;vi++){
+   const o=visItems[vi];
+   const z=o.z-s.distance;
+   const blockKind=Math.abs(Math.floor(o.z)+o.lane)%7;
+   const key=(s.map==='itpark'?'itp:':s.map==='college'?'col:':'sch:')+o.type+':'+(o.letter||o.skill)+':'+o.variant+':'+((o.type==='block'||o.type==='jump'||o.type==='slide')?blockKind:0);
+   let g=itemPoolMap.get(o);
+   if(!g){
+    let matchIdx=-1;
+    for(let fi=freePool.length-1;fi>=0;fi--){
+     if(freePool[fi].userData.key===key){matchIdx=fi;break;}
+    }
+    if(matchIdx>=0){
+     g=freePool[matchIdx];
+     freePool[matchIdx]=freePool[freePool.length-1];
+     freePool.pop();
+    }else{
+     g=freePool.pop();
+    }
+    if(!g)continue;
+    itemPoolMap.set(o,g);
+   }
+   if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;}
+   g.visible=true;const cx=curveRelX(o.z,s),cy=curveRelY(o.z,s);const isFloat=PICKUP_TYPES.has(o.type);
+   g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy,-z);
+   g.rotation.y=isFloat?0:-Math.atan(curveSlopeAt(o.z,s));
+   if(isFloat){
+    pk.animate(g,o.type,s.time,o.z);
+    if(o.type==='coin'){
+     const glints=g.userData.pickupVisual?.userData?.glints;
+     if(glints){const showGlint=z<52;for(let gi=0;gi<glints.length;gi++)glints[gi].visible=showGlint;}
+    }
+   }else if(g.userData.waveArm){g.userData.waveArm.rotation.z=Math.sin(s.time*6.5+o.z)*.24;}
+   if(g.userData.rotors){for(const r of g.userData.rotors)r.rotation.y=s.time*26;if(g.userData.crate)g.userData.crate.position.y=1.05+Math.sin(s.time*4+o.z)*.12;}
+   if(g.userData.spinBadge){g.userData.spinBadge.rotation.y=s.time*2.6+o.z;g.userData.spinBadge.position.y=1.25+Math.sin(s.time*3.5+o.z)*.12;}
+   if(g.userData.serverScan){g.userData.serverScan.position.y=1.16+Math.sin(s.time*3.8+o.z)*.74;}
+   if(g.userData.holoPanel){g.userData.holoPanel.position.y=1.36+Math.sin(s.time*3.2+o.z)*.10;}
+   if(g.userData.swivel){g.userData.swivel.rotation.y=Math.sin(s.time*2.4+o.z)*.42;}
+   if(g.userData.papers){for(let pi=0;pi<g.userData.papers.length;pi++){const sh=g.userData.papers[pi];sh.position.y=sh.userData.baseY+Math.sin(s.time*4.2+o.z+pi*1.7)*.09;sh.rotation.z=Math.sin(s.time*3.4+pi)*.35;}}
+  }
+ }else if(itemPoolMap.size>0){
+  for(const [,grp] of itemPoolMap){grp.visible=false;freePool.push(grp);}
+  itemPoolMap.clear();
+ }
  const count=s.coins;if(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0)){burst=(s.nitro>0||s.turboBoost>0)?.08:.22;for(const p of particles){p.life=.42+Math.random()*.28;p.m.visible=true;p.m.position.set(s.x*2.2+(Math.random()-.5)*.45,height(s)+.7,(s.nitro>0||s.turboBoost>0)?.5:0);p.v.set((Math.random()-.5)*4,Math.random()*3.5,(s.nitro>0||s.turboBoost>0)?8:(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));

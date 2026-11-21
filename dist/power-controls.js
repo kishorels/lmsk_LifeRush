@@ -177,13 +177,20 @@ export function createPowerControls(state,activate) {
       const renderKey = `${slot.id}:${status}:${isReady ? '1' : '0'}:${isActive ? '1' : '0'}`;
       if (label.dataset.renderKey !== renderKey) {
         label.dataset.renderKey = renderKey;
-        label.setAttribute('aria-label', (i === 0 ? '↑ ' : '← ') + nameOf(slot.id) + ' · ' + status);
+        const ariaText = (i === 0 ? '↑ ' : '← ') + nameOf(slot.id) + ' · ' + status;
+        label.setAttribute('aria-label', ariaText);
         label.title = nameOf(slot.id) + ' (' + status + ')';
-        label.innerHTML = `
-          <span class="power-slot-icon">${POWER_ICONS[slot.id] || ''}</span>
-          <span class="power-slot-status">${status}</span>
-          <span class="power-slot-arrow">${i === 0 ? '↑' : '←'}</span>
-        `;
+        if (label.dataset.slotId !== slot.id || !label._statusEl) {
+          label.dataset.slotId = slot.id;
+          label.innerHTML = `
+            <span class="power-slot-icon">${POWER_ICONS[slot.id] || ''}</span>
+            <span class="power-slot-status">${status}</span>
+            <span class="power-slot-arrow">${i === 0 ? '↑' : '←'}</span>
+          `;
+          label._statusEl = label.querySelector('.power-slot-status');
+        } else {
+          label._statusEl.textContent = status;
+        }
       }
     });
 

@@ -856,6 +856,7 @@ export function buildHumanoidRobot(pose = 'wave') {
       const earRing = addPart(head, chrome, side * 0.345, 0, 0, 0.065, 0.03, 0.065, cyl12);
       earRing.rotation.z = Math.PI / 2;
     }
+    batchStatic(head, `robotHead:${scale}`);
     return head;
   }
 
@@ -885,6 +886,7 @@ export function buildHumanoidRobot(pose = 'wave') {
     // Thumb
     const thumb = addPart(arm, white, 0.28, 0.61, 0.10, 0.026, 0.085, 0.026);
     thumb.rotation.z = 0.55;
+    batchStatic(arm, `robotArm:${scale}`);
     return arm;
   }
 
@@ -903,18 +905,12 @@ export function buildHumanoidRobot(pose = 'wave') {
     addPart(g, black, 0, 0.26, -0.06, 0.14, 0.11, 0.14, cyl12);
     addPart(g, white, 0, 0.43, -0.06, 0.25, 0.22, 0.18, sphere);
     addPart(g, chrome, 0, 0.58, -0.06, 0.08, 0.08, 0.08, cyl12);
-    // Big round friendly head with glowing green eyes
-    const head = addRobotHead(g, 0.77, 0.76);
-    head.rotation.z = -0.08;
     // Left arm resting casually down beside leg
     addPart(g, black, -0.24, 0.48, -0.04, 0.065, 0.065, 0.065, sphere);
     addBar(g, white, [-0.26, 0.46, -0.03], [-0.34, 0.24, 0.08], 0.055);
     addPart(g, black, -0.35, 0.22, 0.09, 0.058, 0.058, 0.058, sphere);
     addBar(g, white, [-0.35, 0.20, 0.10], [-0.36, 0.09, 0.28], 0.055);
     addPart(g, white, -0.36, 0.08, 0.34, 0.10, 0.045, 0.12);
-    // Right arm raised waving! (Animated in renderer3d!)
-    const waveArm = addWavingRightArm(g, 0.24, 0.48, -0.04, 0.64);
-    g.userData.waveArm = waveArm;
     // Seated legs stretched forward toward the runner with black knee joints & chunky white robot boots!
     for (const side of [-1, 1]) {
       const lx = side * 0.13;
@@ -924,6 +920,13 @@ export function buildHumanoidRobot(pose = 'wave') {
       addBar(g, white, [lx * 1.15, 0.15, 0.42], [lx * 1.25, 0.12, 0.68], 0.082);
       addShell(g, white, lx * 1.25, 0.15, 0.74, 0.14, 0.22, 0.12, 0.04);
     }
+    batchStatic(g, 'robotBody:seated');
+    // Big round friendly head with glowing green eyes
+    const head = addRobotHead(g, 0.77, 0.76);
+    head.rotation.z = -0.08;
+    // Right arm raised waving! (Animated in renderer3d!)
+    const waveArm = addWavingRightArm(g, 0.24, 0.48, -0.04, 0.64);
+    g.userData.waveArm = waveArm;
     return g;
   }
 
@@ -947,14 +950,15 @@ export function buildHumanoidRobot(pose = 'wave') {
   // Subtle green status chest indicator
   addPart(g, greenEye, 0, 1.46, 0.21, 0.08, 0.03, 0.02);
   addPart(g, chrome, 0, 1.64, 0, 0.10, 0.10, 0.10, cyl12);
-  // Iconic Oversized Round Glossy-White Head with Curved Black Visor & Glowing Neon-Green Eyes!
-  addRobotHead(g, 1.88, 1.0);
   // Left articulated arm relaxed at side
   addPart(g, black, -0.34, 1.52, 0, 0.095, 0.095, 0.095, sphere);
   addBar(g, white, [-0.36, 1.50, 0], [-0.44, 1.18, 0.04], 0.074);
   addPart(g, black, -0.45, 1.15, 0.05, 0.082, 0.082, 0.082, sphere);
   addBar(g, white, [-0.45, 1.12, 0.05], [-0.46, 0.84, 0.12], 0.072);
   addShell(g, white, -0.46, 0.76, 0.14, 0.11, 0.13, 0.06, 0.02);
+  batchStatic(g, 'robotBody:wave');
+  // Iconic Oversized Round Glossy-White Head with Curved Black Visor & Glowing Neon-Green Eyes!
+  addRobotHead(g, 1.88, 1.0);
   // Right articulated arm raised waving hello!
   const waveArm = addWavingRightArm(g, 0.34, 1.52, 0, 0.96);
   g.userData.waveArm = waveArm;

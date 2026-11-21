@@ -127,6 +127,7 @@ export function createCollegeCampus(scene){
  }
  const templates=Array.from({length:6},(_,kind)=>build(kind));
  const slots=Array.from({length:CAMPUS_SLOTS},()=>{const root=new Group();scene.add(root);return {root,kind:-1};});
+ const cache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
  return state=>{
   const college=state.map==='college';
   if(college){
@@ -141,7 +142,7 @@ export function createCollegeCampus(scene){
    const anchor=campusAnchor(slot,state.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,state);
    if(clr.hide){item.root.visible=false;continue;}
    item.root.visible=true;
-   if(item.kind!==kind){item.root.clear();item.root.add(templates[kind].clone());item.kind=kind;}
+   if(item.kind!==kind){item.root.clear();if(!cache[slot].has(kind))cache[slot].set(kind,templates[kind].clone());item.root.add(cache[slot].get(kind));item.kind=kind;}
    item.root.position.set(curveRelX(anchor,state),curveRelY(anchor,state)+clr.dropY,state.distance-anchor);
    item.root.rotation.y=-Math.atan(curveSlopeAt(anchor,state));
   }

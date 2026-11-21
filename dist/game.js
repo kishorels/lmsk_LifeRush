@@ -1,8 +1,8 @@
 import {createPowerControls} from './power-controls.js?v=3.3.0';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.2.3';
-import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.4.1';
+import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.4.2';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE} from './engine.js?v=3.2.3';
-import {createRenderer} from './renderer3d.js?v=3.4.1';
+import {createRenderer} from './renderer3d.js?v=3.4.2';
 import {createLiteRenderer} from './renderer-lite.js?v=3.1.9';
 
 import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
@@ -29,7 +29,7 @@ const IC_CHAR = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14"
 const IC_EXIT = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 const IC_RUSH = '<svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 6 6-6 6"/><path d="m13 6 6 6-6 6"/></svg>';
 let canvas=$('world');
-let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastLmskMask = -1, lastFeverOn = false, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false, audioUnlockedOnce = false;
+let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastLmskMask = -1, lastFeverOn = false, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false;
 const nameModalEl = $('name-modal');
 const shopModalEl = $('shop-modal');
 const speedLinesEl = $('speed-lines');
@@ -122,7 +122,9 @@ function setupIntroVideo() {
     video.muted = true;
     const p = video.play();
     if (p && typeof p.catch === 'function') {
-      p.catch(() => setTimeout(() => video.play().catch(() => activateEnterButton()), 180));
+      p.catch(() => setTimeout(() => {
+        if (video.hasAttribute('src')) video.play().catch(() => activateEnterButton());
+      }, 180));
     }
   };
   if (video.readyState >= 2) tryPlay();
@@ -278,7 +280,9 @@ function ensureRenderer() {
 }
 if (introFinished) scheduleRendererInit();
 
-const save=()=>{
+let saveTimer = 0;
+const flushSave = () => {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; }
   try{
     localStorage.setItem('runverse-progression',JSON.stringify(profile));
     localStorage.setItem('runverse-best',best);
@@ -289,6 +293,18 @@ const save=()=>{
     localStorage.setItem('runverse-map',selectedMap);
   }catch{}
 };
+const save=(immediate = false)=>{
+  if (immediate || s?.mode !== 'running') {
+    flushSave();
+    return;
+  }
+  if (!saveTimer) {
+    saveTimer = setTimeout(flushSave, 2500);
+  }
+};
+const prefersReducedMotion = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+const hudLocationEl = typeof document !== 'undefined' ? document.querySelector('.hud-top-bar .location') : null;
+let lastCoinAnimTime = 0;
 
 const effects=createSound();
 try{sound=localStorage.getItem('runverse-sound')!=='off';}catch{}
@@ -331,7 +347,7 @@ $('sound').onclick=()=>{
   soundButton();
   try{localStorage.setItem('runverse-sound',sound?'on':'off');}catch{}
   if(sound){
-    effects.startBgm?.();
+    if (!game.classList.contains('mode-splash')) effects.startBgm?.();
     effects.play('coin');
   }else{
     effects.pauseBgm?.();
@@ -720,13 +736,17 @@ function enterGameFromSplash() {
   enteredFromSplash = true;
   const btn = $('btn-enter');
   btn?.classList.add('is-pressed');
-  playEnterSound(sound);
-  effects.setEnabled(sound);
-  effects.unlock();
   try {
     const v = $('intro-video');
-    if (v) v.pause();
+    if (v) {
+      v.muted = true;
+      v.pause();
+      v.removeAttribute('src');
+      v.load();
+    }
   } catch {}
+  playEnterSound(sound);
+  if (sound) { effects.unlock(); effects.startBgm(); }
   setScreenMode('select');
   showHub('home');
   if (!playerName) {
@@ -735,7 +755,6 @@ function enterGameFromSplash() {
   if (!rendererStarted) {
     ensureRenderer();
   }
-  if (sound) setTimeout(() => effects.startBgm?.(), 140);
 }
 if($('btn-enter')){
   $('btn-enter').onclick = enterGameFromSplash;
@@ -1017,6 +1036,7 @@ function beginRun(chosen){
 function pause(){
   if(!['running','countdown'].includes(s.mode))return;
   s.mode='paused';
+  flushSave();
   $('countdown').hidden=true;
   if($('report-grade')) $('report-grade').hidden = true;
   if($('report-records')) $('report-records').hidden = true;
@@ -1234,11 +1254,7 @@ document.addEventListener('visibilitychange',()=>{
       }
       return;
     }
-    if (!audioUnlockedOnce) {
-      audioUnlockedOnce = true;
-      effects.unlock();
-      if(sound) effects.startBgm?.();
-    }
+    if (sound) effects.unlock();
   },{passive:true});
 });
 
@@ -1323,12 +1339,13 @@ function tick(t) {
     if (!wasUnlocked && isCollegeUnlocked()) updateUnlockUI();
     if (s.y > 1.2 || s.roofRide) effects.play('roofCoin');
     else effects.play('coin');
-    const counter=$('coins').parentElement;
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      counter.getAnimations().forEach(animation=>animation.cancel());
-      counter.animate([{transform:'scale(1)',boxShadow:'0 0 0 1px #ffe09a'},
-        {transform:'scale(1.16)',offset:.28},{transform:'scale(1)',boxShadow:'0 0 0 8px transparent'}],
-        {duration:260,easing:'ease-out'});
+    if (!prefersReducedMotion && (t - lastCoinAnimTime) > 220) {
+      lastCoinAnimTime = t;
+      const counter=$('coins').parentElement;
+      if (counter?.animate) {
+        counter.animate([{transform:'scale(1)'},{transform:'scale(1.15)',offset:.3},{transform:'scale(1)'}],
+          {duration:220,easing:'ease-out'});
+      }
     }
   }
 
@@ -1445,7 +1462,7 @@ function tick(t) {
   }
 
   // Dynamic Location HUD update matching active branch & map
-  const locEl = document.querySelector('.hud-top-bar .location');
+  const locEl = hudLocationEl || document.querySelector('.hud-top-bar .location');
   if (locEl) {
     let locText = selectedMap === 'itpark' ? (IC_ITPARK + ' IT PARK') : (selectedMap === 'school' ? (IC_SCHOOL + ' RUNVERSE SCHOOL') : (IC_COLLEGE + ' RUNVERSE COLLEGE'));
     if (selectedMap === 'itpark') {
