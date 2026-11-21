@@ -1,17 +1,17 @@
-import {createMagnetCoins} from './magnet-coins.js?v=3.4.3';
-import {createPickupModels} from './pickup-models.js?v=3.4.3';
-import {createGuardEffect} from './guard-effect.js?v=3.4.3';
+import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
+import {createPickupModels,coinReflections} from './pickup-models.js?v=3.4.7';
+import {createGuardEffect} from './guard-effect.js?v=3.4.7';
 import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.6';
-import {createSideTraffic} from './side-vehicles.js?v=3.4.3';
+import {createSideTraffic} from './side-vehicles.js?v=3.2.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.4.3';
+import {createSky} from './sky-scene.js?v=3.4.2';
 import {createCampus} from './campus-scene.js?v=3.2.6';
-import {createCollegeCampus} from './college-scene.js?v=3.4.3';
+import {createCollegeCampus} from './college-scene.js?v=3.2.6';
 import {createItParkCampus} from './itpark-scene.js?v=3.2.6';
-import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.4.3';
+import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.4.2';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.1.1';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.4.3';
-import {createTraffic} from './traffic-scene.js?v=3.4.3';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.4.2';
+import {createTraffic} from './traffic-scene.js?v=3.4.2';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.0.3';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
@@ -329,9 +329,105 @@ export function createRenderer(canvas, callbacks = {}){
  }
  function obstacle(g,o,map='school',blockKind=0){clear(g);g.userData.waveArm=null;g.userData.rotors=null;g.userData.crate=null;g.userData.spinBadge=null;g.userData.serverScan=null;g.userData.papers=null;g.userData.swivel=null;g.userData.holoPanel=null;if(PICKUP_TYPES.has(o.type)){ensurePickups().add(g,o.type);return;}if(ROAD_EVENT_TYPES.has(o.type)){const ev=buildRoadEventMesh(o.type,o);g.add(ev);g.userData.rotors=ev.userData.rotors||null;g.userData.crate=ev.userData.crate||null;g.userData.spinBadge=ev.userData.spinBadge||null;return;}if(map==='itpark'){itParkObstacle(g,o,blockKind);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
 
- const miniCoinGeo=new T.CylinderGeometry(1,1,.28,16);miniCoinGeo.rotateX(Math.PI/2);
- const miniCoinMat=new T.MeshStandardMaterial({color:0xffd700,metalness:.90,roughness:.16,emissive:0xf59e0b,emissiveIntensity:.45});
- const particles=[];for(let i=0;i<24;i++){const m=new T.Mesh(miniCoinGeo,miniCoinMat);m.visible=false;scene.add(m);particles.push({m,life:0,v:new T.Vector3()});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
+ function createBurstCoinMats(){
+  const hdrEnv=coinReflections();
+  const edgeMat=new T.MeshStandardMaterial({color:0xf5b025,emissive:0x7c2d12,emissiveIntensity:.28,metalness:.92,roughness:.14,envMap:hdrEnv,envMapIntensity:2.4});
+  if(typeof document==='undefined'){
+   const faceFallback=new T.MeshStandardMaterial({color:0xffd54f,emissive:0xb91c1c,emissiveIntensity:.30,metalness:.78,roughness:.18,envMap:hdrEnv,envMapIntensity:2.2});
+   return [edgeMat,faceFallback,faceFallback];
+  }
+  const cv=document.createElement('canvas');cv.width=cv.height=192;
+  const ctx=cv.getContext('2d');
+  if(!ctx)return [edgeMat,edgeMat,edgeMat];
+  ctx.translate(96,96);
+  // 1. Gleaming 24K Metallic Gold Outer Coin Disc (matching coin.svg & mantis-flip-coin)
+  const goldGrad=ctx.createLinearGradient(-72,-78,68,80);
+  goldGrad.addColorStop(0,'#fffbcf');
+  goldGrad.addColorStop(.28,'#f2b536');
+  goldGrad.addColorStop(.52,'#ffed9b');
+  goldGrad.addColorStop(.78,'#b46914');
+  goldGrad.addColorStop(1,'#ffd54f');
+  ctx.fillStyle=goldGrad;
+  ctx.beginPath();ctx.arc(0,0,92,0,Math.PI*2);ctx.fill();
+  // Specular outer gold rim & milled coin edge ticks
+  ctx.strokeStyle='#fff6b8';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,0,88,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='#9a5812';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,76,0,Math.PI*2);ctx.stroke();
+  ctx.save();ctx.strokeStyle='#a15c14';ctx.lineWidth=2.2;
+  for(let i=0;i<44;i++){ctx.rotate(Math.PI/22);ctx.beginPath();ctx.moveTo(78,0);ctx.lineTo(85,0);ctx.stroke();}
+  ctx.restore();
+  // 2. Rich Crimson-Red Inner Medallion Ring & Bold Red Winged Star Crest (matching coin.svg #ff6c45 -> #b11d15 -> #690d0d)
+  const redRingGrad=ctx.createRadialGradient(-14,-18,8,0,0,70);
+  redRingGrad.addColorStop(0,'#ff5733');
+  redRingGrad.addColorStop(.55,'#c81e1e');
+  redRingGrad.addColorStop(1,'#690d0d');
+  ctx.strokeStyle=redRingGrad;ctx.lineWidth=10;
+  ctx.beginPath();ctx.arc(0,0,65,0,Math.PI*2);ctx.stroke();
+  // Inner gold ring framing the center emblem
+  ctx.strokeStyle='#ffe47a';ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(0,0,57,0,Math.PI*2);ctx.stroke();
+  // Bold Crimson-Red Winged Emblem across the coin face (exact coin.svg path scaled to 192x192)
+  const redCrestGrad=ctx.createLinearGradient(-48,-40,48,44);
+  redCrestGrad.addColorStop(0,'#ff6c45');
+  redCrestGrad.addColorStop(.55,'#b91c1c');
+  redCrestGrad.addColorStop(1,'#690d0d');
+  ctx.fillStyle=redCrestGrad;
+  ctx.strokeStyle='#ffe066';
+  ctx.lineWidth=4.5;
+  ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.moveTo(-44,-28);
+  ctx.lineTo(0,-9);
+  ctx.lineTo(44,-28);
+  ctx.lineTo(28,0);
+  ctx.lineTo(44,28);
+  ctx.lineTo(0,12);
+  ctx.lineTo(-44,28);
+  ctx.lineTo(-28,0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Center 24K Gold Jewel + Top-Left White-Gold 4-Point Star Sparkle
+  ctx.fillStyle=goldGrad;
+  ctx.strokeStyle='#fff9db';
+  ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.arc(0,0,11,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fffef0';
+  ctx.beginPath();
+  ctx.moveTo(-36,-54);ctx.lineTo(-31,-40);ctx.lineTo(-17,-35);ctx.lineTo(-31,-30);
+  ctx.lineTo(-36,-16);ctx.lineTo(-41,-30);ctx.lineTo(-55,-35);ctx.lineTo(-41,-40);
+  ctx.closePath();ctx.fill();
+  const tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;
+  // Pure white emissive with emissiveMap preserves vivid Crimson Red + gleaming 24K Gold without yellow washout!
+  const faceMat=new T.MeshStandardMaterial({
+   color:0xffffff,
+   map:tex,
+   bumpMap:tex,
+   bumpScale:.014,
+   emissive:0xffffff,
+   emissiveMap:tex,
+   emissiveIntensity:.46,
+   metalness:.74,
+   roughness:.16,
+   envMap:hdrEnv,
+   envMapIntensity:2.3
+  });
+  return [edgeMat,faceMat,faceMat];
+ }
+ function createBurstGlintMat(){
+  const px=new Uint8Array(32*32*4);
+  for(let y=0;y<32;y++)for(let x=0;x<32;x++){
+   const dx=(x-15.5)/15.5,dy=(y-15.5)/15.5,r2=dx*dx+dy*dy,n=(y*32+x)*4;
+   const halo=Math.exp(-r2*7.5)*.62;
+   const star=Math.exp(-dx*dx*220-dy*dy*6)+Math.exp(-dy*dy*220-dx*dx*6);
+   px[n]=255;px[n+1]=215;px[n+2]=120;px[n+3]=Math.round(Math.min(1,halo+star*.88)*255);
+  }
+  const map=new T.DataTexture(px,32,32);map.colorSpace=T.SRGBColorSpace;map.needsUpdate=true;
+  return new T.SpriteMaterial({map,transparent:true,depthWrite:false,toneMapped:false,blending:T.AdditiveBlending});
+ }
+ const burstCoinGeo=new T.CylinderGeometry(1,1,.22,24);
+ const burstCoinMats=createBurstCoinMats();
+ const burstGlintMat=createBurstGlintMat();
+ const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=new T.Mesh(burstCoinGeo,burstCoinMats);m.rotation.order='YXZ';m.scale.setScalar(.15);const glint=new T.Sprite(burstGlintMat);glint.scale.setScalar(1.85);m.add(glint);m.visible=false;scene.add(m);particles.push({m,glint,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(12+i%5*2),tilt:(i%3-1)*.18});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
  function resize(){const r=canvas.getBoundingClientRect();const rw=Math.round(r.width),rh=Math.round(r.height);if(!rw||!rh||(rw===lastCanvasW&&rh===lastCanvasH))return;lastCanvasW=rw;lastCanvasH=rh;renderer.setSize(rw,rh,false);camera.aspect=rw/rh;baseFov=rw/rh<.8?64:58;camera.fov=baseFov;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
  const renderFn=function render(s,character,frameDt){if(contextLost||renderer.getContext?.()?.isContextLost?.())return 'context-lost';stage.restore();capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
  const onPodium=s.mode==='ready'||s.mode==='select';
@@ -442,7 +538,7 @@ export function createRenderer(canvas, callbacks = {}){
   for(const [,grp] of itemPoolMap){grp.visible=false;freePool.push(grp);}
   itemPoolMap.clear();
  }
- const count=s.coins;if(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0)){burst=(s.nitro>0||s.turboBoost>0)?.08:.22;for(const p of particles){p.life=.42+Math.random()*.28;p.m.visible=true;p.m.position.set(s.x*2.2+(Math.random()-.5)*.45,height(s)+.7,(s.nitro>0||s.turboBoost>0)?.5:0);p.m.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,0);p.v.set((Math.random()-.5)*4,Math.random()*3.5,(s.nitro>0||s.turboBoost>0)?8:(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.rotation.y+=dt*16;p.m.rotation.x+=dt*9;p.m.scale.setScalar(.085*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
+ const count=s.coins;if(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0)){burst=(s.nitro>0||s.turboBoost>0)?.07:.14;const emitCount=count>total?5:3;for(let k=0;k<emitCount;k++){const p=particles[particleCursor];particleCursor=(particleCursor+1)%particles.length;const side=(particleCursor%2?1:-1),lat=side*(.08+Math.random()*.12)+(Math.random()-.5)*.05;p.maxLife=.50+k*.055+Math.random()*.08;p.life=p.maxLife;p.m.visible=true;p.angle=Math.random()*Math.PI*2;p.m.rotation.set(Math.PI/2-.22,p.angle,p.tilt);p.m.position.set(s.x*2.2+lat,height(s)+.10+k*.03+Math.random()*.05,.08+k*.16+Math.random()*.06);p.v.set(lat*2.2+(Math.random()-.5)*.40,1.65+k*.20+Math.random()*.55,5.5+k*.95+Math.random()*1.8);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*2.1;p.m.position.addScaledVector(p.v,dt);const minFootY=height(s)+.08,maxArcY=height(s)+.64;if(p.m.position.y<minFootY)p.m.position.y=minFootY;else if(p.m.position.y>maxArcY)p.m.position.y=maxArcY;p.angle+=dt*p.spin;p.m.rotation.set(Math.PI/2-.22,p.angle,p.tilt);const lifeRatio=Math.max(0,Math.min(1,p.life/(p.maxLife||.52)));p.m.scale.setScalar(.15*Math.pow(lifeRatio,.80));if(p.glint)p.glint.scale.setScalar(1.4+1.25*Math.pow(Math.max(0,Math.sin(p.angle*2)),6));}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
  const inSelect=s.mode==='ready'||s.mode==='select'||s.mode==='intro';

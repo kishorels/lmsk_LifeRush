@@ -1,6 +1,7 @@
 import {powerById} from './progression.js';
 import * as T from './vendor/three.module.js';
-import {coinReflections,makeCoin,makePickupGlint,spinCoin} from './coin.js?v=3.4.3';
+import {coinReflections,makeCoin,makePickupGlint,spinCoin} from './coin.js';
+export {coinReflections,makeCoin,makePickupGlint,spinCoin};
 import {createGuardPickup} from './guard-effect.js';
 
 export function createPickupModels() {

@@ -5,6 +5,7 @@ import {coinReflections,makePickupGlint} from './coin.js';
 export function createGuardEffect(runner) {
   const root = new T.Group();
   root.name = 'guard-protection';
+  root.scale.setScalar(0.66);
   root.visible = false;
   runner.add(root);
   const radius = 1.03, span = 1.28, tall = .56;
@@ -259,6 +260,7 @@ export function createGuardPickup() {
     const group = new T.Group();
     group.name='shield-pickup';
     group.position.y = 1.25;
+    group.scale.setScalar(0.82);
     parent.add(group);
     const frame = new T.Mesh(rim, gold);
     frame.position.z = -.0425;
