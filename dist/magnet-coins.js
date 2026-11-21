@@ -1,4 +1,4 @@
-import {makeCoin,spinCoin} from './coin.js';
+import {makeCoin,spinCoin} from './coin.js?v=3.4.3';
 import {height} from './engine.js';
 import {curveRelX,curveRelY} from './campus-layout.js';
 

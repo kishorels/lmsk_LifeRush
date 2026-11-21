@@ -1,4 +1,4 @@
-import {makeCoin,spinCoin} from './coin.js';
+import {makeCoin,spinCoin} from './coin.js?v=3.4.3';
 import {buildBus,buildCollegeVehicle} from './bus-model.js';
 import {buildPorscheGT3RS,buildBugattiChiron,buildRedShuttleCart,buildFreightSemiTruck,buildDucatiStreetfighter} from './itpark-models.js?v=3.0.3';
 import {buildWDP4DTrain,buildRailRampWagon} from './wdp4d-train.js?v=3.1.9';
