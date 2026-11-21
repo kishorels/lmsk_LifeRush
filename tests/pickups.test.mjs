@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fresh,step,trafficPattern} from '../dist/engine.js';
+import {fresh,step,trafficPattern,equipPowers} from '../dist/engine.js';
 import {Group} from '../dist/vendor/three.module.js';
 import {createPickupModels} from '../dist/pickup-models.js';
 
@@ -74,4 +74,25 @@ test('magnet also retrieves the four entry-bus coins from the opposite ground la
   step(s,.01);assert.equal(s.roofCoins,15);assert.equal(s.coinFlights.length,4);
   s.magnet=0;for(let i=0;i<12;i++)step(s,.05);
   assert.equal(s.coins,4);assert.equal(s.floor,0);
+});
+
+test('magnet and shield collectibles spawn along running routes in all maps (school, college, itpark) even with equipped power slots', () => {
+  for (const map of ['school', 'college', 'itpark']) {
+    const s = fresh(42);
+    s.map = map;
+    s.mode = 'running';
+    equipPowers(s, ['nitro', 'doubleCoins']);
+    let magnetsFound = 0, shieldsFound = 0;
+    for (let i = 0; i < 2000; i++) {
+      step(s, 0.05);
+      for (const item of s.items) {
+        if (!item.visited) {
+          if (item.type === 'magnet') { item.visited = true; magnetsFound++; }
+          if (item.type === 'shield') { item.visited = true; shieldsFound++; }
+        }
+      }
+    }
+    assert.ok(magnetsFound >= 2, `${map} spawns magnets on the road`);
+    assert.ok(shieldsFound >= 2, `${map} spawns shields on the road`);
+  }
 });

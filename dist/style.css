@@ -126,9 +126,10 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   margin: 0 auto;
   bottom: max(38px, calc(env(safe-area-inset-bottom) + 28px));
   width: min(310px, 84%);
-  z-index: 45;
-  display: flex;
+  z-index: 100;
+  display: flex !important;
   justify-content: center;
+  pointer-events: auto;
   animation: modalPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 .splash-enter-wrap[hidden] {
@@ -1627,16 +1628,256 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 
 #power-picker{width:min(340px,85vw);max-height:78dvh;overflow:auto;padding:18px;border:1px solid #6cc9db;border-radius:16px;background:#10243e;color:#fff}
 #power-picker::backdrop{background:#08111ddd}
-#power-picker h2{margin:0}#power-picker p{font-size:13px}
-#power-options{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-#power-picker button{position:static;width:auto;margin:0;padding:9px 6px;border:1px solid #42617a;border-radius:9px;background:#18324d;color:#fff;font:700 13px system-ui}
-#power-picker button[aria-pressed=true],#power-picker #confirm-powers:enabled{background:#14695e;border-color:#81efdb}
-#power-picker button:disabled{opacity:.5}.power-actions{margin-top:14px;display:flex;justify-content:space-between}
-#run-powers{position:absolute;right:4%;bottom:24%;z-index:21;touch-action:none;user-select:none}
-#run-powers[hidden],.power-direction[hidden]{display:none}
-#power-trigger{margin:0;border-radius:50%;width:64px;height:64px;padding:0;touch-action:none;background:#133653ed;color:#fff;border:2px solid #7ae8ed;font:bold 12px system-ui}
-.power-direction{display:none;position:absolute;pointer-events:none;width:max-content;max-width:145px;padding:9px;border-radius:9px;background:#10243df2;color:#fff;font:700 12px system-ui}
-#run-powers.open .power-direction:not([hidden]){display:block}.power-direction.above{bottom:110%;right:0}.power-direction.left{right:110%;top:24%}.power-direction.aim{background:#117366}
+#power-picker {
+  margin: auto;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #0d223d, #081527);
+  border: 2px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 229, 255, 0.22);
+  color: #fff;
+  padding: 20px 22px;
+  max-width: 360px;
+}
+#power-picker h2 { margin: 0 0 6px; font-size: 19px; color: #ffd700; text-shadow: 0 0 10px rgba(255, 215, 0, 0.35); }
+#power-picker p { font-size: 13px; color: #94a3b8; margin: 4px 0 12px; line-height: 1.4; }
+#power-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+#power-picker button {
+  position: static;
+  width: auto;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(66, 97, 122, 0.65);
+  border-radius: 10px;
+  background: rgba(24, 50, 77, 0.8);
+  color: #fff;
+  font: 700 12px system-ui, sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+#power-picker button .picker-icon-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#power-picker button .picker-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  text-align: left;
+}
+#power-picker button .picker-name {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#power-picker button .picker-slot-tag {
+  font-size: 9px;
+  color: #ffd700;
+  font-weight: 800;
+}
+#power-picker button[aria-pressed=true] {
+  background: linear-gradient(135deg, rgba(20, 105, 94, 0.95), rgba(12, 70, 96, 0.95));
+  border-color: #00f0ff;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.45);
+}
+#power-picker #confirm-powers:enabled {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+  color: #fff;
+}
+#power-picker button:disabled { opacity: .45; }
+.power-actions { margin-top: 16px; display: flex; justify-content: space-between; gap: 10px; }
+
+/* In-Run Power Action Cluster */
+#run-powers {
+  position: absolute;
+  right: 18px;
+  bottom: 22%;
+  z-index: 25;
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+}
+#run-powers[hidden], .power-direction[hidden] { display: none !important; }
+
+/* Main Center Trigger Button */
+#power-trigger {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 229, 255, 0.75);
+  background: radial-gradient(circle at 35% 35%, rgba(20, 60, 95, 0.95), rgba(7, 21, 38, 0.98));
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.38), inset 0 0 10px rgba(0, 229, 255, 0.22);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+#power-trigger:active {
+  transform: scale(0.92);
+}
+#power-trigger.has-ready {
+  border-color: #00f0ff;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.7), inset 0 0 12px rgba(255, 215, 0, 0.3);
+  animation: powerCorePulse 1.4s ease-in-out infinite alternate;
+}
+@keyframes powerCorePulse {
+  0% { transform: scale(1); box-shadow: 0 0 14px rgba(0, 240, 255, 0.45); }
+  100% { transform: scale(1.04); box-shadow: 0 0 24px rgba(0, 240, 255, 0.8), 0 0 8px rgba(255, 215, 0, 0.45); }
+}
+.power-trigger-icon {
+  display: block;
+  filter: drop-shadow(0 0 4px rgba(0, 229, 255, 0.8));
+}
+.power-trigger-label {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-weight: 900;
+  font-size: 8.5px;
+  letter-spacing: 1px;
+  color: #a5f3fc;
+  margin-top: -2px;
+  text-shadow: 0 0 6px rgba(0, 229, 255, 0.8);
+}
+
+/* Individual Power Slot Buttons (Slot 1 & Slot 2) - Hidden by default, visible only on hover / touch */
+.power-direction {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(56, 189, 248, 0.55);
+  background: radial-gradient(circle at 35% 35%, rgba(15, 38, 64, 0.95), rgba(6, 17, 31, 0.98));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 0 8px rgba(56, 189, 248, 0.15);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.35);
+  transition: opacity 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.power-direction.above {
+  bottom: 114%;
+  right: 5px;
+  transform-origin: bottom center;
+}
+.power-direction.left {
+  right: 114%;
+  top: 5px;
+  transform-origin: right center;
+}
+
+/* Revealed only on hover or when holding/touching the power button */
+#run-powers:hover .power-direction:not([hidden]),
+#run-powers.open .power-direction:not([hidden]),
+#run-powers:focus-within .power-direction:not([hidden]) {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.power-direction.aim, #run-powers:hover .power-direction:not([hidden]):hover {
+  transform: scale(1.18) !important;
+  border-color: #facc15 !important;
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.8), inset 0 0 10px rgba(250, 204, 21, 0.45) !important;
+}
+
+/* Slot Ready State */
+.power-direction.ready {
+  border-color: #00f0ff;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.6), inset 0 0 8px rgba(0, 240, 255, 0.25);
+  animation: slotReadyPulse 1.8s ease-in-out infinite alternate;
+}
+@keyframes slotReadyPulse {
+  0% { box-shadow: 0 0 10px rgba(0, 240, 255, 0.4); }
+  100% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.85); }
+}
+.power-direction.ready .power-slot-status {
+  color: #38bdf8;
+  font-weight: 900;
+  text-shadow: 0 0 5px rgba(56, 189, 248, 0.8);
+}
+
+/* Slot Active State (In Use) */
+.power-direction.active {
+  border-color: #f97316;
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.8), inset 0 0 10px rgba(249, 115, 22, 0.4);
+  animation: slotActiveFlicker 0.6s infinite alternate;
+}
+@keyframes slotActiveFlicker {
+  0% { transform: scale(1.02); }
+  100% { transform: scale(1.08); }
+}
+.power-direction.active .power-slot-status {
+  color: #ffedd5;
+  background: rgba(234, 88, 12, 0.85);
+  padding: 1px 4px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+/* Slot Recharging State */
+.power-direction.recharging {
+  opacity: 0.68;
+  filter: grayscale(0.25);
+}
+.power-direction.recharging .power-slot-status {
+  color: #94a3b8;
+  font-size: 8px;
+}
+
+.power-slot-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.power-slot-status {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  margin-top: -1px;
+}
+.power-slot-arrow {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #0f2d4a;
+  border: 1px solid #38bdf8;
+  color: #7dd3fc;
+  font-size: 9px;
+  font-weight: 900;
+}
 
 .fever-veil {
   position: absolute;

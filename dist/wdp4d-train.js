@@ -89,10 +89,10 @@ function frontNoseMat() {
     // White lower number band
     ctx.fillStyle = '#e8ecf1';
     ctx.fillRect(0, h * 0.44, w, h * 0.30);
-    // Deep Indian Railways cobalt-blue lower chin
+    // Streamlined Metro Red lower chin (Panel 3 reference livery)
     const bg = ctx.createLinearGradient(0, h * 0.74, 0, h);
-    bg.addColorStop(0, '#1f5ec7');
-    bg.addColorStop(1, '#154496');
+    bg.addColorStop(0, '#dc2626');
+    bg.addColorStop(1, '#991b1b');
     ctx.fillStyle = bg;
     ctx.fillRect(0, h * 0.74, w, h * 0.26);
 
@@ -200,8 +200,8 @@ function cabSideMat(cabLabel, flipped) {
     } else {
       ctx.fillRect(0, h * 0.608, w * 0.44, h * 0.114);
     }
-    // Lower cobalt blue skirt aligned with front chin & long hood
-    ctx.fillStyle = '#1d56b8';
+    // Lower streamlined crimson red skirt aligned with front chin & long hood
+    ctx.fillStyle = '#dc2626';
     ctx.fillRect(0, h * 0.864, w, h * 0.136);
 
     // Side metallic louver vent block near nose corner
@@ -254,11 +254,11 @@ function longHoodSideMat() {
   const key = 'wdp4dLongHoodSide';
   if (matCache.has(key)) return matCache.get(key);
   const tex = makeCanvasTex(key, 1024, 256, (ctx, w, h) => {
-    // Deep Indian Railways Cobalt Blue upper & lower hood
+    // Streamlined Crimson Red upper & lower hood (Panel 3 reference livery)
     const bg = ctx.createLinearGradient(0, 0, 0, h);
-    bg.addColorStop(0, '#1e58be');
-    bg.addColorStop(0.5, '#1a4fa8');
-    bg.addColorStop(1, '#143f8a');
+    bg.addColorStop(0, '#dc2626');
+    bg.addColorStop(0.5, '#b91c1c');
+    bg.addColorStop(1, '#991b1b');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
 
@@ -313,7 +313,7 @@ function longHoodSideMat() {
     drawWeathering(ctx, w, h, 11);
   });
   const m = new MeshStandardMaterial({
-    color: tex ? 0xffffff : 0x1d56b8,
+    color: tex ? 0xffffff : 0xdc2626,
     map: tex,
     roughness: 0.40,
     metalness: 0.24
@@ -367,8 +367,8 @@ function buildWDP4DUnitTemplate(unitLen, h) {
 
   const cabWhite = getMat('wdpCabW', { color: 0xe6eaef, roughness: 0.42, metalness: 0.16 });
   const cabRoofGray = getMat('wdpRoofG', { color: 0xcbd2da, roughness: 0.52, metalness: 0.18 });
-  const irBlue = getMat('wdpIrBlue', { color: 0x1d56b8, roughness: 0.36, metalness: 0.24 });
-  const irBlueDark = getMat('wdpIrBlueD', { color: 0x133c84, roughness: 0.45, metalness: 0.28 });
+  const irBlue = getMat('wdpIrBlue', { color: 0xdc2626, roughness: 0.36, metalness: 0.24 });
+  const irBlueDark = getMat('wdpIrBlueD', { color: 0x991b1b, roughness: 0.45, metalness: 0.28 });
   const irYellow = getMat('wdpIrYel', { color: 0xf2a61e, roughness: 0.36, metalness: 0.14 });
   const chassisDark = getMat('wdpChas', { color: 0x2b3138, roughness: 0.62, metalness: 0.46 });
   const ironDark = getMat('wdpIron', { color: 0x1f242a, roughness: 0.55, metalness: 0.58 });

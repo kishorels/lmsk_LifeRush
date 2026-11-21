@@ -17,7 +17,7 @@ export function playerLevel(xp) {
   while (level < 50 && xp >= xpForLevel(level + 1)) level++;
   return level;
 }
-export const parkOpen = profile => profile.collegeBest >= 15000 && profile.collegeCoins >= 40000;
+export const parkOpen = profile => Boolean(profile?.itParkUnlocked || (profile?.collegeBest >= 15000 && profile?.collegeCoins >= 40000));
 export function runPickup(level,seed,index,featured) {
   if (featured && index === 0 && powerById[featured]?.level <= level) return featured;
   const pool = ['magnet','shield',...powers.filter(power => power.level <= level).map(power => power.id)];

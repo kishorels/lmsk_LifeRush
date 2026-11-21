@@ -91,7 +91,7 @@
     <div id="splash-screen" class="splash-screen">
       <video id="intro-video" class="intro-video" src="assets/videos/intro_video.mp4" poster="assets/videos/intro-poster.jpg" muted autoplay playsinline preload="auto" disablepictureinpicture disableremoteplayback></video>
       <div id="splash-enter-wrap" class="splash-enter-wrap" hidden>
-        <button id="btn-enter" class="enter-btn ready" type="button" disabled>
+        <button id="btn-enter" class="enter-btn ready" type="button" aria-label="Enter Game">
           <span class="enter-btn-sheen" aria-hidden="true"></span>
           <span class="enter-btn-sparks" aria-hidden="true"><i></i><i></i><i></i></span>
           <span class="enter-btn-content">
@@ -193,10 +193,10 @@
         <div class="hub-map-options">
           <button type="button" class="hub-map-card" data-map="school" aria-pressed="true"><span class="map-art school-art" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="#10283e"><path d="M12 3 1 9l4 2.18v6L12 21l7-3.82v-6L21 10.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9z"/></svg></span><span><strong>School Campus</strong><small>School uniforms · buses</small></span><b><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></b></button>
           <button type="button" class="hub-map-card is-locked" data-map="college" aria-pressed="false" aria-disabled="true"><span class="map-art college-art" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="#ffffff"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg></span><span><strong>College Campus</strong><small id="college-map-sub">Complete 2 goals</small></span><b id="college-map-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-3.1 0H9.1V6a2.9 2.9 0 0 1 5.8 0v2z"/></svg></b></button>
-          <button type="button" class="hub-map-card is-locked" data-map="itpark" aria-pressed="false" aria-disabled="true"><span class="map-art" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="#ffffff"><path d="M19 2H9a2 2 0 0 0-2 2v3H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM7 19H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm4 8H9v-2h2v2zm0-4H9v-2h2v2zm0-4H9V9h2v2zm0-4H9V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2z"/></svg></span><span><strong>IT Park</strong><small id="park-goals">College goals</small></span><b id="park-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-3.1 0H9.1V6a2.9 2.9 0 0 1 5.8 0v2z"/></svg></b></button>
+          <button type="button" class="hub-map-card" data-map="itpark" aria-pressed="false" aria-disabled="false"><span class="map-art" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="#ffffff"><path d="M19 2H9a2 2 0 0 0-2 2v3H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM7 19H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm4 8H9v-2h2v2zm0-4H9v-2h2v2zm0-4H9V9h2v2zm0-4H9V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2z"/></svg></span><span><strong>IT Park</strong><small id="park-goals">Glass towers · Office shuttles</small></span><b id="park-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></b></button>
         </div>
         <div id="map-unlock-checklist" class="unlock-checklist"></div>
-        <div id="park-checklist" class="unlock-checklist">
+        <div id="park-checklist" class="unlock-checklist" hidden>
           <label><span>College best run</span><strong><span id="park-distance-value">0</span> / 15,000 m</strong><progress id="park-distance" max="15000" value="0"></progress></label>
           <label><span>College coins</span><strong><span id="park-coins-value">0</span> / 40,000</strong><progress id="park-coins" max="40000" value="0"></progress></label>
         </div>
@@ -336,8 +336,20 @@
       <div class="power-actions"><button id="cancel-powers" type="button">Back</button><button id="confirm-powers" type="button" disabled>Start run</button></div>
     </dialog>
     <div id="run-powers" hidden>
-      <span class="power-direction above"></span><span class="power-direction left"></span>
-      <button id="power-trigger" aria-label="Hold and swipe up or left to use a power. Keyboard: 1 or 2.">POWER</button>
+      <button type="button" class="power-direction above" aria-label="Use Power Slot 1 (or swipe up)"></button>
+      <button type="button" class="power-direction left" aria-label="Use Power Slot 2 (or swipe left)"></button>
+      <button id="power-trigger" type="button" aria-label="Hold and swipe up or left to use a power. Keyboard: 1 or 2.">
+        <svg class="power-trigger-icon" viewBox="0 0 24 24" width="26" height="26" fill="none" aria-hidden="true">
+          <path d="M13 2L3 14h8l-2 8 11-13h-8l3-7z" fill="url(#coreVolt)" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>
+          <defs>
+            <linearGradient id="coreVolt" x1="3" y1="2" x2="21" y2="22">
+              <stop offset="0%" stop-color="#00f0ff"/>
+              <stop offset="100%" stop-color="#ffd700"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="power-trigger-label">POWER</span>
+      </button>
     </div>
 
     <!-- Touch Controls -->
@@ -355,6 +367,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.2.2-offline"></script>
+<script type="module" src="boot.js?v=3.3.9"></script>
 </body>
 </html>

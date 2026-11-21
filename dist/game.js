@@ -1,14 +1,14 @@
-import {createPowerControls} from './power-controls.js?v=3.1.8';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.2.2';
-import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.1.8';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE} from './engine.js?v=3.2.2';
-import {createRenderer} from './renderer3d.js?v=3.2.2';
+import {createPowerControls} from './power-controls.js?v=3.3.0';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.2.3';
+import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.3.9';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE} from './engine.js?v=3.2.3';
+import {createRenderer} from './renderer3d.js?v=3.3.9';
 import {createLiteRenderer} from './renderer-lite.js?v=3.1.9';
 
 import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
 import {initializeBuildProfile} from './build-profile.js';
 initializeBuildProfile();
-const profile = {xp:0,collegeBest:0,collegeCoins:0,introduced:0};
+const profile = {xp:0,collegeBest:0,collegeCoins:0,introduced:0,itParkUnlocked:true};
 const $=id=>document.getElementById(id);
 
 const IC_COIN = '<img class="ui-coin-ic" width="14" height="14" src="assets/icons/coin.svg" alt="">';
@@ -25,6 +25,8 @@ const IC_ITPARK = '<svg class="ui-icon" viewBox="0 0 24 24" width="13" height="1
 const IC_SOUND_ON = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
 const IC_SOUND_OFF = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>';
 const IC_REPLAY = '<svg class="ui-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+const IC_CHAR = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+const IC_EXIT = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 const IC_RUSH = '<svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 6 6-6 6"/><path d="m13 6 6 6-6 6"/></svg>';
 let canvas=$('world');
 let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastLmskMask = -1, lastFeverOn = false, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false, audioUnlockedOnce = false;
@@ -52,22 +54,28 @@ function updateAssetProgress(type, fraction) {
 }
 
 function activateEnterButton() {
-  if (introFinished) return;
-  introFinished = true;
   const wrap = $('splash-enter-wrap');
   const btn = $('btn-enter');
   const btnTxt = $('btn-enter-text');
   const arrow = $('btn-enter-arrow');
 
-  if (wrap) wrap.hidden = false;
+  if (wrap) {
+    wrap.hidden = false;
+    wrap.removeAttribute('hidden');
+    wrap.style.display = 'flex';
+  }
   if (btn) {
     btn.disabled = false;
+    btn.removeAttribute('disabled');
     btn.classList.remove('loading');
     btn.classList.add('ready');
   }
   if (btnTxt) btnTxt.textContent = 'Enter LifeRush';
   if (arrow) arrow.hidden = false;
-  if (typeof scheduleRendererInit === 'function') scheduleRendererInit();
+  if (!introFinished) {
+    introFinished = true;
+    if (typeof scheduleRendererInit === 'function') scheduleRendererInit();
+  }
 }
 
 function setupIntroVideo() {
@@ -79,19 +87,31 @@ function setupIntroVideo() {
   video.muted = true;
   video.defaultMuted = true;
 
-  function freezeAtEnd() {
-    if (introFinished) return;
-    try {
-      if (Number.isFinite(video.duration) && video.duration > 0.2) {
-        video.currentTime = Math.max(0, video.duration - 0.05);
-      }
-      video.pause();
-    } catch {}
+  let logoShown = false;
+  function showButtonOnLogo() {
+    if (logoShown) return;
+    logoShown = true;
     activateEnterButton();
   }
 
+  let videoFrozen = false;
+  function freezeAtEnd() {
+    if (videoFrozen) return;
+    videoFrozen = true;
+    try {
+      video.pause();
+    } catch {}
+    showButtonOnLogo();
+  }
+
   video.addEventListener('timeupdate', () => {
-    if (Number.isFinite(video.duration) && video.duration > 0.5 && video.currentTime >= video.duration - 0.08) {
+    // LMSK LifeRush title logo slams onto screen around 7.2s
+    if (video.currentTime >= 7.2) {
+      showButtonOnLogo();
+    }
+    // Freeze cleanly at 9.2s where the logo and runner are completely stationary and vibrant
+    // Crucial: never seek or let video reach 10.0s where browser decoders unload frames to black
+    if (video.currentTime >= 9.2) {
       freezeAtEnd();
     }
   });
@@ -110,7 +130,10 @@ function setupIntroVideo() {
     video.addEventListener('canplay', tryPlay, { once: true });
     tryPlay();
   }
-  setTimeout(() => { if (!introFinished) activateEnterButton(); }, 5500);
+  // Graceful safety timeout: if video stalls or cannot play, show button after 8.5 seconds
+  setTimeout(() => {
+    if (!introFinished) activateEnterButton();
+  }, 8500);
 }
 setupIntroVideo();
 
@@ -123,7 +146,7 @@ const COLLEGE_UNLOCK_DISTANCE = 10000;
 const COLLEGE_UNLOCK_COINS = 20000;
 const CHARACTER_ROSTER = [
   { id: 'male', name: 'SCHOOL BOY', outfit: 'School Uniform · School Campus', map: 'school', gender: 'male', lockedByCollege: false },
-  { id: 'female', name: 'SCHOOL GIRL', outfit: 'School Uniform · School Campus', map: 'school', gender: 'female', lockedByCollege: false },
+  { id: 'female', name: 'SCHOOL GIRL', outfit: 'Original Outfit · School Campus', map: 'school', gender: 'female', lockedByCollege: false },
   { id: 'college-male', name: 'COLLEGE BOY', outfit: 'Casual Outfit · College Campus', map: 'college', gender: 'male', lockedByCollege: true },
   { id: 'college-woman', name: 'COLLEGE WOMAN', outfit: 'Blue Style · College Campus', map: 'college', gender: 'female', lockedByCollege: true },
   { id: 'college-man', name: 'COLLEGE MAN', outfit: 'Jacket Style · College Campus', map: 'college', gender: 'male', lockedByCollege: true }
@@ -134,10 +157,25 @@ let s=fresh(),best=0,totalCoins=0,collegeDistDone=false,collegeCoinsDone=false,
     equippedCharId='male',character='male',selectedMap='school',carouselIndex=0,currentHub='home',
     sound=true,prev=0,w=600,h=700;
 
-const isDistGoalMet = () => collegeDistDone || best >= COLLEGE_UNLOCK_DISTANCE;
-const isCoinsGoalMet = () => collegeCoinsDone || totalCoins >= COLLEGE_UNLOCK_COINS;
-const isCollegeUnlocked = () => isDistGoalMet() && isCoinsGoalMet();
-const isCharUnlocked = entry => !entry?.lockedByCollege || isCollegeUnlocked();
+export const isLocalTest = typeof window !== 'undefined' && Boolean(
+  (window.location?.hostname === 'localhost' ||
+   window.location?.hostname === '127.0.0.1' ||
+   window.location?.hostname === '[::1]' ||
+   window.location?.hostname?.startsWith('192.168.') ||
+   window.location?.hostname?.startsWith('10.') ||
+   window.location?.port === '3000' ||
+   window.location?.port === '8080' ||
+   window.location?.port === '5173' ||
+   window.location?.protocol === 'file:' ||
+   window.location?.search?.includes('unlock=all') ||
+   window.location?.search?.includes('test=1')) &&
+  !window.Capacitor?.isNativePlatform?.()
+);
+
+const isDistGoalMet = () => isLocalTest || collegeDistDone || best >= COLLEGE_UNLOCK_DISTANCE;
+const isCoinsGoalMet = () => isLocalTest || collegeCoinsDone || totalCoins >= COLLEGE_UNLOCK_COINS;
+const isCollegeUnlocked = () => isLocalTest || (isDistGoalMet() && isCoinsGoalMet());
+const isCharUnlocked = entry => isLocalTest || !entry?.lockedByCollege || isCollegeUnlocked();
 
 try{
   best=Number(localStorage.getItem('runverse-best'))||0;
@@ -150,14 +188,25 @@ try{
       if (Number.isSafeInteger(stored?.[key]) && stored[key] >= 0) profile[key] = stored[key];
     }
   } catch {}
+  if (isLocalTest) {
+    profile.itParkUnlocked = true;
+  }
   const savedChar=localStorage.getItem('runverse-character')||'male';
-  const savedMap=parkOpen(profile) && localStorage.getItem('runverse-map')==='itpark' ? 'itpark' : localStorage.getItem('runverse-map')==='college'?'college':'school';
-  if (!isCollegeUnlocked()) {
+  const rawSavedMap = localStorage.getItem('runverse-map');
+  const canAccessPark = isLocalTest || parkOpen(profile);
+  const canAccessCollege = isCollegeUnlocked();
+  let savedMap = 'school';
+  if (rawSavedMap === 'itpark' && canAccessPark) savedMap = 'itpark';
+  else if (rawSavedMap === 'college' && canAccessCollege) savedMap = 'college';
+  else if (rawSavedMap === 'school') savedMap = 'school';
+  else if (canAccessCollege) savedMap = 'college';
+
+  if (!canAccessCollege && !isLocalTest) {
     selectedMap = 'school';
     equippedCharId = (savedChar === 'female' || savedChar === 'college-woman') ? 'female' : 'male';
   } else {
     selectedMap = savedMap;
-    if (CHARACTER_ROSTER.some(c => c.id === savedChar)) {
+    if (CHARACTER_ROSTER.some(c => c.id === savedChar) && (isLocalTest || isCharUnlocked(CHARACTER_ROSTER.find(c => c.id === savedChar)))) {
       equippedCharId = savedChar;
     } else {
       equippedCharId = savedChar === 'female'
@@ -339,7 +388,7 @@ function updateUnlockUI() {
       (next ? ' · Next: ' + next.name + ' (Lv ' + next.level + ')' : ' · All powers open');
   }
   const park = document.querySelector('[data-map="itpark"]');
-  const open = parkOpen(profile);
+  const open = isLocalTest || parkOpen(profile);
   if (park) {
     park.classList.toggle('is-locked',!open);
     park.setAttribute('aria-disabled',String(!open));
@@ -375,7 +424,11 @@ function updateUnlockUI() {
   if ($('park-checklist')) {
     $('park-checklist').hidden = open;
   }
-  if ($('char-unlock-checklist')) $('char-unlock-checklist').innerHTML = checklistHtml;
+  if ($('char-unlock-checklist')) {
+    $('char-unlock-checklist').innerHTML = checklistHtml;
+    const entry = CHARACTER_ROSTER[carouselIndex] || CHARACTER_ROSTER[0];
+    $('char-unlock-checklist').hidden = !entry.lockedByCollege || isCharUnlocked(entry);
+  }
 }
 
 function syncMapHeaderUI() {
@@ -385,7 +438,7 @@ function syncMapHeaderUI() {
     button.setAttribute('aria-pressed',String(active));
   });
   const school=selectedMap==='school';
-  if($('hub-map-name')) $('hub-map-name').textContent=school?'SCHOOL CAMPUS':'COLLEGE CAMPUS';
+  if($('hub-map-name')) $('hub-map-name').textContent=selectedMap==='itpark'?'IT PARK':school?'SCHOOL CAMPUS':'COLLEGE CAMPUS';
   if(selectedMap==='itpark' && $('hub-map-name')) $('hub-map-name').textContent='IT PARK';
   if($('hub-outfit-name')) $('hub-outfit-name').textContent=school?'School uniform':'Casual outfit';
   const loc = document.querySelector('.hud-top-bar .location');
@@ -433,7 +486,7 @@ function updateCarouselUI() {
   if ($('char-side-prev-lock')) $('char-side-prev-lock').hidden = isCharUnlocked(prevEntry);
   if ($('char-side-next-lock')) $('char-side-next-lock').hidden = isCharUnlocked(nextEntry);
   const checklist = $('char-unlock-checklist');
-  if (checklist) checklist.hidden = !entry.lockedByCollege;
+  if (checklist) checklist.hidden = !entry.lockedByCollege || unlocked;
   updateUnlockUI();
 }
 
@@ -441,15 +494,9 @@ let activePreviewCharId = equippedCharId;
 function scheduleCarouselPreview() {
   clearTimeout(carouselSwapTimer);
   const targetId = CHARACTER_ROSTER[carouselIndex]?.id || equippedCharId;
+  activePreviewCharId = targetId;
   menuNeedsFrame = true;
-  if (draw?.isLoaded?.(targetId)) {
-    activePreviewCharId = targetId;
-    return;
-  }
-  carouselSwapTimer = setTimeout(() => {
-    activePreviewCharId = targetId;
-    menuNeedsFrame = true;
-  }, 120);
+  draw?.preload?.(targetId);
 }
 function startHeroPreloader() {
   if (preloaderStarted) return;
@@ -475,7 +522,9 @@ function selectUnlockedCharacter(id) {
   equippedCharId = entry.id;
   activePreviewCharId = entry.id;
   character = entry.gender;
-  if (selectedMap !== 'itpark' || entry.map === 'school') selectedMap = entry.map;
+  if (!isLocalTest) {
+    if (selectedMap !== 'itpark' || entry.map === 'school') selectedMap = entry.map;
+  }
   s.map = selectedMap;
   carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === entry.id));
   syncMapHeaderUI();
@@ -521,7 +570,7 @@ if ($('char-equip-btn')) {
 }
 
 function selectMap(map, fromUser = false){
-  if (map === 'itpark' && !parkOpen(profile)) { pulseChecklist($('park-checklist')); return; }
+  if (map === 'itpark' && !(isLocalTest || parkOpen(profile))) { pulseChecklist($('park-checklist')); return; }
   if (map === 'college' && !isCollegeUnlocked()) {
     if (fromUser) {
       pulseChecklist($('map-unlock-checklist'));
@@ -531,13 +580,15 @@ function selectMap(map, fromUser = false){
   }
   selectedMap=map==='itpark'?'itpark':map==='college'?'college':'school';
   s.map=selectedMap;
-  if (selectedMap !== 'school') {
-    if (!equippedCharId.startsWith('college-')) {
-      equippedCharId = character === 'female' ? 'college-woman' : 'college-man';
-    }
-  } else {
-    if (equippedCharId.startsWith('college-')) {
-      equippedCharId = character === 'female' ? 'female' : 'male';
+  if (!isLocalTest) {
+    if (selectedMap !== 'school') {
+      if (!equippedCharId.startsWith('college-')) {
+        equippedCharId = character === 'female' ? 'college-woman' : 'college-man';
+      }
+    } else {
+      if (equippedCharId.startsWith('college-')) {
+        equippedCharId = character === 'female' ? 'female' : 'male';
+      }
     }
   }
   carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
@@ -551,7 +602,11 @@ syncMapHeaderUI();
 updateCarouselUI();
 document.querySelectorAll('[data-map]').forEach(button=>button.onclick=()=>{
   const before = selectedMap;
-  selectMap(button.dataset.map, true);
+  const targetMap = button.dataset.map;
+  selectMap(targetMap, true);
+  s.map = targetMap;
+  s.previewRain = (targetMap === 'college');
+  menuNeedsFrame = true;
   if (selectedMap !== before) triggerSwag();
 });
 
@@ -577,6 +632,8 @@ function showHub(page='home'){
   } else if (next === 'home') {
     menuNeedsFrame = true;
   } else if (next === 'maps') {
+    s.previewRain = (s.map === 'college');
+    menuNeedsFrame = true;
     updateUnlockUI();
   }
 }
@@ -658,31 +715,37 @@ if ($('btn-edit-player-name')) {
 }
 
 let enteredFromSplash = false;
+function enterGameFromSplash() {
+  if (enteredFromSplash) return;
+  enteredFromSplash = true;
+  const btn = $('btn-enter');
+  btn?.classList.add('is-pressed');
+  playEnterSound(sound);
+  effects.setEnabled(sound);
+  effects.unlock();
+  try {
+    const v = $('intro-video');
+    if (v) v.pause();
+  } catch {}
+  setScreenMode('select');
+  showHub('home');
+  if (!playerName) {
+    showNameModal();
+  }
+  if (!rendererStarted) {
+    ensureRenderer();
+  }
+  if (sound) setTimeout(() => effects.startBgm?.(), 140);
+}
 if($('btn-enter')){
-  $('btn-enter').onclick=()=>{
-    if (enteredFromSplash) return;
-    enteredFromSplash = true;
-    const btn = $('btn-enter');
-    btn?.classList.add('is-pressed');
-    playEnterSound(sound);
-    effects.setEnabled(sound);
-    effects.unlock();
-    try {
-      const v = $('intro-video');
-      if (v) v.pause();
-    } catch {}
-    setTimeout(() => {
-      setScreenMode('select');
-      showHub('home');
-      if (!playerName) {
-        showNameModal();
-      }
-      if (!rendererStarted) {
-        setTimeout(ensureRenderer, 20);
-      }
-      if (sound) setTimeout(() => effects.startBgm?.(), 140);
-    }, 85);
-  };
+  $('btn-enter').onclick = enterGameFromSplash;
+}
+if($('splash-screen')){
+  $('splash-screen').addEventListener('click', (e) => {
+    if (e.target?.closest?.('#sound')) return;
+    if (!introFinished) return;
+    enterGameFromSplash();
+  });
 }
 
 const UPGRADE_DEFS = [
@@ -926,7 +989,7 @@ function beginRun(chosen){
   s=fresh();
   s.level = playerLevel(profile.xp);
   equipPowers(s,chosen);
-  s.enableForks = selectedMap === 'school' || selectedMap === 'itpark';
+  s.enableForks = selectedMap === 'itpark';
   s.map=selectedMap;
   s.turnTime = 0.65;
   s.mode = 'intro';
@@ -961,7 +1024,8 @@ function pause(){
   if($('btn-revive')) $('btn-revive').hidden = true;
   if($('btn-share-score')) $('btn-share-score').hidden = true;
   setScreenMode('gameover');
-  show('Take a breath.','Your school run will be right here.','RESUME RUN','PAUSED');
+  const mapName = selectedMap === 'itpark' ? 'IT Park' : selectedMap === 'college' ? 'College' : 'School';
+  show('Take a breath.', `Your ${mapName} run will be right here.`, 'RESUME RUN', 'PAUSED');
 }
 
 function resume(){
@@ -979,7 +1043,16 @@ function show(title,message,button,tag){
   $('tag').textContent=tag;
   if($('selection')) $('selection').hidden=true;
   if($('restart')) $('restart').hidden=s.mode!=='paused';
-  $('tip').textContent='Each new run starts from zero.';
+  if($('btn-change-char')) {
+    if(s.mode==='paused'){
+      $('btn-change-char').innerHTML=IC_EXIT+' EXIT GAME';
+      $('btn-change-char').setAttribute('aria-label', 'Exit game to main menu');
+    } else {
+      $('btn-change-char').innerHTML=IC_CHAR+' CHARACTER';
+      $('btn-change-char').setAttribute('aria-label', 'Change character');
+    }
+  }
+  $('tip').textContent=s.mode==='paused'?'Paused. Resume run or exit to menu.':'Each new run starts from zero.';
   updatePlayerNameDisplays(playerName);
   $('overlay').hidden=false;
 }
@@ -1102,6 +1175,7 @@ if($('btn-play-again')) $('btn-play-again').onclick=()=>{
 };
 if($('restart')) $('restart').onclick=start;
 if($('btn-change-char')) $('btn-change-char').onclick=()=>{
+  const wasPaused = s.mode === 'paused';
   s=fresh();
   s.map=selectedMap;
   s.mode='ready';
@@ -1113,7 +1187,7 @@ if($('btn-change-char')) $('btn-change-char').onclick=()=>{
   syncMapHeaderUI();
   updateCarouselUI();
   setScreenMode('select');
-  showHub('characters');
+  showHub(wasPaused ? 'home' : 'characters');
 };
 $('pause').onclick=()=>s.mode==='paused'?resume():pause();
 
@@ -1171,7 +1245,19 @@ document.addEventListener('visibilitychange',()=>{
 function tick(t) {
   const dt = prev ? Math.min(0.1, (t-prev)/1000) : 0;
   prev = t;
-  if (game.classList.contains('mode-splash') || !draw) return;
+  if (!draw) return;
+  if (game.classList.contains('mode-splash')) {
+    if (introFinished && !warmedFirstFrame) {
+      try {
+        const warmupStatus = draw(s, equippedCharId, 0.016);
+        if (warmupStatus === 'ready') {
+          warmedFirstFrame = true;
+          if (!assetsReady) onAllAssetsReady();
+        }
+      } catch {}
+    }
+    return;
+  }
   const old = s.mode, firstHitBefore = s.firstHitAt, captureBefore = s.capture, hitBefore = s.hit;
   const distanceBefore = s.distance, coinsBefore = s.coins;
   
@@ -1189,7 +1275,7 @@ function tick(t) {
 
   step(s, dt);
   powerControls.update();
-  try { effects.update(s); } catch (err) { if (!loopErrorLogged) { loopErrorLogged = true; console.error('Sound update error:', err); } }
+  try { effects.update(s, character); } catch (err) { if (!loopErrorLogged) { loopErrorLogged = true; console.error('Sound update error:', err); } }
   
   if(old==='running' && s.mode==='falling') {
     effects.play('hit', s.cause, character);
@@ -1357,6 +1443,20 @@ function tick(t) {
     lastHudBest = best;
     $('best').textContent = best+' m';
   }
+
+  // Dynamic Location HUD update matching active branch & map
+  const locEl = document.querySelector('.hud-top-bar .location');
+  if (locEl) {
+    let locText = selectedMap === 'itpark' ? (IC_ITPARK + ' IT PARK') : (selectedMap === 'school' ? (IC_SCHOOL + ' RUNVERSE SCHOOL') : (IC_COLLEGE + ' RUNVERSE COLLEGE'));
+    if (selectedMap === 'itpark') {
+      if (s.activeBranch === 'skybridge') locText = IC_ITPARK + ' SKY BRIDGE';
+      else if (s.activeBranch === 'underpass') locText = IC_ITPARK + ' METRO TUNNEL';
+    }
+    if (locEl._lastText !== locText) {
+      locEl._lastText = locText;
+      locEl.innerHTML = locText;
+    }
+  }
   
   // Powerup HUD indicators
   const magActive = s.magnet > 0;
@@ -1421,12 +1521,16 @@ function tick(t) {
     if (cdSec >= 0) $('countdown').textContent = cdSec;
   }
 
-  // Pause 3D WebGL rendering completely while static overlay pages (Maps/Settings/Name/Shop modals) are open
+  // Pause 3D WebGL rendering completely while static modal dialogs (Name/Shop modals) are open
   // (after warming up 1 ready frame behind the name modal so clicking Start Adventure is 0ms instant)
-  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'maps' || currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden) || (shopModalEl && !shopModalEl.hidden));
+  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden) || (shopModalEl && !shopModalEl.hidden));
   if (staticOverlayOpen && assetsReady && warmedFirstFrame) {
     if (!menuNeedsFrame) return;
     menuNeedsFrame = false;
+  }
+  if (s.mode === 'ready') {
+    s.time = (s.time || 0) + (dt || 0.016);
+    s.previewRain = (s.map === 'college');
   }
 
   let status = 'ready';
@@ -1453,7 +1557,7 @@ function tick(t) {
     warmedFirstFrame = true;
     if (!assetsReady) onAllAssetsReady();
   }
-  const showCharBlur = (s.mode === 'ready' && !usingLiteRenderer && status !== 'ready');
+  const showCharBlur = (s.mode === 'ready' && !usingLiteRenderer && status !== 'ready' && currentHub === 'characters');
   const showCharErr = showCharBlur && status === 'error';
   if (showCharBlur !== lastShowCharBlur || showCharErr !== lastShowCharErr) {
     lastShowCharBlur = showCharBlur;

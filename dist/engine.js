@@ -146,6 +146,7 @@ export function busSurface(s){
  let surface=0;
  for(const bus of s.items){
   if(bus.type!=='bus'||((bus.encounter||bus.roofRide)&&!bus.started))continue;
+  if(bus.collegeKind==='scooty'||bus.collegeKind==='ducati')continue;
   if(Math.abs(s.x-bus.lane)*2.2>.94||s.distance<bus.z||s.distance>=bus.z+bus.length)continue;
   surface=Math.max(surface,bus.roof||2.8);
  }
@@ -265,8 +266,31 @@ export function hits(s, obstacle) {
   if (Math.abs(s.x - lane) > .48) return false;
   if (obstacle.type === 'jump') return height(s) < 1.05;
   if (obstacle.type === 'slide') return !(s.slide || s.roll);
-  if(obstacle.type==='bus')return height(s)<(obstacle.roof||2.8)-.12;
-  return obstacle.type === 'block' || obstacle.type === 'sideVehicle';
+  if(obstacle.type==='bus') {
+    const isTwoWheeler = obstacle.collegeKind === 'scooty' || obstacle.collegeKind === 'ducati';
+    const clearH = isTwoWheeler ? 0.90 : (obstacle.roof || 2.8) - .12;
+    return height(s) < clearH;
+  }
+  if(obstacle.type==='sideVehicle') {
+    const isTwoWheeler = obstacle.variant === 'scooty' || obstacle.variant === 'bike';
+    if (isTwoWheeler) return height(s) < 0.90;
+    return true;
+  }
+  if(obstacle.type==='block') {
+    if(s.map==='college') {
+      const blockKind = Math.abs(Math.floor(obstacle.z) + obstacle.lane) % 7;
+      if (blockKind >= 3) {
+        return height(s) < 0.75 && !(s.jump > 0 && (JUMP_DURATION - s.jump) < 0.25);
+      }
+    } else if(s.map==='itpark') {
+      const bKind = Math.abs(Math.floor(obstacle.z) + obstacle.lane) % 7;
+      if (bKind === 6) {
+        return height(s) < 0.75 && !(s.jump > 0 && (JUMP_DURATION - s.jump) < 0.25);
+      }
+    }
+    return true;
+  }
+  return false;
 }
 
 function advanceDrop(s, dt) {
@@ -408,11 +432,14 @@ function predictedBlockedLanesAt(s, targetZ, reactionSec = 0.95) {
   return blocked;
 }
 
-function enforceOpenEscapeLane(s) {
+const FAR_ESCAPE_HORIZONS = [8.5, 7.2, 6.0, 4.8, 3.6, 2.5, 1.45, 1.15, 0.85, 0.55];
+const NEAR_ESCAPE_HORIZONS = [1.45, 1.15, 0.85, 0.55];
+function enforceOpenEscapeLane(s, checkFar = false) {
   if (s.next >= 90000) return;
   const speed = Math.max(24, s.speed || 28);
-  // Check far horizon FIRST (220..340m out in horizon fog) so 3-lane conflicts clear BEFORE the player ever sees them!
-  for (const t of [8.5, 7.2, 6.0, 4.8, 3.6, 2.5, 1.45, 1.15, 0.85, 0.55]) {
+  const horizons = checkFar ? FAR_ESCAPE_HORIZONS : NEAR_ESCAPE_HORIZONS;
+  // Check far horizon when spawning / periodically so 3-lane conflicts clear BEFORE the player ever sees them!
+  for (const t of horizons) {
     const targetZ = s.distance + speed * t;
     const padZ = Math.max(9, speed * 0.38);
     const vanLanes = new Set();
@@ -569,21 +596,38 @@ export function step(s, dt, random = Math.random) {
     s.comboTimer = Math.max(0, s.comboTimer - dt);
     if (s.comboTimer === 0) s.combo = 1;
   }
+  let spawnedFar = false;
   while (s.distance + 340 > s.next) {
+    spawnedFar = true;
     const index=s.trafficIndex++;
     const newItems=trafficPattern(s.next,index,s.runSeed,s.map);
     const pickup = newItems.find(item => item.type !== 'coin' && PICKUP_TYPES.has(item.type));
-    if (pickup) pickup.type = runPickup(s.level,s.runSeed,index,s.featured);
+    if (pickup) {
+      if (s.slots) {
+        // Collectible map pickups: alternate between magnet and shield along the running route in all maps
+        pickup.type = (index % 2 === 0) ? 'magnet' : 'shield';
+      } else {
+        pickup.type = runPickup(s.level,s.runSeed,index,s.featured);
+      }
+    }
     const safeLane=newItems.find(o=>o.type==='coin')?.lane??0;
     if(!s.runSeed)for(let i=0;i<3;i++)newItems.push({z:s.next+28+i*4,lane:safeLane,type:'coin',done:false});
     if(!s.runSeed&&s.trafficIndex%4===1) newItems.push({z:s.next+52,lane:safeLane,type:'magnet',done:false});
     else if(!s.runSeed&&s.trafficIndex%4===3) newItems.push({z:s.next+52,lane:safeLane,type:'shield',done:false});
-    const pushed = s.slots ? newItems.filter(item => item.type === 'coin' || !PICKUP_TYPES.has(item.type)) : newItems;
+    const pushed = s.slots ? newItems.filter(item => item.type === 'coin' || item.type === 'magnet' || item.type === 'shield' || !PICKUP_TYPES.has(item.type)) : newItems;
     if (s.activeBranch === 'underpass') {
       for (const o of pushed) {
         if (o.type === 'bus' && o.z >= s.branchStart && o.z < s.branchEnd) {
           o.metro = true;
           if (!o.roofRide) { o.length = Math.max(o.length || 12, 12); o.roof = Math.max(o.roof || 2.8, 2.8); }
+        } else if (o.type === 'sideVehicle' && o.z >= s.branchStart && o.z <= s.branchEnd) {
+          o.type = 'bus'; o.metro = true; o.velocity = 24; o.length = 18; o.roof = 2.6; o.activate = o.z - 260; o.started = true; o.encounter = false;
+        }
+      }
+    } else if (s.activeBranch === 'skybridge') {
+      for (const o of pushed) {
+        if (o.type === 'sideVehicle' && o.z >= s.branchStart && o.z <= s.branchEnd) {
+          o.type = 'bus'; o.collegeKind = o.variant || 'porsche'; o.velocity = 18; o.length = 4.6; o.roof = 1.45; o.activate = o.z - 260; o.started = true; o.encounter = false;
         }
       }
     }
@@ -596,6 +640,11 @@ export function step(s, dt, random = Math.random) {
     }
     while (s.distance + 340 >= s.nextMidObstacle && s.nextMidObstacle < 5000) {
       const targetZ = s.nextMidObstacle;
+      const fPlan = forkPlanAt(targetZ);
+      if (Math.abs(targetZ - fPlan.start) <= 26) {
+        s.nextMidObstacle += 75;
+        continue;
+      }
       const unsafeSegLanes = new Set([s.lane, Math.round(s.x)]);
       const baseIdx = Math.max(0, s.trafficIndex - 2);
       let safeWindow = true;
@@ -627,6 +676,11 @@ export function step(s, dt, random = Math.random) {
     }
     while (s.distance + 340 >= s.nextLaneObstacle) {
       const targetZ = s.nextLaneObstacle;
+      const fPlan = forkPlanAt(targetZ);
+      if (Math.abs(targetZ - fPlan.start) <= 26) {
+        s.nextLaneObstacle += 80;
+        continue;
+      }
       const targetLane = s.lane;
       const vanHitCheck = vanSurface(targetZ, targetLane, s.runSeed) > 0;
       if (!vanHitCheck) {
@@ -660,8 +714,8 @@ export function step(s, dt, random = Math.random) {
                 metro: inCave || undefined,
                 velocity: 18,
                 activate: targetZ - 30,
-                length: inCave ? 12 : (isCol ? (cKind==='semi'?10.5:(cKind==='scooty'||cKind==='ducati')?2.6:4.6) : 10),
-                roof: inCave ? 2.8 : (isCol ? (cKind==='semi'?2.8:(cKind==='scooty'||cKind==='ducati')?1.65:1.45) : 2.8),
+                length: inCave ? 12 : (isCol ? (cKind==='semi'?10.5:cKind==='scooty'?2.2:cKind==='ducati'?2.4:4.6) : 10),
+                roof: inCave ? 2.8 : (isCol ? (cKind==='semi'?2.8:cKind==='scooty'?0.95:cKind==='ducati'?1.05:1.45) : 2.8),
                 done: false,
               });
             } else {
@@ -697,13 +751,25 @@ export function step(s, dt, random = Math.random) {
   for(const item of s.items){
     if(item.roofRide&&!item.started&&s.distance>=item.activate){item.started=true;item.velocity=-s.speed*.35;}
     if(item.encounter&&!item.started&&s.distance>=item.trigger){
-      item.started=true;item.startedAt=s.time;
-      item.z=s.distance+(s.speed+(item.velocity||0))*1.45;
-      s.warning={until:s.time+1.45,side:item.type==='sideVehicle'?item.lane:s.warning?.side};
+      if (s.activeBranch === 'skybridge' && item.z >= (s.branchStart || 0) - 10 && item.z <= (s.branchEnd || 0) + 10) {
+        item.type = 'bus';
+        item.collegeKind = item.variant || 'porsche';
+        item.velocity = 18;
+        item.length = 4.6;
+        item.roof = 1.45;
+        item.started = true;
+        item.encounter = false;
+      } else {
+        item.started=true;item.startedAt=s.time;
+        item.z=s.distance+(s.speed+(item.velocity||0))*1.45;
+        s.warning={until:s.time+1.45,side:item.type==='sideVehicle'?item.lane:s.warning?.side};
+      }
     }
     if(item.velocity && ((item.encounter||item.roofRide)?item.started:s.distance>=item.activate))item.z-=item.velocity*dt*trafficRate;
   }
-  enforceOpenEscapeLane(s);
+  const farCheckDue = spawnedFar || !s.lastFarEscape || (s.time - s.lastFarEscape) >= 0.25;
+  if (farCheckDue) s.lastFarEscape = s.time;
+  enforceOpenEscapeLane(s, farCheckDue);
 
   collectMagnetCoins(s);
   updateElevation(s, dt);
@@ -729,7 +795,11 @@ export function step(s, dt, random = Math.random) {
     if(obstacle.encounter&&!obstacle.started)continue;
     if(obstacle.type==='bus'||obstacle.type==='sideVehicle') {
       const relative=obstacle.z-s.distance;
-      if(!obstacle.done && relative<=1.1 && relative>=-obstacle.length && hits(s,obstacle)) {
+      const isTwoWheeler = obstacle.collegeKind === 'scooty' || obstacle.collegeKind === 'ducati' || obstacle.variant === 'scooty' || obstacle.variant === 'bike';
+      if (isTwoWheeler && !obstacle.jumpCleared && relative <= 0.8 && relative >= -obstacle.length && !hits(s, obstacle)) {
+        obstacle.jumpCleared = true;
+      }
+      if(!obstacle.done && !obstacle.jumpCleared && relative<=1.1 && relative>=-obstacle.length && hits(s,obstacle)) {
         if (s.nitro > 0) {
           obstacle.done = true;
           awardNearMiss(s, 'nitro');

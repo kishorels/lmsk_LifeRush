@@ -1,4 +1,4 @@
-import { AnimationClip, AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide, VectorKeyframeTrack, QuaternionKeyframeTrack, Group, Mesh, BufferGeometry, Float32BufferAttribute } from './vendor/three.module.js';
+import { AnimationClip, AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide, VectorKeyframeTrack, QuaternionKeyframeTrack, Group, Mesh, BufferGeometry, Float32BufferAttribute, TorusGeometry, PlaneGeometry, BoxGeometry } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { SWEEP_SECONDS, JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
 import {saveGestureBindPose} from './signature-gesture.js';
@@ -81,8 +81,108 @@ function createSchoolBadgeTexture(CanvasTextureClass) {
 let sharedMaleClipsPromise = null;
 let sharedInjuredClipsPromise = null;
 let sharedCollegeIdlePromise = null;
+let sharedFemaleCollegeAnimsPromise = null;
 let sharedSchoolBadgeTex = null;
+let sharedBackEmbroiderTex = null;
 const isTouchDevice = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+
+function createBackEmbroideryTexture(CanvasTextureClass) {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 340; // 1.5:1 ratio matching official lmsk-logo.jpg (1024 x 682)
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const r = 26;
+
+  function drawPatch(logoImg = null) {
+    ctx.clearRect(0, 0, w, h);
+
+    // Outer embroidered fabric backing (athletic rounded patch)
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(6, 6, w - 12, h - 12, r);
+    ctx.fillStyle = '#060d1a';
+    ctx.fill();
+
+    // Metallic gold embroidery outer stitched rim
+    ctx.strokeStyle = '#b38728';
+    ctx.lineWidth = 8;
+    ctx.stroke();
+
+    // Golden running stitch dashes
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 3.5;
+    ctx.setLineDash([9, 6]);
+    ctx.beginPath();
+    ctx.roundRect(10, 10, w - 20, h - 20, r - 4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    if (logoImg && logoImg.complete && logoImg.naturalWidth > 0) {
+      // Draw actual official LMSK LifeRush logo inside the embroidered patch
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(15, 15, w - 30, h - 30, r - 8);
+      ctx.clip();
+      ctx.drawImage(logoImg, 15, 15, w - 30, h - 30);
+
+      // Inner golden border trim
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.65)';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // Crisp athletic embroidery fallback while image loads
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const goldGrad = ctx.createLinearGradient(0, 60, 0, 180);
+      goldGrad.addColorStop(0, '#fff494');
+      goldGrad.addColorStop(0.4, '#ffd700');
+      goldGrad.addColorStop(0.8, '#f59e0b');
+      goldGrad.addColorStop(1, '#b45309');
+
+      ctx.font = '900 84px "Segoe UI", "Arial Black", Impact, sans-serif';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#78350f';
+      ctx.strokeText('LMSK', w / 2, 115);
+      ctx.fillStyle = goldGrad;
+      ctx.fillText('LMSK', w / 2, 115);
+
+      ctx.font = '900 44px "Segoe UI", Arial, sans-serif';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#0369a1';
+      ctx.strokeText('— LifeRush —', w / 2, 225);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('— LifeRush —', w / 2, 225);
+      ctx.restore();
+    }
+  }
+
+  drawPatch(null);
+
+  const tex = new CanvasTextureClass(canvas);
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+
+  if (typeof Image !== 'undefined') {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      drawPatch(img);
+      tex.needsUpdate = true;
+    };
+    img.src = './assets/lmsk-logo.jpg';
+  }
+
+  return tex;
+}
 
 function loadInjuredRunData() {
   if (!sharedInjuredClipsPromise) {
@@ -106,15 +206,28 @@ function loadCollegeIdleData() {
   return sharedCollegeIdlePromise;
 }
 
+function loadFemaleCollegeAnims() {
+  if (!sharedFemaleCollegeAnimsPromise) {
+    sharedFemaleCollegeAnimsPromise = typeof fetch === 'function'
+      ? fetch(new URL('./assets/female-college-anims.json?v=3.2.7', import.meta.url).href)
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null)
+      : Promise.resolve(null);
+  }
+  return sharedFemaleCollegeAnimsPromise;
+}
+
 export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = false) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
+  let skirtMeshes = [], clothL = 0.06, clothR = 0.06, clothVelL = 0, clothVelR = 0, stridePhase = 0, scarfMeshes = [];
   function load() {
     const assets = {
       male: './assets/runverse-schoolboy.glb?v=2.2-opt',
-      female: './assets/schoolgirl.glb?v=uniform-3-opt',
+      female: './assets/casual-schoolgirl.glb?v=3.2.7',
       'college-male': './assets/runverse-runner-v6.glb',
-      'college-woman': './assets/college-woman.glb?v=1',
-      'college-man': './assets/college-man.glb?v=1'
+      'college-woman': './assets/college-woman.glb?v=3.2.5',
+      'college-man': './assets/college-man.glb?v=1',
+      'aged-elder': './assets/aged-elder.glb?v=4'
     };
     const loader = new GLTFLoader();
     const progress = xhr => { if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total); };
@@ -126,7 +239,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
       ? (sharedMaleClipsPromise || (sharedMaleClipsPromise = loader.loadAsync(new URL(assets.male, import.meta.url).href)))
       : Promise.resolve(null);
     const collegeIdlePromise = selected === 'college-male' ? loadCollegeIdleData() : Promise.resolve(null);
-    Promise.all([main, schoolMotion, loadInjuredRunData(), collegeIdlePromise]).then(([gltf, schoolGltf, injuredData, collegeIdleData]) => {
+    const femaleCollegeAnimsPromise = selected === 'female' ? loadFemaleCollegeAnims() : Promise.resolve(null);
+    Promise.all([main, schoolMotion, loadInjuredRunData(), collegeIdlePromise, femaleCollegeAnimsPromise]).then(([gltf, schoolGltf, injuredData, collegeIdleData, femaleCollegeAnims]) => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall', 'ShoulderSweep'];
     if (schoolGltf) for (const clip of schoolGltf.animations) if (!clips.has(clip.name)) clips.set(clip.name, clip);
@@ -135,6 +249,26 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
         ? new VectorKeyframeTrack(t.name, t.times, t.values)
         : new QuaternionKeyframeTrack(t.name, t.times, t.values));
       clips.set('Idle', new AnimationClip('Idle', collegeIdleData.duration, idleTracks));
+    }
+    // Retarget the exact College woman animation set (Neutral Idle + athletic Run/Jump/Slide/Roll/etc.) onto the original schoolgirl model!
+    if (selected === 'female' && femaleCollegeAnims?.clips) {
+      const hasColon = Boolean(gltf.scene?.getObjectByName?.('mixamorig:Hips'));
+      for (const nm of names) {
+        const entry = femaleCollegeAnims.clips[nm];
+        if (!entry?.tracks?.length) continue;
+        const tracks = entry.tracks.map(t => {
+          let trackName = t.name;
+          if (hasColon && trackName.startsWith('mixamorig') && !trackName.startsWith('mixamorig:')) {
+            trackName = trackName.replace(/^mixamorig/, 'mixamorig:');
+          } else if (!hasColon && trackName.startsWith('mixamorig:')) {
+            trackName = trackName.replace(/^mixamorig:/, 'mixamorig');
+          }
+          return t.type === 'vector'
+            ? new VectorKeyframeTrack(trackName, t.times, t.values)
+            : new QuaternionKeyframeTrack(trackName, t.times, t.values);
+        });
+        clips.set(nm, new AnimationClip(nm, entry.duration, tracks));
+      }
     }
     if (names.some(name => !clips.has(name))) { render.failed=true; return; }
 
@@ -197,8 +331,14 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
       }
     });
     if (selected === 'female') {
+      skirtMeshes = [];
       let crownMesh = null;
-      model.traverse(o => { if (!crownMesh && o.isMesh && /swept_crown|Hair_smooth/i.test(o.name)) crownMesh = o; });
+      model.traverse(o => {
+        if (o.isMesh && /pleated_skirt/i.test(o.name) && o.morphTargetInfluences?.length >= 2) {
+          skirtMeshes.push(o);
+        }
+        if (!crownMesh && o.isMesh && /swept_crown|Hair_smooth/i.test(o.name)) crownMesh = o;
+      });
       const headBone = model.getObjectByName('mixamorigHead') || model.getObjectByName('mixamorig:Head');
       if (crownMesh && headBone) {
         const rawMat = crownMesh.material?.clone?.() || new MeshStandardMaterial({ color: 0x3b2618, roughness: 0.72, metalness: 0 });
@@ -255,6 +395,107 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
         headBone.attach(hairGroup);
       }
     }
+    if (selected === 'aged-elder') {
+      scarfMeshes = [];
+      const neckBone = model.getObjectByName('mixamorigNeck') || model.getObjectByName('mixamorigSpine2');
+      if (neckBone) {
+        const scarfGroup = new Group();
+        scarfGroup.name = 'ElderRedScarf';
+        const scarfMat = new MeshStandardMaterial({
+          color: 0xc9182b,
+          roughness: 0.65,
+          metalness: 0.05,
+          side: DoubleSide,
+        });
+        const goldMat = new MeshStandardMaterial({
+          color: 0xffb703,
+          roughness: 0.35,
+          metalness: 0.65,
+        });
+        // Wrapped collar loop
+        const loop = new Mesh(new TorusGeometry(0.16, 0.045, 8, 18), scarfMat);
+        loop.rotation.x = Math.PI / 2;
+        loop.position.set(0, 0.06, -0.02);
+        scarfGroup.add(loop);
+
+        // Left flowing scarf tail trailing behind left shoulder
+        const leftTailGeo = new PlaneGeometry(0.13, 0.82, 2, 6);
+        leftTailGeo.translate(0, -0.40, 0);
+        const leftTail = new Mesh(leftTailGeo, scarfMat);
+        leftTail.position.set(-0.13, 0.04, 0.08);
+        leftTail.rotation.x = 0.52;
+        leftTail.rotation.y = -0.15;
+        leftTail.castShadow = true;
+        scarfGroup.add(leftTail);
+
+        // Right flowing scarf tail trailing behind right shoulder
+        const rightTailGeo = new PlaneGeometry(0.13, 0.88, 2, 6);
+        rightTailGeo.translate(0, -0.44, 0);
+        const rightTail = new Mesh(rightTailGeo, scarfMat);
+        rightTail.position.set(0.13, 0.04, 0.08);
+        rightTail.rotation.x = 0.48;
+        rightTail.rotation.y = 0.15;
+        rightTail.castShadow = true;
+        scarfGroup.add(rightTail);
+
+        // Gold tassel trims on scarf ends
+        const trimL = new Mesh(new BoxGeometry(0.13, 0.04, 0.015), goldMat);
+        trimL.position.set(-0.13, -0.38, 0.32);
+        scarfGroup.add(trimL);
+        const trimR = new Mesh(new BoxGeometry(0.13, 0.04, 0.015), goldMat);
+        trimR.position.set(0.13, -0.42, 0.34);
+        scarfGroup.add(trimR);
+
+        model.add(scarfGroup);
+        model.updateMatrixWorld(true);
+        neckBone.attach(scarfGroup);
+        scarfMeshes = [leftTail, rightTail];
+      }
+    }
+
+    // Dress Backside Embroidered Badge ("LMSK - LifeRush") visible in center of back while running
+    const spineBone = (selected === 'female')
+      ? (model.getObjectByName('mixamorig:Spine1') || model.getObjectByName('mixamorigSpine1') || model.getObjectByName('mixamorig:Spine2') || model.getObjectByName('mixamorigSpine2'))
+      : (model.getObjectByName('mixamorig:Spine2') || model.getObjectByName('mixamorigSpine2') || model.getObjectByName('CC_Base_Spine02') || model.getObjectByName('mixamorig:Spine1') || model.getObjectByName('mixamorigSpine1'));
+
+    if (spineBone) {
+      const isCC = spineBone.name.startsWith('CC_');
+      const badgeGeo = new PlaneGeometry(0.26, 0.17);
+
+      const badgeMat = new MeshStandardMaterial({
+        color: 0xffffff,
+        metalness: 0.12,
+        roughness: 0.45,
+        side: DoubleSide,
+        depthWrite: false,
+        depthTest: true,
+        polygonOffset: true,
+        polygonOffsetFactor: -8.0,
+        polygonOffsetUnits: -8.0,
+      });
+
+      if (!sharedBackEmbroiderTex) sharedBackEmbroiderTex = createBackEmbroideryTexture(CanvasTexture);
+      if (sharedBackEmbroiderTex) badgeMat.map = sharedBackEmbroiderTex;
+
+      const backBadge = new Mesh(badgeGeo, badgeMat);
+      backBadge.name = 'DressBackEmbroiderBadge';
+      backBadge.castShadow = true;
+      backBadge.renderOrder = 16;
+
+      const spineOffsets = {
+        male: [0, 0.05, -0.168],
+        female: [0, 0.08, -0.155],
+        'college-male': [0, 0.05, -0.180],
+        'college-woman': [0, 0.02, -0.182],
+        'college-man': [0, 0.02, -0.192],
+        'aged-elder': [0, 0.04, -0.155]
+      };
+      const [bx, by, bz] = spineOffsets[selected] || (isCC ? [0, 0.02, -0.190] : [0, 0.05, -0.168]);
+      backBadge.position.set(bx, by, bz);
+      backBadge.rotation.set(0.06, Math.PI, 0);
+
+      spineBone.add(backBadge);
+    }
     saveGestureBindPose(model);
     mixer = new AnimationMixer(model);
     actions = Object.fromEntries(names.map(name => [name, mixer.clipAction(clips.get(name))]));
@@ -264,9 +505,18 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
         : (selected.includes('female') || selected.includes('woman') ? 'female' : 'male');
       const rawTracks = injuredData[trackKey] || [];
       if (rawTracks.length) {
-        const tracks = rawTracks.map(t => t.type === 'vector'
-          ? new VectorKeyframeTrack(t.name, t.times, t.values)
-          : new QuaternionKeyframeTrack(t.name, t.times, t.values));
+        const hasColon = Boolean(model?.getObjectByName?.('mixamorig:Hips'));
+        const tracks = rawTracks.map(t => {
+          let trackName = t.name;
+          if (hasColon && trackName.startsWith('mixamorig') && !trackName.startsWith('mixamorig:')) {
+            trackName = trackName.replace(/^mixamorig/, 'mixamorig:');
+          } else if (!hasColon && trackName.startsWith('mixamorig:')) {
+            trackName = trackName.replace(/^mixamorig:/, 'mixamorig');
+          }
+          return t.type === 'vector'
+            ? new VectorKeyframeTrack(trackName, t.times, t.values)
+            : new QuaternionKeyframeTrack(trackName, t.times, t.values);
+        });
         const injuredClip = new AnimationClip('InjuredRun', injuredData.duration, tracks);
         actions.InjuredRun = mixer.clipAction(injuredClip);
       }
@@ -369,7 +619,60 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     model.rotation.y = currentRotationY - lean * .65;
     pace+=(Math.min(1.65,1+(state.speed-22)/40)-pace)*blend;
     if (name === 'Run' || name === 'InjuredRun') next.setEffectiveTimeScale(pace);
-    mixer.update(frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0)));
+    const stepDt = frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0));
+    mixer.update(stepDt);
+
+    // Spring-damped real-time cloth dynamics for the School Female pleated skirt (wind billow, stride flutter, jump flare, turn swing!)
+    if (skirtMeshes.length) {
+      let targetL = 0.05, targetR = 0.05;
+      const tNow = state.time || 0;
+      if (name === 'Run' || name === 'InjuredRun') {
+        stridePhase += stepDt * pace * 12.2;
+        const speedDrag = Math.min(0.56, Math.max(0.26, ((state.speed || 28) - 16) / 62));
+        const strideSwing = Math.sin(stridePhase) * 0.42;
+        const flutter = Math.sin(stridePhase * 2.3 + 0.7) * 0.09;
+        const turnLag = -lean * 1.65;
+        targetL = Math.max(0.08, Math.min(1.15, speedDrag + Math.max(0, strideSwing) + flutter + Math.max(0, turnLag)));
+        targetR = Math.max(0.08, Math.min(1.15, speedDrag + Math.max(0, -strideSwing) - flutter + Math.max(0, -turnLag)));
+      } else if (name === 'Jump') {
+        const airFlare = 0.78 + Math.sin(tNow * 14) * 0.10;
+        const turnLag = -lean * 1.4;
+        targetL = Math.max(0.25, Math.min(1.2, airFlare + turnLag));
+        targetR = Math.max(0.25, Math.min(1.2, airFlare - turnLag));
+      } else if (name === 'Slide' || name === 'Roll') {
+        targetL = 0.68;
+        targetR = 0.68;
+      } else if (name === 'ShoulderSweep') {
+        const swirl = Math.sin((1 - (state.styleAction || 0) / SWEEP_SECONDS) * Math.PI * 2) * 0.34;
+        targetL = Math.max(0.06, 0.22 + swirl);
+        targetR = Math.max(0.06, 0.22 - swirl);
+      } else {
+        const breeze = Math.sin(tNow * 1.9) * 0.055;
+        targetL = 0.07 + Math.max(0, breeze);
+        targetR = 0.07 + Math.max(0, -breeze);
+      }
+      if (stepDt > 0) {
+        const stiff = 64, damp = 10.5;
+        clothVelL += ((targetL - clothL) * stiff - clothVelL * damp) * stepDt;
+        clothVelR += ((targetR - clothR) * stiff - clothVelR * damp) * stepDt;
+        clothL = Math.max(0, Math.min(1.25, clothL + clothVelL * stepDt));
+        clothR = Math.max(0, Math.min(1.25, clothR + clothVelR * stepDt));
+      }
+      for (const sm of skirtMeshes) {
+        sm.morphTargetInfluences[0] = clothL;
+        sm.morphTargetInfluences[1] = clothR;
+      }
+    }
+    if (selected === 'aged-elder' && scarfMeshes.length) {
+      const tNow = state.time || 0;
+      const flutter = Math.sin(tNow * 24) * 0.14;
+      const turnLag = -lean * 0.9;
+      const runLift = (state.mode === 'running') ? 0.44 + flutter : 0.08;
+      scarfMeshes[0].rotation.x = 0.48 + runLift;
+      scarfMeshes[0].rotation.z = turnLag + Math.cos(tNow * 18) * 0.09;
+      scarfMeshes[1].rotation.x = 0.44 + runLift;
+      scarfMeshes[1].rotation.z = turnLag - Math.cos(tNow * 18) * 0.09;
+    }
     return true;
   }
   render.preload = () => { if (!requested) { requested = true; load(); } };

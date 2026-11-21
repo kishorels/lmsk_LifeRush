@@ -1,32 +1,32 @@
 import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
 import {createPickupModels} from './pickup-models.js?v=3.0.0';
 import {createGuardEffect} from './guard-effect.js?v=3.0.0';
-import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.1';
+import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.6';
 import {createSideTraffic} from './side-vehicles.js?v=3.2.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.1.8';
-import {createCampus} from './campus-scene.js?v=3.2.2';
-import {createCollegeCampus} from './college-scene.js?v=3.2.2';
-import {createItParkCampus} from './itpark-scene.js?v=3.2.2';
+import {createSky} from './sky-scene.js?v=3.3.9';
+import {createCampus} from './campus-scene.js?v=3.2.6';
+import {createCollegeCampus} from './college-scene.js?v=3.2.6';
+import {createItParkCampus} from './itpark-scene.js?v=3.2.6';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.0.3';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.1.1';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.2.2';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.3.9';
 import {createTraffic} from './traffic-scene.js?v=3.2.1';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.0.3';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
 import {loadChaserModel} from './chaser-model.js?v=3.0.0';
-import {loadRunnerModel} from './runner-model.js?v=3.0.0';
-import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.2.2';
+import {loadRunnerModel} from './runner-model.js?v=3.3.0';
+import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.2.6';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});}
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
  let contextLost=false;canvas.addEventListener?.('webglcontextlost',()=>{contextLost=true;},false);canvas.addEventListener?.('webglcontextrestored',()=>{contextLost=false;},false);
  const isTouchDevice=typeof navigator!=='undefined'&&navigator.maxTouchPoints>0;
- renderer.setPixelRatio(Math.min(devicePixelRatio||1,isTouchDevice?1.15:1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.18;
+ renderer.setPixelRatio(Math.min(devicePixelRatio||1,isTouchDevice?1.0:1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.18;
  const scene=new T.Scene();scene.background=new T.Color('#64d6ff');scene.fog=new T.Fog('#78dcff',150,325);
  const camera=new T.PerspectiveCamera(57,1,.1,375);camera.position.set(0,1.52,3.65);camera.lookAt(0,.98,0);
- const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);const sun=new T.DirectionalLight(0xfff4d6,3.55);sun.position.set(-15,26,15);sun.castShadow=true;const sm=isTouchDevice?512:1024;sun.shadow.mapSize.set(sm,sm);Object.assign(sun.shadow.camera,{left:-20,right:20,top:22,bottom:-26,near:1,far:80});sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
+ const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);const sun=new T.DirectionalLight(0xfff4d6,3.55);sun.position.set(-15,26,15);sun.castShadow=true;const sm=isTouchDevice?512:1024;sun.shadow.mapSize.set(sm,sm);Object.assign(sun.shadow.camera,{left:-12,right:12,top:14,bottom:-18,near:4,far:52});sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
  const mats=new Map();function mat(c){if(!mats.has(c))mats.set(c,new T.MeshStandardMaterial({color:c,roughness:.78}));return mats.get(c);}
  const cube=new T.BoxGeometry(1,1,1),sphere=new T.SphereGeometry(1,12,8),cyl=new T.CylinderGeometry(1,1,1,8),cone=new T.ConeGeometry(1,1,7),ringGeometry=new T.TorusGeometry(.32,.075,6,16);
  function mesh(g,c,parent,x,y,z,sx=1,sy=1,sz=1,shadow=false){const m=new T.Mesh(g,mat(c));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=shadow;m.receiveShadow=true;parent.add(m);return m;}
@@ -56,12 +56,13 @@ export function createRenderer(canvas, callbacks = {}){
  let pickups=null;
  const ensurePickups=()=>{if(!pickups)pickups=createPickupModels();return pickups;};
  const activeKey=callbacks?.initialModelKey||'male';
- const heroModels={male:loadRunnerModel(runner,'male',activeKey==='male'?callbacks?.onBoyProgress:null,activeKey==='male'),female:loadRunnerModel(runner,'female',activeKey==='female'?callbacks?.onBoyProgress:null,activeKey==='female'),'college-male':loadRunnerModel(runner,'college-male',activeKey==='college-male'?callbacks?.onBoyProgress:null,activeKey==='college-male'),'college-woman':loadRunnerModel(runner,'college-woman',activeKey==='college-woman'?callbacks?.onBoyProgress:null,activeKey==='college-woman'),'college-man':loadRunnerModel(runner,'college-man',activeKey==='college-man'?callbacks?.onBoyProgress:null,activeKey==='college-man')};
+ const heroModels={male:loadRunnerModel(runner,'male',activeKey==='male'?callbacks?.onBoyProgress:null,activeKey==='male'),female:loadRunnerModel(runner,'female',activeKey==='female'?callbacks?.onBoyProgress:null,activeKey==='female'),'college-male':loadRunnerModel(runner,'college-male',activeKey==='college-male'?callbacks?.onBoyProgress:null,activeKey==='college-male'),'college-woman':loadRunnerModel(runner,'college-woman',activeKey==='college-woman'?callbacks?.onBoyProgress:null,activeKey==='college-woman'),'college-man':loadRunnerModel(runner,'college-man',activeKey==='college-man'?callbacks?.onBoyProgress:null,activeKey==='college-man'),'aged-elder':loadRunnerModel(runner,'aged-elder',activeKey==='aged-elder'?callbacks?.onBoyProgress:null,activeKey==='aged-elder')};
  const updateChaserModel=loadChaserModel(scene, callbacks?.onChaserProgress, true);
  let compiled = false;
  const capture=createCaptureScene(scene);
  const updateSchool=createSchoolEntrance(scene);
- const updateRoadEvents=createRoadEventsScene(scene);
+ // Lazy-load IT Park Glass Bridge, Sea World, Cave & Metro Viaducts ONLY on IT Park (zero overhead on School/College!)
+ let updateRoadEvents=null,roadEventsActive=false;
  const updateMagnetCoins=createMagnetCoins(scene);const updateTraffic=createTraffic(scene);const updateSideTraffic=createSideTraffic(scene);const stage=createCaptureStage(scene);
  const torso=ball(body,0xffcb38,0,1.25,0,.33,.46,.23,true);box(body,0x17a4a3,0,1.22,.22,.4,.47,.15,true);box(body,0x86ead6,0,1.23,.31,.24,.24,.05);box(body,0xffe67a,0,1.27,.35,.16,.06,.025);for(const side of [-1,1])box(body,0x16857f,side*.21,1.34,.17,.055,.55,.07);const head=ball(body,0xd9986f,0,1.91,0,.255,.28,.24,true);ball(body,0x273455,0,2.07,-.01,.27,.16,.25,true);const cap=ball(body,0xf65d78,0,2.16,0,.29,.11,.27,true);box(body,0xf65d78,0,2.11,-.22,.4,.045,.25);const pony=ball(body,0x273455,0,1.95,.28,.12,.26,.14,true);
  // Front details for the lightweight character mesh used by the female option.
@@ -309,7 +310,7 @@ export function createRenderer(canvas, callbacks = {}){
  if(podiumChanged){
    lastOnPodium=onPodium;
    sun.castShadow=!onPodium;
-   camera.far=onPodium?68:375;
+   camera.far=375;
    camera.updateProjectionMatrix();
    if(onPodium){
      trackCameraY=0;
@@ -319,9 +320,16 @@ export function createRenderer(canvas, callbacks = {}){
  }
  updateSchool(s);if(!onPodium||podiumChanged){updateTraffic(s);updateSideTraffic(s);updateMagnetCoins(s);}
  const weather=updateSky(s);
- const branchCovering=(s.activeBranch&&s.distance>=s.branchStart+1&&s.distance<=s.branchEnd)?s.activeBranch:null;
+ const branchCovering=(s.map==='itpark'&&s.activeBranch&&s.distance>=s.branchStart+1&&s.distance<=s.branchEnd)?s.activeBranch:null;
  updateStreet(s.distance,weather,s.map,branchCovering,s);
- updateRoadEvents(s,weather);
+ if(s.map==='itpark'){
+   if(!updateRoadEvents)updateRoadEvents=createRoadEventsScene(scene);
+   updateRoadEvents(s,weather);
+   roadEventsActive=true;
+ }else if(roadEventsActive&&updateRoadEvents){
+   updateRoadEvents(s,weather);
+   roadEventsActive=false;
+ }
  updatePark(s,weather);
  if(s.map==='college'){if(!updateCollege)updateCollege=createCollegeCampus(scene);updateCollege(s);if(updateCampus)updateCampus(s,weather);}
  else{if(!onPodium||podiumChanged){if(!updateCampus&&!onPodium&&s.map!=='itpark')updateCampus=createCampus(scene);if(updateCampus)updateCampus(s,weather);}if(updateCollege)updateCollege(s);}
@@ -329,14 +337,14 @@ export function createRenderer(canvas, callbacks = {}){
  podium.position.set(0,.09,s.distance);
  podium.visible=onPodium;
  const fallRecoil = s.mode==='falling' ? Math.sin(Math.min(1,(1-s.fall/FALL_DURATION)/.38)*Math.PI)*.45 : 0;
- runner.position.set(s.x*2.2,height(s)+(onPodium?.04:0),fallRecoil);const rawChar=String(character||'male');const desiredKey=['male','female','college-male','college-woman','college-man'].includes(rawChar)?(rawChar.startsWith('college-')?rawChar:(s.map==='college'?(rawChar==='female'?'college-woman':'college-male'):rawChar)):'male';const altKey=desiredKey==='college-woman'?'female':(desiredKey.startsWith('college-')?'male':`college-${desiredKey}`);const isFemaleBody=desiredKey.includes('female')||desiredKey.includes('woman'),isCollegeBody=desiredKey.startsWith('college-')||s.map==='college';if(!heroModels[desiredKey]?.model)heroModels[desiredKey]?.(s,desiredKey,frameDt);const modelKey=onPodium?desiredKey:(heroModels[desiredKey]?.model?desiredKey:heroModels[altKey]?.model?altKey:desiredKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleBody?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleBody;cap.visible=!isFemaleBody;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
+ runner.position.set(s.x*2.2,height(s)+(onPodium?.04:0),fallRecoil);const rawChar=String(character||'male');const selectedKey=rawChar==='aged-elder'?'aged-elder':rawChar.startsWith('college-')?rawChar:(rawChar.includes('female')||rawChar.includes('woman'))?'female':'male';const altKey=selectedKey==='aged-elder'?'male':selectedKey==='college-woman'?'female':(selectedKey.startsWith('college-')?'male':`college-${selectedKey}`);const isFemaleMesh=selectedKey.includes('female')||selectedKey.includes('woman'),isCollegeBody=selectedKey.startsWith('college-')||s.map==='college';if(!heroModels[selectedKey]?.model)heroModels[selectedKey]?.(s,selectedKey,frameDt);const modelKey=onPodium?selectedKey:(heroModels[selectedKey]?.model?selectedKey:heroModels[altKey]?.model?altKey:selectedKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleMesh?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleMesh;cap.visible=!isFemaleMesh;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
  updateGuard(s,selectedModel?.model);
  let n=0;if(!onPodium){const pk=ensurePickups();
  // Render solid obstacles & pads FIRST (priority over coins) so pool limits NEVER hide a slide/jump/block barrier!
  // Keep solid obstacles visible even after `o.done` until completely behind the camera (`z < -10`) — ZERO disappearing in front of you!
  const drawItem=o=>{
   const z=o.z-s.distance;
-  if(o.cleared||o.smashed||z<-10||z>340)return;
+  if(o.cleared||o.smashed||o.isForkDivider||z<-10||z>340)return;
   const isCollectible=PICKUP_TYPES.has(o.type)||o.type==='mysteryCrate'||o.type==='letter';
   if(o.done&&isCollectible)return;
   const g=pool[n++];if(!g)return;
@@ -355,7 +363,8 @@ export function createRenderer(canvas, callbacks = {}){
   if(g.userData.papers){for(let pi=0;pi<g.userData.papers.length;pi++){const sh=g.userData.papers[pi];sh.position.y=sh.userData.baseY+Math.sin(s.time*4.2+o.z+pi*1.7)*.09;sh.rotation.z=Math.sin(s.time*3.4+pi)*.35;}}
  };
  for(const o of s.items){if(o.type==='bus'||o.type==='sideVehicle'||o.type==='coin')continue;drawItem(o);if(n>=pool.length)break;}
- for(const o of s.items){if(o.type!=='coin')continue;drawItem(o);if(n>=pool.length)break;}
+ const coinFar=isTouchDevice?220:265;
+ for(const o of s.items){if(o.type!=='coin'||o.z-s.distance>coinFar)continue;drawItem(o);if(n>=pool.length)break;}
  }for(;n<pool.length;n++)pool[n].visible=false;
  const count=s.coins;if(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0)){burst=(s.nitro>0||s.turboBoost>0)?.08:.22;for(const p of particles){p.life=.42+Math.random()*.28;p.m.visible=true;p.m.position.set(s.x*2.2+(Math.random()-.5)*.45,height(s)+.7,(s.nitro>0||s.turboBoost>0)?.5:0);p.v.set((Math.random()-.5)*4,Math.random()*3.5,(s.nitro>0||s.turboBoost>0)?8:(Math.random()-.5)*4);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*7;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(.07*p.life/.8);}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;

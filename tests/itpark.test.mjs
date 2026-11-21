@@ -167,14 +167,14 @@ test('Phase 1-3: Road Y-splits (1,000m Glass Bridge vs 1,000m 2x Underpass), Tur
   sR.distance = 1230; step(sR, 0.05);
   assert.equal(sR.activeBranch, null, 'Returns cleanly to normal road after 1,000m Underpass');
 
-  // Verify live seeded runs spawn turbo pads but never spawn jump pads
+  // Verify live seeded runs follow standard school speed progression without forced turbo pads or jump pads
   const sLive = fresh(1234);
   sLive.mode = 'running';
   for (let m = 0; m < 500; m += 20) {
     sLive.distance = m;
     step(sLive, 0.05);
   }
-  assert.ok(sLive.items.some(o => o.type === 'turboPad'), 'Live run spawns speed turbo pads');
+  assert.ok(!sLive.items.some(o => o.type === 'turboPad'), 'Live run follows normal school speed progression without forced turbo pads');
   assert.ok(!sLive.items.some(o => o.type === 'jumpPad'), 'Live run never spawns jump pads');
 
   // 2. Turbo Boost Pad (+15 coins & speed surge), Jump Launch Pad (>3.3m apex), Mystery Crate, and L-M-S-K Fever Rush
@@ -291,4 +291,46 @@ test('curly S-bend transitions smoothly at branch entry/exit and continuation ro
  const tState = { map: 'itpark', mode: 'running', runSeed: 1, distance: 200, speed: 28, time: 5, items: [encBus], collected: [], activeBranch: null };
  updTraffic(tState);
  assert.equal(tScene.children.length > 0, true, 'pending encounter bus renders 100m before trigger instead of popping in');
+});
+
+test('Glass Bridge and Cave forks are exclusive to IT Park; School and College keep continuous scenery and baked deck draw calls stay bounded', () => {
+ // School & College never trigger forks or hide buildings at fork distances even on live seeded runs!
+ for (const map of ['school', 'college']) {
+  const s = fresh(12345);
+  s.map = map;
+  s.mode = 'running';
+  s.enableForks = false;
+  s.distance = 219;
+  s.lane = s.x = -1;
+  step(s, 0.05);
+  s.distance = 240;
+  step(s, 0.05);
+  assert.equal(s.activeBranch, null, `${map} never enters Glass Bridge or Cave`);
+  for (const anchor of [204, 220, 250, 284, 500, 1670]) {
+   const clr = branchForkClearance(anchor, { map, enableForks: false, runSeed: 12345, next: 500, activeBranch: null });
+   assert.deepEqual(clr, { hide: false, dropY: 0, spreadX: 0 }, `${map} keeps full scenery at ${anchor}m`);
+  }
+  // Even if enableForks were accidentally set on school/college, updateRoadEvents & scenery stay IT Park–only!
+  const sGuard = fresh(99);
+  sGuard.map = map;
+  sGuard.mode = 'running';
+  sGuard.enableForks = true;
+  sGuard.distance = 230;
+  step(sGuard, 0.05);
+  assert.equal(sGuard.activeBranch, null, `${map} guard blocks fork activation`);
+ }
+
+ // IT Park road-events scene hides all IT Park props on School & College and keeps baked Glass Bridge draw calls bounded!
+ const sc = new Scene();
+ const upd = createRoadEventsScene(sc);
+ upd({ map: 'itpark', mode: 'running', enableForks: true, activeBranch: 'skybridge', distance: 240, time: 5 }, { night: 0, rain: 0 });
+ const deck = sc.getObjectByName('glass-bridge-deck');
+ let visibleDeckMeshes = 0;
+ deck.traverseVisible(o => { if (o.isMesh) visibleDeckMeshes++; });
+ assert.ok(visibleDeckMeshes < 260, `baked Glass Bridge deck keeps low visible draw-call count (got ${visibleDeckMeshes})`);
+
+ for (const map of ['school', 'college']) {
+  upd({ map, mode: 'running', enableForks: false, activeBranch: null, distance: 220, time: 6 }, { night: 0, rain: 0 });
+  assert.ok(sc.children.every(c => !c.visible), `all IT Park bridge/cave/sea/viaduct groups hide on ${map}`);
+ }
 });

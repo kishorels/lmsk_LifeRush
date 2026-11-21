@@ -125,6 +125,11 @@ assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&
    'Characters page includes Left/Right holographic preview cards and character loading blur veil');
  assert.ok(cssSrc.includes('.game.is-char-loading #world')&&cssSrc.includes('blur('),
    'Canvas blurs cleanly with blue hologram veil whenever a character is still loading or failed to load');
+  const runnerModelSrc=await readFile(new URL('../dist/runner-model.js',import.meta.url),'utf8');
+  assert.ok(runnerModelSrc.includes('DressBackEmbroiderBadge')&&runnerModelSrc.includes('createBackEmbroideryTexture'),
+    'runner models feature embroidered back badge with LMSK - LifeRush');
+  assert.ok(runnerModelSrc.includes("fillText('LMSK'")&&runnerModelSrc.includes("fillText('— LifeRush —'"),
+    'embroidered back texture renders LMSK and LifeRush branding');
 });
 
 test('college uses Kodaikanal-style winding road, scooty/car traffic instead of buses, and college obstacles',async()=>{

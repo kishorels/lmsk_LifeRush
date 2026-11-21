@@ -106,7 +106,8 @@ export function createCampus(scene) {
   // Batch static campus details by material to keep mobile draw calls low.
   g.updateMatrixWorld(true);const batches=new Map();
   g.traverse(o=>{if(!o.isMesh)return;const geo=(o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone()).applyMatrix4(o.matrixWorld);if(!batches.has(o.material))batches.set(o.material,[]);batches.get(o.material).push(geo);});
-  const merged=new Group();for(const [mat,list]of batches){const mesh=new Mesh(mergeGeometries(list),mat);mesh.receiveShadow=true;mesh.castShadow=true;merged.add(mesh);for(const geo of list)geo.dispose();}
+  const isTouch=typeof navigator!=='undefined'&&navigator.maxTouchPoints>0;
+  const merged=new Group();for(const [mat,list]of batches){const mesh=new Mesh(mergeGeometries(list),mat);mesh.receiveShadow=true;mesh.castShadow=!isTouch;merged.add(mesh);for(const geo of list)geo.dispose();}
   return merged;
  }
  const templates=[0,1,2,3,4,5].map(build);

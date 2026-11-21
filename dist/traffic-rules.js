@@ -61,8 +61,8 @@ export function trafficPattern(base,index,seed=0,map='school'){
   const cKind2=isPark?parkPool[(index+2+(seed&3))%4]:isCollege?((index%2)?'car':'scooty'):undefined;
   const mkTraffic=(z,tLane,vel,extra={})=>{
     const ck=extra.collegeKind;
-    const len=isCollege?(ck==='semi'?10.5:(ck==='scooty'||ck==='ducati')?2.6:4.6):10;
-    const rf=isCollege?(ck==='semi'?2.8:(ck==='scooty'||ck==='ducati')?1.65:1.45):2.8;
+    const len=isCollege?(ck==='semi'?10.5:ck==='scooty'?2.2:ck==='ducati'?2.4:4.6):10;
+    const rf=isCollege?(ck==='semi'?2.8:ck==='scooty'?0.95:ck==='ducati'?1.05:1.45):2.8;
     return {z,lane:tLane,type:'bus',velocity:vel,length:len,roof:rf,done:false,...extra};
   };
   if(p.kind==='encounter'){

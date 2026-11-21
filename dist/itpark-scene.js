@@ -40,6 +40,110 @@ export function createItParkCampus(scene) {
     plaster.anisotropy = 4;
   }
 
+  // Realistic Architectural Curtain-Wall Office Window Generator
+  function createCurtainWallGlass({ baseColor, mullionColor = '#0f172a', warmLights = true, repeatX = 2.0, repeatY = 4.0, envIntensity = 1.85, metalness = 0.72 }) {
+    if (typeof document === 'undefined') {
+      return new MeshStandardMaterial({
+        color: baseColor,
+        roughness: 0.12,
+        metalness,
+        envMapIntensity: envIntensity,
+        emissive: baseColor,
+        emissiveIntensity: 0.08
+      });
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 512;
+    const ctx = cv.getContext('2d');
+    const emCv = document.createElement('canvas');
+    emCv.width = 512; emCv.height = 512;
+    const emCtx = emCv.getContext('2d');
+
+    if (ctx && emCtx) {
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(0, 0, 512, 512);
+      emCtx.fillStyle = '#000000';
+      emCtx.fillRect(0, 0, 512, 512);
+
+      const cols = 8, rows = 16;
+      const cw = 512 / cols;
+      const ch = 512 / rows;
+
+      for (let r = 0; r < rows; r++) {
+        const isSpandrel = (r % 4 === 0);
+        for (let c = 0; c < cols; c++) {
+          const x = c * cw;
+          const y = r * ch;
+          if (isSpandrel) {
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2);
+            continue;
+          }
+          const hash = Math.sin(c * 37.1 + r * 89.3) * 10000;
+          const rnd = hash - Math.floor(hash);
+
+          if (rnd < 0.38) {
+            const glow = warmLights ? '#fef08a' : '#e0f2fe';
+            ctx.fillStyle = glow;
+            ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            emCtx.fillStyle = warmLights ? '#f59e0b' : '#38bdf8';
+            emCtx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            ctx.fillStyle = 'rgba(71, 85, 105, 0.35)';
+            ctx.fillRect(x + 2, y + Math.floor(ch * 0.42), cw - 4, 2);
+          } else if (rnd < 0.65) {
+            ctx.fillStyle = '#7dd3fc';
+            ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            emCtx.fillStyle = '#0284c7';
+            emCtx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+          } else if (rnd < 0.82) {
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+          } else {
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            ctx.fillStyle = 'rgba(51, 65, 85, 0.45)';
+            for (let by = y + 4; by < y + ch - 4; by += 4) {
+              ctx.fillRect(x + 3, by, cw - 6, 1.5);
+            }
+          }
+        }
+      }
+
+      ctx.strokeStyle = mullionColor;
+      ctx.lineWidth = 3;
+      for (let c = 0; c <= cols; c++) {
+        ctx.beginPath(); ctx.moveTo(c * cw, 0); ctx.lineTo(c * cw, 512); ctx.stroke();
+      }
+      for (let r = 0; r <= rows; r++) {
+        ctx.beginPath(); ctx.moveTo(0, r * ch); ctx.lineTo(512, r * ch); ctx.stroke();
+      }
+
+      const map = new CanvasTexture(cv);
+      map.colorSpace = SRGBColorSpace;
+      map.wrapS = map.wrapT = RepeatWrapping;
+      map.repeat.set(repeatX, repeatY);
+      map.anisotropy = 4;
+
+      const emissiveMap = new CanvasTexture(emCv);
+      emissiveMap.colorSpace = SRGBColorSpace;
+      emissiveMap.wrapS = emissiveMap.wrapT = RepeatWrapping;
+      emissiveMap.repeat.set(repeatX, repeatY);
+      emissiveMap.anisotropy = 4;
+
+      return new MeshStandardMaterial({
+        color: 0xffffff,
+        map,
+        emissiveMap,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.16,
+        roughness: 0.12,
+        metalness,
+        envMapIntensity: envIntensity
+      });
+    }
+    return new MeshStandardMaterial({ color: baseColor, roughness: 0.12, metalness });
+  }
+
   const M = {
     // Ref 1: Neoclassical travertine stone + bright ivory trim
     limestone: new MeshStandardMaterial({ color: 0xe3dbc7, map: plaster, bumpMap: plaster, bumpScale: 0.012, roughness: 0.86, metalness: 0.02 }),
@@ -53,17 +157,17 @@ export function createItParkCampus(scene) {
     // Ref 2 & 5: Dark steel exoskeleton, frames, mullions
     charcoalGrid: new MeshStandardMaterial({ color: 0x3b434c, roughness: 0.40, metalness: 0.45 }),
     darkMullion: new MeshStandardMaterial({ color: 0x1c252f, roughness: 0.36, metalness: 0.55 }),
-    // Reflective curtain-wall glasses (night emissive animated in update)
-    skyGlass: new MeshStandardMaterial({ color: 0x6caae0, roughness: 0.10, metalness: 0.72, envMapIntensity: 1.75, emissive: 0x69a7d6, emissiveIntensity: 0.06 }),
-    skyGlassBright: new MeshStandardMaterial({ color: 0x8bc2f0, roughness: 0.08, metalness: 0.76, envMapIntensity: 1.85, emissive: 0x7cb9e8, emissiveIntensity: 0.08 }),
-    cyanGlass: new MeshStandardMaterial({ color: 0x63acc2, roughness: 0.12, metalness: 0.64, envMapIntensity: 1.65, emissive: 0x5caac2, emissiveIntensity: 0.06 }),
-    smokedGlass: new MeshStandardMaterial({ color: 0x252d35, roughness: 0.10, metalness: 0.68, envMapIntensity: 1.65, emissive: 0xd4a45a, emissiveIntensity: 0.08 }),
+    // Highly realistic curtain-wall glass with architectural aluminum mullions, illuminated offices & computer monitors
+    skyGlass: createCurtainWallGlass({ baseColor: '#5396d8', mullionColor: '#1e293b', warmLights: true, repeatX: 2.0, repeatY: 4.5, envIntensity: 1.85, metalness: 0.72 }),
+    skyGlassBright: createCurtainWallGlass({ baseColor: '#38bdf8', mullionColor: '#0f172a', warmLights: false, repeatX: 2.5, repeatY: 5.0, envIntensity: 1.95, metalness: 0.78 }),
+    cyanGlass: createCurtainWallGlass({ baseColor: '#2dd4bf', mullionColor: '#134e4a', warmLights: true, repeatX: 1.8, repeatY: 3.5, envIntensity: 1.75, metalness: 0.65 }),
+    smokedGlass: createCurtainWallGlass({ baseColor: '#334155', mullionColor: '#0f172a', warmLights: true, repeatX: 2.2, repeatY: 4.0, envIntensity: 1.70, metalness: 0.70 }),
     warmGlow: new MeshStandardMaterial({ color: 0xf7dca0, emissive: 0xf5c869, emissiveIntensity: 0.78, roughness: 0.35, metalness: 0.05 }),
     balconyRail: new MeshStandardMaterial({ color: 0xdcebf5, roughness: 0.18, metalness: 0.35, envMapIntensity: 1.3 }),
     // Ref 4: Bauhaus beige concrete + deep petroleum teal glass + navy annex + steel mast
     sandStucco: new MeshStandardMaterial({ color: 0xcfa97e, map: plaster, bumpMap: plaster, bumpScale: 0.01, roughness: 0.84, metalness: 0.02 }),
     sandDark: new MeshStandardMaterial({ color: 0xb99166, map: plaster, roughness: 0.88, metalness: 0.02 }),
-    bauhausGlass: new MeshStandardMaterial({ color: 0x124b64, roughness: 0.16, metalness: 0.56, envMapIntensity: 1.45, emissive: 0x1d6c8a, emissiveIntensity: 0.08 }),
+    bauhausGlass: createCurtainWallGlass({ baseColor: '#0e7490', mullionColor: '#164e63', warmLights: false, repeatX: 3.0, repeatY: 3.0, envIntensity: 1.55, metalness: 0.58 }),
     navyAnnex: new MeshStandardMaterial({ color: 0x152f47, roughness: 0.64, metalness: 0.22 }),
     awningBlue: new MeshStandardMaterial({ color: 0x276285, roughness: 0.52, metalness: 0.25 }),
     mastSteel: new MeshStandardMaterial({ color: 0x83acc7, roughness: 0.30, metalness: 0.76 }),
@@ -782,29 +886,81 @@ export function createItParkCampus(scene) {
   function makeBannerMat(kind) {
     if (typeof document === 'undefined') return kind === 'blue' ? M.bannerBlue : M.bannerCoral;
     const cv = document.createElement('canvas');
-    cv.width = 192; cv.height = 384;
+    cv.width = 256; cv.height = 512;
     const ctx = cv.getContext('2d');
     if (!ctx) return kind === 'blue' ? M.bannerBlue : M.bannerCoral;
-    const g = ctx.createLinearGradient(0, 0, 0, 384);
-    if (kind === 'blue') { g.addColorStop(0, '#4f46e5'); g.addColorStop(1, '#2563eb'); }
-    else { g.addColorStop(0, '#f43f5e'); g.addColorStop(1, '#f59e0b'); }
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 192, 384);
-    ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 6; ctx.strokeRect(8, 8, 176, 368);
-    ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
+    const g = ctx.createLinearGradient(0, 0, 0, 512);
     if (kind === 'blue') {
-      ctx.font = '900 38px system-ui, sans-serif';
-      ctx.fillText('Learn', 96, 118);
-      ctx.fillText('Code', 96, 178);
-      ctx.fillText('Build', 96, 238);
-      ctx.fillText('Future', 96, 298);
+      g.addColorStop(0, '#0284c7');
+      g.addColorStop(0.5, '#0369a1');
+      g.addColorStop(1, '#0c4a6e');
     } else {
-      ctx.font = '900 42px system-ui, sans-serif';
-      ctx.fillText('LMSK', 96, 165);
-      ctx.font = '800 28px system-ui, sans-serif';
-      ctx.fillText('IT PARK', 96, 224);
+      g.addColorStop(0, '#f43f5e');
+      g.addColorStop(0.5, '#e11d48');
+      g.addColorStop(1, '#9f1239');
     }
-    const tex = new CanvasTexture(cv); tex.colorSpace = SRGBColorSpace;
-    return new MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.34 });
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 512);
+
+    // Glowing electric border with stylized tech corners
+    const borderGlow = kind === 'blue' ? '#00e5ff' : '#fb7185';
+    ctx.strokeStyle = borderGlow;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(10, 10, 236, 492);
+
+    // Corner brackets
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = '#ffffff';
+    for (const [cx, cy, dx, dy] of [[10, 10, 24, 24], [246, 10, -24, 24], [10, 502, 24, -24], [246, 502, -24, -24]]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + dx, cy);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx, cy + dy);
+      ctx.stroke();
+    }
+
+    // High-impact cyber tech branding
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    if (kind === 'blue') {
+      ctx.font = '900 32px system-ui, sans-serif';
+      ctx.fillText('LMSK', 128, 110);
+      ctx.font = '800 24px system-ui, sans-serif';
+      ctx.fillText('AI & ROBOTICS', 128, 150);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(48, 175, 160, 3);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 22px system-ui, sans-serif';
+      ctx.fillText('INNOVATION', 128, 230);
+      ctx.fillText('TECH CAMPUS', 128, 275);
+      ctx.font = '900 28px system-ui, sans-serif';
+      ctx.fillStyle = '#7dd3fc';
+      ctx.fillText('FUTURE', 128, 360);
+    } else {
+      ctx.font = '900 32px system-ui, sans-serif';
+      ctx.fillText('LIFE RUSH', 128, 110);
+      ctx.font = '800 22px system-ui, sans-serif';
+      ctx.fillText('AUTONOMOUS', 128, 150);
+      ctx.fillStyle = '#fda4af';
+      ctx.fillRect(48, 175, 160, 3);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 22px system-ui, sans-serif';
+      ctx.fillText('CYBER CITY', 128, 230);
+      ctx.fillText('NEXT GEN', 128, 275);
+      ctx.font = '900 28px system-ui, sans-serif';
+      ctx.fillStyle = '#fecdd3';
+      ctx.fillText('VELOCITY', 128, 360);
+    }
+
+    const tex = new CanvasTexture(cv);
+    tex.colorSpace = SRGBColorSpace;
+    return new MeshStandardMaterial({
+      map: tex,
+      emissiveMap: tex,
+      emissive: 0xffffff,
+      emissiveIntensity: 0.35,
+      roughness: 0.30
+    });
   }
   const blueBannerMat = makeBannerMat('blue');
   const coralBannerMat = makeBannerMat('coral');
@@ -888,13 +1044,14 @@ export function createItParkCampus(scene) {
       if (!batches.has(obj.material)) batches.set(obj.material, []);
       batches.get(obj.material).push(geo);
     });
+    const isTouch = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
     const merged = new Group();
     for (const [mat, list] of batches) {
       const combined = list.length === 1 ? list[0] : mergeGeometries(list, false);
       if (!combined) { for (const geo of list) geo.dispose(); continue; }
       const mesh = new Mesh(combined, mat);
       mesh.receiveShadow = true;
-      mesh.castShadow = mat !== M.lawnGreen && mat !== M.plazaGray && mat !== M.plazaDark;
+      mesh.castShadow = !isTouch && mat !== M.lawnGreen && mat !== M.plazaGray && mat !== M.plazaDark;
       merged.add(mesh);
       if (list.length > 1) for (const geo of list) geo.dispose();
     }
@@ -928,17 +1085,17 @@ export function createItParkCampus(scene) {
       const pulse = Math.sin(t * 2.4) * 0.5 + 0.5;
       const shimmer = Math.sin(t * 1.35) * 0.5 + 0.5;
       // Live animated skyline shimmer: glowing cyan guardrails, warm golden interior windows, & rooftop beacons
-      M.skyGlass.emissiveIntensity = 0.06 + shimmer * 0.06 + night * 0.32;
-      M.skyGlassBright.emissiveIntensity = 0.08 + pulse * 0.08 + night * 0.36;
-      M.cyanGlass.emissiveIntensity = 0.07 + pulse * 0.09 + night * 0.34;
-      M.smokedGlass.emissiveIntensity = 0.08 + shimmer * 0.07 + night * 0.36;
-      M.bauhausGlass.emissiveIntensity = 0.08 + shimmer * 0.06 + night * 0.30;
+      M.skyGlass.emissiveIntensity = 0.16 + shimmer * 0.08 + night * 0.45;
+      M.skyGlassBright.emissiveIntensity = 0.18 + pulse * 0.10 + night * 0.50;
+      M.cyanGlass.emissiveIntensity = 0.16 + pulse * 0.10 + night * 0.48;
+      M.smokedGlass.emissiveIntensity = 0.16 + shimmer * 0.08 + night * 0.50;
+      M.bauhausGlass.emissiveIntensity = 0.14 + shimmer * 0.08 + night * 0.42;
       M.warmGlow.emissiveIntensity = 0.72 + shimmer * 0.24 + night * 0.55;
       M.lampGlow.emissiveIntensity = 0.68 + pulse * 0.18 + night * 0.85;
       M.cyanRailLed.emissiveIntensity = 1.15 + pulse * 0.48 + night * 0.85;
       M.redBeacon.emissiveIntensity = 0.6 + (Math.sin(t * 4.5) > 0 ? 1.4 : 0.1);
-      blueBannerMat.emissiveIntensity = 0.24 + pulse * 0.16 + night * 0.25;
-      coralBannerMat.emissiveIntensity = 0.24 + (1 - pulse) * 0.16 + night * 0.25;
+      blueBannerMat.emissiveIntensity = 0.35 + pulse * 0.20 + night * 0.30;
+      coralBannerMat.emissiveIntensity = 0.35 + (1 - pulse) * 0.20 + night * 0.30;
     }
     for (let slot = 0; slot < slots.length; slot++) {
       const item = slots[slot];

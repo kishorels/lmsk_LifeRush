@@ -3,6 +3,7 @@ import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {roadsideTree} from './street-materials.js';
 import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
 import {branchForkClearance} from './road-events.js';
+import {hasCollegeRain, sceneWeather} from './weather.js';
 
 // A separate modern campus set; it uses the same collision-safe road and route plan.
 export function createCollegeCampus(scene){
@@ -120,13 +121,20 @@ export function createCollegeCampus(scene){
   // Bake small architectural details into a handful of meshes for mobile GPUs.
   root.updateMatrixWorld(true);const batches=new Map();
   root.traverse(object=>{if(!object.isMesh)return;const geo=(object.geometry.index?object.geometry.toNonIndexed():object.geometry.clone()).applyMatrix4(object.matrixWorld);if(!batches.has(object.material))batches.set(object.material,[]);batches.get(object.material).push(geo);});
-  const merged=new Group();for(const [mat,list] of batches){const mesh=new Mesh(mergeGeometries(list),mat);mesh.receiveShadow=true;mesh.castShadow=true;merged.add(mesh);for(const geo of list)geo.dispose();}
+  const isTouch=typeof navigator!=='undefined'&&navigator.maxTouchPoints>0;
+  const merged=new Group();for(const [mat,list] of batches){const mesh=new Mesh(mergeGeometries(list),mat);mesh.receiveShadow=true;mesh.castShadow=!isTouch;merged.add(mesh);for(const geo of list)geo.dispose();}
   return merged;
  }
  const templates=Array.from({length:6},(_,kind)=>build(kind));
  const slots=Array.from({length:CAMPUS_SLOTS},()=>{const root=new Group();scene.add(root);return {root,kind:-1};});
  return state=>{
   const college=state.map==='college';
+  if(college){
+   const lamp=material(0xffeac0);
+   lamp.emissive.setHex(0xffbf65);
+   const w = sceneWeather(state);
+   lamp.emissiveIntensity = (w.rain > 0.25 || (w.wet || 0) > 0.4) ? 1.7 : 0;
+  }
   for(let slot=0;slot<slots.length;slot++){
    const item=slots[slot];
    if(!college){item.root.visible=false;continue;}

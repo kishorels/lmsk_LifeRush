@@ -4,7 +4,8 @@ import { routeSegment } from './traffic-rules.js';
 
 export const FORK_FIRST = 220;
 export const FORK_STRIDE = 1450;
-export const FORK_WARN = 75;
+export const FORK_WARN = 80;
+export const FORK_LOOKAHEAD = 420;
 export const FORK_LEN = 1000;
 export const METRO_FIRST = 150;
 export const METRO_STRIDE = 210;
@@ -17,7 +18,7 @@ function smoothstep(t) {
 }
 
 export function forkPlanAt(distance) {
-  const index = Math.max(0, Math.floor((distance - FORK_FIRST + FORK_WARN) / FORK_STRIDE));
+  const index = Math.max(0, Math.floor((distance - FORK_FIRST + FORK_LOOKAHEAD) / FORK_STRIDE));
   const start = FORK_FIRST + index * FORK_STRIDE;
   const warnStart = start - FORK_WARN;
   const end = start + FORK_LEN;
@@ -73,7 +74,7 @@ function safeLaneAt(s, z) {
 export function branchForkClearance(anchor, state) {
   if (!state) return { hide: false, dropY: 0, spreadX: 0 };
   const active = state.activeBranch;
-  const forksOn = Boolean(state.enableForks) || ((state.runSeed || 0) > 0 && (state.next || 0) < 90000);
+  const forksOn = Boolean(state.enableForks) && state.map === 'itpark';
   if (active === 'underpass') {
     // Cave walls enclose the roadside; campus stays visible above through the glass skylight,
     // pushed outward so nothing pokes through the rock walls.
@@ -97,7 +98,7 @@ export function branchForkClearance(anchor, state) {
   if (forksOn) {
     const plan = forkPlanAt(anchor);
     if (anchor >= plan.start - 16 && anchor <= plan.start + 64) {
-      return { hide: state.map !== 'itpark', dropY: 0, spreadX: 3.4 };
+      return { hide: false, dropY: 0, spreadX: 3.4 };
     }
   }
   return { hide: false, dropY: 0, spreadX: 0 };
@@ -108,7 +109,7 @@ export function updateRoadEvents(s, dt, vanSurfaceFn) {
   s.feverTimer = Math.max(0, (s.feverTimer || 0) - dt);
   if (!s.jump && s.launchBoost) s.launchBoost = 0;
 
-  const forksEnabled = Boolean(s.enableForks);
+  const forksEnabled = Boolean(s.enableForks) && (!s.map || s.map === 'itpark');
   const plan = forksEnabled ? forkPlanAt(s.distance) : { approaching: false, active: false, index: -1, start: 0, end: 0 };
   if (forksEnabled && (plan.approaching || (plan.active && s.distance <= plan.start + 2.5))) {
     if (!s.items.some(o => o.isForkDivider && o.z === plan.start)) {
@@ -159,8 +160,7 @@ export function updateRoadEvents(s, dt, vanSurfaceFn) {
         if (picked === 'skybridge') {
           for (let off = 28; off < FORK_LEN - 40; off += 130) {
             const bLane = safeLaneAt(s, plan.start + off);
-            s.items.push({ z: plan.start + off, lane: bLane, type: 'turboPad', done: false });
-            for (let i = 0; i < 5; i++) s.items.push({ z: plan.start + off + 6 + i * 4.5, lane: bLane, type: 'coin', done: false });
+            for (let i = 0; i < 8; i++) s.items.push({ z: plan.start + off + i * 4.5, lane: bLane, type: 'coin', done: false });
           }
         } else {
           for (let off = 32; off < FORK_LEN - 40; off += 130) {
@@ -170,13 +170,25 @@ export function updateRoadEvents(s, dt, vanSurfaceFn) {
         }
       }
     }
-    // Inside the Underpass cave: convert every oncoming rail vehicle to the authentic Indian Railways WDP4D 45420 train!
+    // Inside the Underpass cave: convert oncoming rail vehicles to Indian Railways WDP4D 45420 train, never vanish approaching vehicles!
     if (s.activeBranch === 'underpass') {
       for (const o of s.items) {
-        if (!o.done && o.z >= s.distance - 2 && o.z <= plan.end && (o.type === 'jumpPad' || (o.roofRide && s.map !== 'itpark') || (o.type === 'sideVehicle' && !o.started))) {
-          o.done = true;
-          o.z = s.distance - 100;
-          continue;
+        if (!o.done && o.z >= s.distance - 2 && o.z <= plan.end) {
+          if (o.type === 'jumpPad' || (o.roofRide && s.map !== 'itpark')) {
+            o.done = true;
+            o.z = s.distance - 100;
+            continue;
+          }
+          if (o.type === 'sideVehicle') {
+            o.type = 'bus';
+            o.metro = true;
+            o.velocity = 24;
+            o.length = 18;
+            o.roof = 2.6;
+            o.activate = o.z - 260;
+            o.started = true;
+            o.encounter = false;
+          }
         }
         if (o.type === 'bus' && !o.done && o.z >= plan.start && o.z < plan.end) {
           o.metro = true;
@@ -187,6 +199,22 @@ export function updateRoadEvents(s, dt, vanSurfaceFn) {
         }
       }
       s.launchBoost = 0;
+    } else if (s.activeBranch === 'skybridge') {
+      // On the Glass Bridge: cars only come straight down the bridge lanes, never cutting in across open sea!
+      for (const o of s.items) {
+        if (!o.done && o.z >= s.distance - 2 && o.z <= plan.end) {
+          if (o.type === 'sideVehicle') {
+            o.type = 'bus';
+            o.collegeKind = o.variant || 'porsche';
+            o.velocity = 18;
+            o.length = 4.6;
+            o.roof = 1.45;
+            o.activate = o.z - 260;
+            o.started = true;
+            o.encounter = false;
+          }
+        }
+      }
     }
     s.branchElevation = branchElevationAt(s.distance, s.activeBranch, plan.start, plan.end);
     s.branchOffsetX = branchOffsetXAt(s.distance, s.activeBranch, plan.start, plan.end);
@@ -208,18 +236,7 @@ export function updateRoadEvents(s, dt, vanSurfaceFn) {
     }
   }
 
-  // Spawn interactive pads on live seeded runs (jumpPad, drone crates & letters removed per user request; turboPad kept)
-  if (!s.runSeed || s.next >= 90000) return;
-
-  if (!s.nextTurboPad) s.nextTurboPad = 120;
-  while (s.distance + 340 >= s.nextTurboPad) {
-    const z = s.nextTurboPad;
-    const lane = safeLaneAt(s, z);
-    if (!vanSurfaceFn || vanSurfaceFn(z, lane, s.runSeed) === 0) {
-      s.items.push({ z, lane, type: 'turboPad', done: false });
-    }
-    s.nextTurboPad += 130;
-  }
+  // Live seeded runs: follow standard school map speed progression without forced turbo pads per user request
 }
 
 export function triggerRoadEvent(s, obstacle, jumpDuration) {

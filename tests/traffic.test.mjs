@@ -39,3 +39,47 @@ test('crowded recovery corridor is cleared without chained hits',()=>{
  step(s,.025);assert.equal(s.damage,1);assert.equal(s.mode,'running');
  assert.equal(s.items.filter(o=>o.lane===s.lane&&o.type!=='coin').length,0);
 });
+
+test('jumping over College scooty cleanly clears the scooty without damage, and landing behind does not hit',()=>{
+ const s=fresh(0);s.map='college';s.mode='running';s.distance=100;s.next=100000;s.x=s.lane=0;
+ const scooty={type:'bus',collegeKind:'scooty',lane:0,z:118,length:2.2,roof:0.95,velocity:18,activate:50,done:false};
+ s.items=[scooty];
+ // Jump as scooty approaches
+ action(s,'jump');
+ while(scooty.z>s.distance-10 && s.mode==='running'){
+   step(s,.02);
+ }
+ assert.equal(s.damage,0,'jumping over scooty incurs zero damage');
+ assert.ok(scooty.jumpCleared,'scooty is flagged as jump cleared');
+ assert.equal(s.mode,'running','player continues running after clearing scooty');
+
+ // Ground collision test: not jumping into a scooty triggers collision
+ const sHit=fresh(0);sHit.map='college';sHit.mode='running';sHit.distance=100;sHit.next=100000;sHit.x=sHit.lane=0;
+ const scootyHit={type:'bus',collegeKind:'scooty',lane:0,z:102,length:2.2,roof:0.95,velocity:18,activate:50,done:false};
+ sHit.items=[scootyHit];
+ step(sHit,.05);
+ assert.equal(sHit.damage,1,'running straight into scooty without jumping takes a hit');
+});
+
+test('jumping over stationary parked College scooty (blockKind >= 3) cleanly clears with zero damage',()=>{
+ const sJump=fresh(0);sJump.map='college';sJump.mode='running';sJump.distance=90;sJump.next=100000;sJump.x=sJump.lane=0;
+ // z = 101, lane = 0 => 101 % 7 = 3 (Parked scooty obstacle)
+ const parkedScooty={type:'block',lane:0,z:101,done:false};
+ sJump.items=[parkedScooty];
+ while(sJump.distance<96)step(sJump,.02);
+ action(sJump,'jump');
+ while(sJump.distance<106 && sJump.mode==='running'){
+   step(sJump,.02);
+ }
+ assert.equal(sJump.damage,0,'jumping over stationary parked scooty clears with zero damage');
+ assert.ok(parkedScooty.done,'parked scooty is completed');
+
+ // Ground collision: running straight into parked scooty without jumping takes a hit
+ const sGround=fresh(0);sGround.map='college';sGround.mode='running';sGround.distance=98;sGround.next=100000;sGround.x=sGround.lane=0;
+ const parkedHit={type:'block',lane:0,z:101,done:false};
+ sGround.items=[parkedHit];
+ while(sGround.distance<103 && sGround.mode==='running'){
+   step(sGround,.02);
+ }
+ assert.equal(sGround.damage,1,'running straight into stationary scooty without jumping takes damage');
+});

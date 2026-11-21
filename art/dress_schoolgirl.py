@@ -273,43 +273,81 @@ def mesh(name, points, faces, mat, uv=None, joints=None, weights=None, targets=N
     return len(g['nodes']) - 1
 
 
-# Sixteen sewn pleats. Red hem bands share the cloth's skin and morph targets.
+# Sixteen softly draped pleats tailored snugly to the fitted waist & hip contour.
+# Red hem bands share the cloth's 4-bone skinning and expressive wind/sway morph targets.
 points, uv, faces, slots, joints, weights, sway_left, sway_right = [], [], [], [], [], [], [], []
-levels = sorted(set([i / 20 for i in range(21)] + [.80, .84, .90, .94]))
+levels = sorted(set([i / 24 for i in range(25)] + [.78, .82, .88, .92]))
 segments = 128
+
+def _smoothstep(x):
+    c = max(0.0, min(1.0, x))
+    return c * c * (3.0 - 2.0 * c)
+
 for t in levels:
+    # Waist (t=0) tucks flush inside the fitted jacket waist (rx=0.156, rz=0.118 -> zero boxy rim!),
+    # smoothly hugs hips (t~0.35), then drapes outward in a graceful pleated skirt flare to hem (t=1).
+    hip_curve = _smoothstep(t / 0.42)
+    flare = max(0.0, t - 0.18) ** 1.28
+    base_rx = 0.156 + 0.044 * hip_curve + 0.056 * flare
+    base_rz = 0.116 + 0.022 * hip_curve + 0.054 * flare
+    z_center = -0.008 * hip_curve - 0.006 * t
     for col in range(segments + 1):
         theta = col / segments * math.tau
-        wave = 2 * abs(2 * ((col / segments * 16) % 1) - 1) - 1
-        fold = wave * t ** 1.2
-        px = (.182 + .105 * t + .021 * fold) * math.sin(theta)
-        pz = (.132 + .120 * t + .018 * fold) * math.cos(theta)
-        py = 1.085 - .42 * t + .004 * math.cos(theta) * t
-        points.append([px, py, pz]);uv.append([col / segments * 6, t * 3])
-        leg = .65 * max(0, (t - .18) / .82)
-        left = .5 + .5 * math.tanh(px / .055)
-        joints.append([joint_ids['Hips'], joint_ids['LeftUpLeg'], joint_ids['RightUpLeg'], 0])
-        weights.append([1 - leg, leg * left, leg * (1 - left), 0])
-        sway_left.append([.015 * t*t, .004 * math.sin(theta*3) * t*t, .009 * math.cos(theta) * t*t])
-        sway_right.append([-.015 * t*t, -.004 * math.sin(theta*3) * t*t, .009 * math.cos(theta) * t*t])
+        # Soft rounded fabric pleats (silky cloth folds rather than sharp paper zig-zags)
+        pleat = 0.74 * math.sin(theta * 16.0) + 0.26 * math.sin(theta * 32.0 + 0.4)
+        drape_ripple = 0.005 * math.sin(theta * 3.0 + 0.35) * (t ** 1.4)
+        fold = pleat * (t ** 1.35)
+        px = (base_rx + 0.015 * fold + drape_ripple) * math.sin(theta)
+        pz = z_center + (base_rz + 0.013 * fold + drape_ripple) * math.cos(theta)
+        py = 1.072 - 0.395 * t + 0.008 * math.cos(theta) * (t ** 1.2) - 0.005 * abs(math.sin(theta)) * t
+        points.append([px, py, pz])
+        uv.append([col / segments * 6, t * 3])
+        # 4-bone smooth cloth skinning: Spine+Hips lock waistband to jacket; thighs drive soft lower drape!
+        spine_w = 0.42 * (1.0 - _smoothstep(t / 0.26))
+        leg_w = 0.74 * _smoothstep((t - 0.14) / 0.86)
+        hips_w = max(0.0, 1.0 - spine_w - leg_w)
+        left_share = 0.5 + 0.5 * math.tanh(px / 0.052)
+        w_sum = spine_w + hips_w + leg_w
+        joints.append([joint_ids['Hips'], joint_ids['LeftUpLeg'], joint_ids['RightUpLeg'], joint_ids['Spine']])
+        weights.append([hips_w / w_sum, (leg_w * left_share) / w_sum, (leg_w * (1.0 - left_share)) / w_sum, spine_w / w_sum])
+        # Expressive cloth morph targets: backward aerodynamic wind billow + outward radial flare +
+        # hem lift + opposite-phase fabric wave flutter & left/right inertia swing!
+        t2 = t ** 1.55
+        t3 = t ** 1.75
+        radial_x = math.sin(theta) * 0.036 * t2
+        radial_z = math.cos(theta) * 0.026 * t2
+        wind_back = -0.072 * t3
+        hem_lift = 0.028 * t3
+        ripple_a = math.sin(theta * 4.0 + t * 3.8)
+        ripple_b = math.cos(theta * 3.0 - t * 3.2)
+        sway_left.append([
+            radial_x + 0.046 * t2 + 0.010 * ripple_b * t3,
+            hem_lift + 0.014 * ripple_a * t3,
+            radial_z + wind_back + 0.012 * ripple_a * t3
+        ])
+        sway_right.append([
+            radial_x - 0.046 * t2 - 0.010 * ripple_b * t3,
+            hem_lift - 0.014 * ripple_a * t3,
+            radial_z + wind_back - 0.012 * ripple_a * t3
+        ])
 for row in range(len(levels) - 1):
     mid = (levels[row] + levels[row + 1]) / 2
-    mat = red if .80 <= mid <= .84 or .90 <= mid <= .94 else black
+    mat = red if .78 <= mid <= .82 or .88 <= mid <= .92 else black
     for col in range(segments):
         a = row * (segments + 1) + col;b = a + segments + 1
         faces.extend([(a, b, a+1), (a+1, b, b+1)]);slots.extend([mat, mat])
 skirt_node = mesh('Uniform pleated skirt with twin red hem bands', points, faces, black, uv, joints, weights,
                   [sway_left, sway_right], slots)
 
-# Folded bow lobes and separate draped tails, rather than flat decals.
+# Proportionate tailored folded bow lobes and sleek draped tails.
 for side in [-1, 1]:
     points, faces = [], []
     for row in range(13):
         v = row / 12 * 2 - 1
         for col in range(17):
-            u = col / 16;px = side * (.009 + .108 * u)
-            py = 1.437 + v * (.014 + .047 * math.sin(u * math.pi / 2)) + .009*u
-            pz = surface_z(px, py) + .018 + .022 * math.sin(u*math.pi) * math.cos(v*math.pi/2) + .003*math.sin(v*math.pi*3)*u
+            u = col / 16;px = side * (.008 + .082 * u)
+            py = 1.438 + v * (.011 + .036 * math.sin(u * math.pi / 2)) + .006*u
+            pz = surface_z(px, py) + .014 + .018 * math.sin(u*math.pi) * math.cos(v*math.pi/2) + .0025*math.sin(v*math.pi*3)*u
             points.append([px, py, pz])
             if row < 12 and col < 16:
                 a = row*17+col;faces.extend([(a,a+1,a+17), (a+1,a+18,a+17)])
@@ -318,9 +356,9 @@ for side in [-1, 1]:
     for row in range(17):
         t = row / 16
         for col in range(7):
-            u = col / 6 * 2 - 1;px = side*(.012 + t*.035) + u*(.013+.013*t)
-            py = 1.43 - .175*t + .013 * abs(u) * t**8
-            pz = surface_z(px,py) + .022 + .013*math.sin(t*math.pi) + .004*math.sin(u*math.pi*2)*math.sin(t*math.pi)
+            u = col / 6 * 2 - 1;px = side*(.010 + t*.027) + u*(.011+.010*t)
+            py = 1.432 - .145*t + .010 * abs(u) * t**8
+            pz = surface_z(px,py) + .018 + .010*math.sin(t*math.pi) + .003*math.sin(u*math.pi*2)*math.sin(t*math.pi)
             points.append([px,py,pz])
             if row<16 and col<6:
                 a=row*7+col;faces.extend([(a,a+1,a+7), (a+1,a+8,a+7)])
@@ -370,16 +408,21 @@ for front in [True,False]:
                     a=start+row*7+col;faces.extend([(a,a+1,a+7),(a+1,a+8,a+7)])
 mesh('Uniform tailored front and back seams',points,faces,seam)
 
-# Small secondary cloth motion is baked into every existing action and blends
-# with the same jump/slide/roll/gesture clips used by the runner controller.
+# Lively secondary cloth motion baked into every action (blended with live runtime cloth sway in runner-model.js).
 for clip in g['animations']:
     duration=max(float(read(s['input'])[-1,0]) for s in clip['samplers'])
     times=np.linspace(0,duration,41)
     phase=times/max(duration,.001)
-    if clip['name']=='Run':wave=np.sin(phase*math.tau*2)*.72
-    elif clip['name'] in ['Jump','Slide','Roll']:wave=np.sin(phase*math.pi)*.42
-    else:wave=np.sin(phase*math.tau)*.09
-    values=np.stack([np.maximum(0,wave),np.maximum(0,-wave)],axis=-1).reshape(-1)
+    if clip['name']=='Run':
+        w0=0.32+0.42*(0.5+0.5*np.sin(phase*math.tau*2))
+        w1=0.32+0.42*(0.5-0.5*np.sin(phase*math.tau*2))
+    elif clip['name'] in ['Jump','Slide','Roll']:
+        lift=0.18+0.58*np.sin(phase*math.pi)
+        w0=lift; w1=lift
+    else:
+        w0=0.05+0.04*(0.5+0.5*np.sin(phase*math.tau))
+        w1=0.05+0.04*(0.5-0.5*np.sin(phase*math.tau))
+    values=np.stack([w0,w1],axis=-1).reshape(-1)
     sampler=len(clip['samplers'])
     clip['samplers'].append({'input':accessor(times),'output':accessor(values),'interpolation':'LINEAR'})
     clip['channels'].append({'sampler':sampler,'target':{'node':skirt_node,'path':'weights'}})

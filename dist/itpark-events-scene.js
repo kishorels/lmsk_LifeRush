@@ -1,9 +1,11 @@
 import {
   BoxGeometry,
   CanvasTexture,
+  ClampToEdgeWrapping,
   Color,
   ConeGeometry,
   CylinderGeometry,
+  DodecahedronGeometry,
   DoubleSide,
   Group,
   IcosahedronGeometry,
@@ -14,6 +16,7 @@ import {
   RepeatWrapping,
   SphereGeometry,
   SRGBColorSpace,
+  TextureLoader,
   TorusGeometry
 } from './vendor/three.module.js';
 import { forkPlanAt, METRO_FIRST, METRO_STRIDE } from './road-events.js';
@@ -21,7 +24,7 @@ import { branchCurveY, curveRelX, curveRelY, curveSlopeAt, roadCurveSlope } from
 import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
 
 const cube = new BoxGeometry(1, 1, 1);
-const rockGeo = new IcosahedronGeometry(1, 0);
+const rockGeo = new DodecahedronGeometry(1, 1);
 const boomGeo = new CylinderGeometry(0.16, 0.34, 1, 12);
 const coneGeo = new ConeGeometry(1, 1, 10);
 
@@ -32,15 +35,21 @@ function bakeGroup(group) {
   group.traverse(o => {
     if (!o.isMesh) return;
     const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
+    for (const key of Object.keys(geo.attributes)) {
+      if (key !== 'position' && key !== 'normal' && key !== 'uv') geo.deleteAttribute(key);
+    }
+    if (!geo.attributes.normal) geo.computeVertexNormals();
     if (!batches.has(o.material)) batches.set(o.material, []);
     batches.get(o.material).push(geo);
   });
   const out = new Group();
   for (const [mat, list] of batches) {
-    const mesh = new Mesh(mergeGeometries(list), mat);
+    const mergedGeo = list.length === 1 ? list[0] : mergeGeometries(list, false);
+    if (!mergedGeo) { for (const geo of list) geo.dispose(); continue; }
+    const mesh = new Mesh(mergedGeo, mat);
     mesh.receiveShadow = true;
     out.add(mesh);
-    for (const geo of list) geo.dispose();
+    if (list.length > 1) for (const geo of list) geo.dispose();
   }
   return out;
 }
@@ -465,12 +474,205 @@ export function createRoadEventsScene(scene) {
   const shrubBright = getMat('reShrub1', { color: 0x22c55e, roughness: 0.72 });
   const shrubDeep = getMat('reShrub2', { color: 0x15803d, roughness: 0.78 });
   const shrubLime = getMat('reShrub3', { color: 0x4ade80, roughness: 0.68 });
-  const skyGlassFloor = getMat('reSkyGlass', {
-    color: 0x6ce0ff, roughness: 0.04, metalness: 0.46, transparent: true, opacity: 0.50, emissive: 0x0284c7, emissiveIntensity: 0.24
-  });
-  const skyRailGlass = getMat('reRailGlass', {
-    color: 0x38bdf8, roughness: 0.06, metalness: 0.34, transparent: true, opacity: 0.46, emissive: 0x0284c7, emissiveIntensity: 0.22
-  });
+
+  // High-Definition Laminated Architectural Glass Floor (Spider Bolts, Expansion Joints & Anti-Slip Frit Pattern)
+  function createSkywalkGlassMat() {
+    if (typeof document === 'undefined') {
+      return getMat('reSkyGlass:fb', {
+        color: 0x6ce0ff, roughness: 0.04, metalness: 0.46, transparent: true, opacity: 0.50, emissive: 0x0284c7, emissiveIntensity: 0.24
+      });
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 512;
+    const ctx = cv.getContext('2d');
+    const emCv = document.createElement('canvas');
+    emCv.width = 512; emCv.height = 512;
+    const emCtx = emCv.getContext('2d');
+    if (!ctx || !emCtx) {
+      return getMat('reSkyGlass:fb', {
+        color: 0x6ce0ff, roughness: 0.04, metalness: 0.46, transparent: true, opacity: 0.50, emissive: 0x0284c7, emissiveIntensity: 0.24
+      });
+    }
+
+    // Deep crystal azure translucent glass tint
+    ctx.fillStyle = 'rgba(14, 165, 233, 0.45)';
+    ctx.fillRect(0, 0, 512, 512);
+    emCtx.fillStyle = '#000000';
+    emCtx.fillRect(0, 0, 512, 512);
+
+    const cols = 4, rows = 8;
+    const pw = 512 / cols;
+    const ph = 512 / rows;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = c * pw;
+        const y = r * ph;
+
+        // Inner bevel refraction highlight showing 19mm architectural glass edge thickness
+        ctx.strokeStyle = 'rgba(125, 211, 252, 0.55)';
+        ctx.lineWidth = 1.8;
+        ctx.strokeRect(x + 3, y + 3, pw - 6, ph - 6);
+
+        // Anti-slip ceramic traction frit dot grid (leaves central inspection window clear for deep ocean view)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+        for (let fx = x + 10; fx < x + pw - 10; fx += 14) {
+          for (let fy = y + 10; fy < y + ph - 10; fy += 12) {
+            // Leave center 40% open for crystal-clear sea and wave visibility below!
+            const dx = Math.abs(fx - (x + pw / 2));
+            const dy = Math.abs(fy - (y + ph / 2));
+            if (dx < pw * 0.28 && dy < ph * 0.28) continue;
+            ctx.beginPath();
+            ctx.arc(fx, fy, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Structural silicone expansion joint
+        ctx.strokeStyle = 'rgba(8, 51, 68, 0.75)';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, pw, ph);
+
+        // Stainless steel spider clamp discs and countersunk hex bolts at panel corners
+        for (const [bx, by] of [[x + 6, y + 6], [x + pw - 6, y + 6], [x + 6, y + ph - 6], [x + pw - 6, y + ph - 6]]) {
+          // Steel clamp disc
+          ctx.fillStyle = '#cbd5e1';
+          ctx.beginPath();
+          ctx.arc(bx, by, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          // Countersunk hex bolt head
+          ctx.fillStyle = '#334155';
+          ctx.beginPath();
+          ctx.arc(bx, by, 2.0, 0, Math.PI * 2);
+          ctx.fill();
+          // Ambient cyan bolt illumination
+          emCtx.fillStyle = '#00f0ff';
+          emCtx.beginPath();
+          emCtx.arc(bx, by, 2.5, 0, Math.PI * 2);
+          emCtx.fill();
+        }
+      }
+    }
+
+    // Embedded glowing cyan lane dividers (marking the 3 runner lanes directly inside the glass)
+    for (const lx of [128, 256, 384]) {
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.65)';
+      ctx.fillRect(lx - 2, 0, 4, 512);
+      emCtx.fillStyle = '#00f0ff';
+      emCtx.fillRect(lx - 1.5, 0, 3, 512);
+    }
+
+    const map = new CanvasTexture(cv);
+    map.colorSpace = SRGBColorSpace;
+    map.wrapS = map.wrapT = RepeatWrapping;
+    map.repeat.set(2, 4);
+    map.anisotropy = 4;
+
+    const emissiveMap = new CanvasTexture(emCv);
+    emissiveMap.colorSpace = SRGBColorSpace;
+    emissiveMap.wrapS = emissiveMap.wrapT = RepeatWrapping;
+    emissiveMap.repeat.set(2, 4);
+    emissiveMap.anisotropy = 4;
+
+    return new MeshStandardMaterial({
+      color: 0xffffff,
+      map,
+      emissiveMap,
+      emissive: 0x00f0ff,
+      emissiveIntensity: 0.32,
+      roughness: 0.04,
+      metalness: 0.52,
+      transparent: true,
+      opacity: 0.58,
+      envMapIntensity: 2.1
+    });
+  }
+
+  // Structural Glass Balustrade Railing (Vertical Panels, Panel Gaps & Clamp Shoes)
+  function createSkywalkRailGlassMat() {
+    if (typeof document === 'undefined') {
+      return getMat('reRailGlass:fb', {
+        color: 0x38bdf8, roughness: 0.06, metalness: 0.34, transparent: true, opacity: 0.46, emissive: 0x0284c7, emissiveIntensity: 0.22
+      });
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 256;
+    const ctx = cv.getContext('2d');
+    const emCv = document.createElement('canvas');
+    emCv.width = 256; emCv.height = 256;
+    const emCtx = emCv.getContext('2d');
+    if (!ctx || !emCtx) {
+      return getMat('reRailGlass:fb', {
+        color: 0x38bdf8, roughness: 0.06, metalness: 0.34, transparent: true, opacity: 0.46, emissive: 0x0284c7, emissiveIntensity: 0.22
+      });
+    }
+
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.40)';
+    ctx.fillRect(0, 0, 256, 256);
+    emCtx.fillStyle = '#000000';
+    emCtx.fillRect(0, 0, 256, 256);
+
+    // 4 vertical structural glass panels separated by expansion gaps
+    for (let i = 0; i < 4; i++) {
+      const px = i * 64;
+      // Gap
+      ctx.fillStyle = 'rgba(8, 47, 73, 0.65)';
+      ctx.fillRect(px, 0, 3, 256);
+      // Bright bevel refraction edge
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.65)';
+      ctx.fillRect(px + 3, 0, 1.5, 256);
+      // Stainless steel base clamp shoe
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(px + 12, 224, 40, 32);
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.arc(px + 32, 240, 3, 0, Math.PI * 2);
+      ctx.fill();
+      // Stainless steel point-fixing boss clamp in middle
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(px + 32, 128, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(px + 32, 128, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Top handrail cap
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(0, 0, 256, 12);
+    // Cyan LED underglow in base channel
+    emCtx.fillStyle = '#00e5ff';
+    emCtx.fillRect(0, 248, 256, 8);
+
+    const map = new CanvasTexture(cv);
+    map.colorSpace = SRGBColorSpace;
+    map.wrapS = map.wrapT = RepeatWrapping;
+    map.repeat.set(4, 1);
+    map.anisotropy = 4;
+
+    const emissiveMap = new CanvasTexture(emCv);
+    emissiveMap.colorSpace = SRGBColorSpace;
+    emissiveMap.wrapS = emissiveMap.wrapT = RepeatWrapping;
+    emissiveMap.repeat.set(4, 1);
+    emissiveMap.anisotropy = 4;
+
+    return new MeshStandardMaterial({
+      color: 0xffffff,
+      map,
+      emissiveMap,
+      emissive: 0x00e5ff,
+      emissiveIntensity: 0.28,
+      roughness: 0.05,
+      metalness: 0.38,
+      transparent: true,
+      opacity: 0.54,
+      envMapIntensity: 2.0
+    });
+  }
+
+  const skyGlassFloor = createSkywalkGlassMat();
+  const skyRailGlass = createSkywalkRailGlassMat();
   const metroWhite = getMat('reMetW', { color: 0xf8fafc, roughness: 0.16, metalness: 0.28 });
   const metroBlue = getMat('reMetB', { color: 0x2563eb, roughness: 0.22, metalness: 0.38 });
   const metroGlass = getMat('reMetG', { color: 0x152a42, roughness: 0.08, metalness: 0.78 });
@@ -600,6 +802,10 @@ export function createRoadEventsScene(scene) {
     part(portalPreview, chevLeft, 0.85, 2.10, kz, 0.08, 1.28, 2.15);
     part(portalPreview, chevRight, 4.22, 2.10, kz, 0.08, 1.28, 2.15);
   }
+  // Bake the ~190 static approach sleeve parts into ~12 merged draw calls for smooth mobile FPS!
+  const bakedPreview = bakeGroup(portalPreview);
+  portalPreview.clear();
+  portalPreview.add(bakedPreview);
 
   // ---------------------------------------------------------------------------
   // 2. SEAMLESS 1,000m ENDLESS LOOPING 3-LANE CRYSTAL-BLUE GLASS SEA-BRIDGE
@@ -689,6 +895,53 @@ export function createRoadEventsScene(scene) {
   const departHeadland = buildShoreHeadland(-1); // faces open ocean (-Z) at plan.start + 160
   const returnHeadland = buildShoreHeadland(1);  // faces open ocean (+Z) at plan.end - 160
 
+  // Bake Glass Bridge bay geometry into 2 shared templates (plain & pier) — drops ~1,008 draw calls to ~140!
+  function buildSkyBayDeckTemplate(withPier) {
+    const g = new Group();
+    // Full 3-lane translucent glossy sky-blue glass deck + steel architectural grid (slight overlap seals curves!)
+    part(g, skyGlassFloor, 0, 0.06, 0, 7.65, 0.12, BAY_OVERLAP);
+    for (const gx of [-3.74, -1.25, 1.25, 3.74]) {
+      part(g, steel, gx, 0.08, 0, 0.14, 0.14, BAY_OVERLAP);
+    }
+    for (const gz of [-6, -2, 2, 6]) {
+      part(g, steel, 0, 0.08, gz, 7.82, 0.14, 0.14);
+    }
+    // Deep structural diagonal steel cross-trusses visible through the translucent glass deck!
+    for (const gz of [-4, 0, 4]) {
+      const diag1 = part(g, steel, -1.25, -0.06, gz, 0.10, 0.12, 3.8);
+      diag1.rotation.y = 0.58;
+      const diag2 = part(g, steel, 1.25, -0.06, gz, 0.10, 0.12, 3.8);
+      diag2.rotation.y = -0.58;
+    }
+    // Glowing cyan lane guide accents & outer floor LED channels + sleek blue-glass side railings!
+    for (const side of [-1, 1]) {
+      part(g, cyanLed, side * 1.15, 0.13, 0, 0.09, 0.04, BAY_OVERLAP);
+      part(g, blueSteel, side * 3.92, 1.26, 0, 0.22, 0.16, BAY_OVERLAP);
+      part(g, blueSteel, side * 3.92, 0.22, 0, 0.36, 0.26, BAY_OVERLAP);
+      part(g, skyRailGlass, side * 3.92, 0.74, 0, 0.08, 0.86, BAY_OVERLAP);
+      for (const pz of [-5.2, 0, 5.2]) {
+        part(g, cyanLed, side * 3.58, 0.16, pz, 0.20, 0.10, 3.4);
+        part(g, blueSteel, side * 3.92, 0.74, pz, 0.24, 1.18, 0.24);
+        part(g, cyanLed, side * 3.80, 0.74, pz, 0.08, 0.78, 0.14);
+      }
+      // Illuminated parapet curb edge pods (Exact Reference Image!)
+      for (const pz of [-5.2, -1.8, 1.8, 5.2]) {
+        part(g, steel, side * 3.68, 0.18, pz, 0.22, 0.14, 0.72);
+        part(g, cyanLed, side * 3.56, 0.18, pz, 0.06, 0.10, 0.60);
+      }
+    }
+    if (withPier) {
+      part(g, concrete, 0, -0.35, 0, 8.2, 0.65, 1.15);
+      for (const side of [-1, 1]) {
+        part(g, concreteLight, side * 3.45, -3.70, 0, 0.92, 7.15, 1.05);
+        part(g, concreteDark, side * 3.45, SEA_Y - 1.1, 0, 1.28, 3.6, 1.48);
+      }
+    }
+    return bakeGroup(g);
+  }
+  const skyBayPlainTpl = buildSkyBayDeckTemplate(false);
+  const skyBayPierTpl = buildSkyBayDeckTemplate(true);
+
   for (let i = 0; i < skyBayCount; i++) {
     const bay = new Group();
     skyLoop.add(bay);
@@ -698,34 +951,13 @@ export function createRoadEventsScene(scene) {
     quay.visible = false;
     bay.add(quay);
     bay.userData.quay = quay;
-    // Full 3-lane translucent glossy sky-blue glass deck + steel architectural grid (slight overlap seals curves!)
-    part(bay, skyGlassFloor, 0, 0.06, 0, 7.65, 0.12, BAY_OVERLAP);
-    for (const gx of [-3.74, -1.25, 1.25, 3.74]) {
-      part(bay, steel, gx, 0.08, 0, 0.14, 0.14, BAY_OVERLAP);
-    }
-    for (const gz of [-6, -2, 2, 6]) {
-      part(bay, steel, 0, 0.08, gz, 7.82, 0.14, 0.14);
-    }
-    // Glowing cyan lane guide accents & outer floor LED channels + sleek blue-glass side railings!
-    for (const side of [-1, 1]) {
-      part(bay, cyanLed, side * 1.15, 0.13, 0, 0.09, 0.04, BAY_OVERLAP);
-      part(bay, blueSteel, side * 3.92, 1.26, 0, 0.22, 0.16, BAY_OVERLAP);
-      part(bay, blueSteel, side * 3.92, 0.22, 0, 0.36, 0.26, BAY_OVERLAP);
-      part(bay, skyRailGlass, side * 3.92, 0.74, 0, 0.08, 0.86, BAY_OVERLAP);
-      for (const pz of [-5.2, 0, 5.2]) {
-        part(bay, cyanLed, side * 3.58, 0.16, pz, 0.20, 0.10, 3.4);
-        part(bay, blueSteel, side * 3.92, 0.74, pz, 0.24, 1.18, 0.24);
-        part(bay, cyanLed, side * 3.80, 0.74, pz, 0.08, 0.78, 0.14);
-      }
-    }
-    // Deep ocean support piers & waterline surf-foam rings under every alternate bay
-    if (i % 2 === 0) {
+    const hasPier = i % 2 === 0;
+    bay.add((hasPier ? skyBayPierTpl : skyBayPlainTpl).clone());
+    // Waterline surf-foam rings under every alternate pier bay
+    if (hasPier) {
       bay.userData.hasPier = true;
       bay.userData.surfs = [];
-      part(bay, concrete, 0, -0.35, 0, 8.2, 0.65, 1.15);
       for (const side of [-1, 1]) {
-        part(bay, concreteLight, side * 3.45, -3.70, 0, 0.92, 7.15, 1.05);
-        part(bay, concreteDark, side * 3.45, SEA_Y - 1.1, 0, 1.28, 3.6, 1.48);
         const surf = new Mesh(ringGeo, foamMat);
         surf.rotation.x = Math.PI / 2;
         surf.position.set(side * 3.45, SEA_Y + 0.22, 0);
@@ -746,6 +978,8 @@ export function createRoadEventsScene(scene) {
       tower.rotation.z = side * 0.04;
       part(g, cyanLed, side * 4.24, 9.5, 0, 0.16, 17.5, 0.36);
       part(g, concreteDark, side * 5.0, SEA_Y - 1.2, 0, 2.25, 4.8, 3.2);
+      // High-visibility beacon light atop each pylon stay summit
+      part(g, whiteLed, side * 4.75, 21.95, 0, 0.28, 0.45, 0.28, sphere);
       // Fan array of sleek suspension cables sweeping fore & aft down to the glass bridge deck
       for (const dz of [-38, -28, -19, -11, 11, 19, 28, 38]) {
         const topY = 20.5 - Math.abs(dz) * 0.13;
@@ -972,57 +1206,353 @@ export function createRoadEventsScene(scene) {
   }
 
   const seaBoats = [
-    { mesh: buildBoat(false), side: -1, x: -24, speed: 6.5, span: 310, offset: 35 },
-    { mesh: buildBoat(true),  side: 1,  x: 28,  speed: 4.2, span: 310, offset: 120 },
-    { mesh: buildBoat(true),  side: -1, x: -46, speed: 3.8, span: 310, offset: 205 },
-    { mesh: buildBoat(false), side: 1,  x: 52,  speed: 7.4, span: 310, offset: 265 }
+    { mesh: buildBoat(true),  side: -1, x: -68, speed: 2.2, span: 340, offset: 45 },
+    { mesh: buildBoat(false), side: 1,  x: 82,  speed: 3.5, span: 380, offset: 160 }
   ];
   for (const bt of seaBoats) {
     bt.mesh.scale.setScalar(1.25);
     seaWorld.add(bt.mesh);
   }
 
-  // Distant Ocean Cruise Liner gliding slowly across the far horizon!
-  const cruiseShip = new Group();
-  part(cruiseShip, hullNavy, 0, 1.8, 0, 36, 3.8, 6.8);
-  part(cruiseShip, hullWhite, 0, 4.8, 0, 32, 3.2, 6.2);
-  part(cruiseShip, hullWhite, 1.2, 7.3, 0, 22, 2.2, 5.2);
-  part(cruiseShip, warmLamp, 0, 4.9, 3.16, 28, 0.55, 0.10);
-  part(cruiseShip, warmLamp, 1.2, 7.2, 2.66, 18, 0.45, 0.10);
-  part(cruiseShip, getMat('reCruiseRed', { color: 0xe11d48, roughness: 0.35 }), -4.5, 9.6, 0, 3.2, 2.8, 2.4);
-  part(cruiseShip, wakeMat, 0, 0.15, 0, 46, 0.12, 8.6);
-  cruiseShip.position.set(-75, SEA_Y + 0.1, -245);
-  seaWorld.add(cruiseShip);
-
-  // Scenic Coastal Rocky Islands + Red-and-White Striped Lighthouse with rotating warm beacon!
-  const sandMat = getMat('reIslandSand', { color: 0xe6c88a, roughness: 0.88 });
+  // Scenic Coastal Rocky Islands + Photorealistic School Map Trees + Red-and-White Lighthouse!
   const lhRed = getMat('reLhRed', { color: 0xdc2626, roughness: 0.32 });
   const beaconBeamMat = new MeshBasicMaterial({
     color: 0xfff3a8, transparent: true, opacity: 0.28, side: DoubleSide, depthWrite: false
   });
   const lighthouseBeacon = new Group();
+
+  // ---------------------------------------------------------------------------
+  // PHOTOREALISTIC ISLAND MATERIALS: COASTAL GRANITE CLIFFS, JUNGLE TURF & EARTH SOIL
+  // ---------------------------------------------------------------------------
+  function createRealisticRockMat() {
+    if (typeof document === 'undefined') {
+      return getMat('reRockFb', { color: 0x8a8277, roughness: 0.85, metalness: 0.05 });
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 512;
+    const ctx = cv.getContext('2d');
+    const bCv = document.createElement('canvas');
+    bCv.width = 512; bCv.height = 512;
+    const bCtx = bCv.getContext('2d');
+    if (!ctx || !bCtx) return getMat('reRockFb', { color: 0x8a8277, roughness: 0.85, metalness: 0.05 });
+
+    // Warm natural sunlit coastal granite gradient (weathered grey-tan stone)
+    const grad = ctx.createLinearGradient(0, 0, 512, 512);
+    grad.addColorStop(0, '#aba399');    // Sunlit warm granite crown
+    grad.addColorStop(0.35, '#8e867b'); // Weathered coastal stone
+    grad.addColorStop(0.70, '#6e675e'); // Shaded granite crevices
+    grad.addColorStop(1, '#423b34');    // Wet waterline stone base
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 512);
+
+    bCtx.fillStyle = '#808080';
+    bCtx.fillRect(0, 0, 512, 512);
+
+    // Geological horizontal strata bands
+    for (let y = 0; y < 512; y += 14 + hash01(y * 13) * 18) {
+      const dark = hash01(y * 19) > 0.45;
+      ctx.fillStyle = dark ? 'rgba(55, 48, 42, 0.28)' : 'rgba(235, 228, 220, 0.28)';
+      ctx.fillRect(0, y, 512, 2 + hash01(y * 23) * 4);
+      bCtx.fillStyle = dark ? '#656565' : '#9b9b9b';
+      bCtx.fillRect(0, y, 512, 2 + hash01(y * 23) * 4);
+    }
+
+    // Granular mineral pebble noise (quartz, feldspar speckles)
+    const imgData = ctx.getImageData(0, 0, 512, 512);
+    const d = imgData.data;
+    const bImg = bCtx.getImageData(0, 0, 512, 512);
+    const bd = bImg.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const n = (hash01(i * 3.3) - 0.5) * 32;
+      d[i] = Math.max(0, Math.min(255, d[i] + n));
+      d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n * 0.95));
+      d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n * 0.90));
+      const bn = Math.max(0, Math.min(255, bd[i] + n * 1.1));
+      bd[i] = bd[i + 1] = bd[i + 2] = bn;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    bCtx.putImageData(bImg, 0, 0);
+
+    // Subtle granite fracture fissures
+    for (let i = 0; i < 35; i++) {
+      let cx = hash01(i * 31) * 512, cy = hash01(i * 37) * 512;
+      ctx.strokeStyle = 'rgba(40, 34, 28, 0.65)';
+      ctx.lineWidth = 1.2 + hash01(i * 41) * 1.8;
+      bCtx.strokeStyle = '#404040';
+      bCtx.lineWidth = ctx.lineWidth;
+      ctx.beginPath();
+      bCtx.beginPath();
+      ctx.moveTo(cx, cy);
+      bCtx.moveTo(cx, cy);
+      for (let s = 0; s < 4; s++) {
+        cx += (hash01(i * 47 + s * 13) - 0.5) * 36;
+        cy += hash01(i * 53 + s * 17) * 28;
+        ctx.lineTo(cx, cy);
+        bCtx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+      bCtx.stroke();
+    }
+
+    // Coastal green moss clinging to crevices
+    for (let i = 0; i < 30; i++) {
+      const mx = hash01(i * 61) * 512, my = hash01(i * 67) * 350;
+      ctx.fillStyle = 'rgba(46, 125, 50, 0.40)';
+      ctx.beginPath();
+      ctx.arc(mx, my, 8 + hash01(i * 71) * 16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const tex = new CanvasTexture(cv);
+    tex.colorSpace = SRGBColorSpace;
+    tex.wrapS = tex.wrapT = RepeatWrapping;
+    tex.repeat.set(2, 2);
+
+    const bumpTex = new CanvasTexture(bCv);
+    bumpTex.wrapS = bumpTex.wrapT = RepeatWrapping;
+    bumpTex.repeat.set(2, 2);
+
+    return new MeshStandardMaterial({
+      map: tex,
+      bumpMap: bumpTex,
+      bumpScale: 0.10,
+      roughness: 0.84,
+      metalness: 0.04
+    });
+  }
+
+  function createRealisticIslandTurfMat() {
+    if (typeof document === 'undefined') {
+      return getMat('reTurfFb', { color: 0x2e8540, roughness: 0.88 });
+    }
+    const turfMap = new TextureLoader().load(new URL('./assets/street/turf.webp', import.meta.url).href);
+    turfMap.wrapS = RepeatWrapping;
+    turfMap.wrapT = RepeatWrapping;
+    turfMap.repeat.set(8, 8);
+    turfMap.colorSpace = SRGBColorSpace;
+    return new MeshStandardMaterial({
+      map: turfMap,
+      color: 0x2e8540, // Vibrant lush tropical green (Exact Reference Image!)
+      roughness: 0.88,
+      metalness: 0.04
+    });
+  }
+
+  function createRealisticIslandSoilMat() {
+    if (typeof document === 'undefined') {
+      return getMat('reSoilFb', { color: 0xc49e65, roughness: 0.92 });
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 512;
+    const ctx = cv.getContext('2d');
+    const bCv = document.createElement('canvas');
+    bCv.width = 512; bCv.height = 512;
+    const bCtx = bCv.getContext('2d');
+    if (!ctx || !bCtx) return getMat('reSoilFb', { color: 0xc49e65, roughness: 0.92 });
+
+    // Warm tropical beach sand gradient (dry golden-tan to rich warm sand)
+    const grad = ctx.createLinearGradient(0, 0, 512, 512);
+    grad.addColorStop(0, '#f2dfbc');    // Sunlit dry golden beach sand
+    grad.addColorStop(0.35, '#e4ca9e'); // Warm coastal dune sand
+    grad.addColorStop(0.70, '#c9a874'); // Moist beach sand
+    grad.addColorStop(1, '#8f6e42');    // Wet tidal wash sand
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 512);
+
+    bCtx.fillStyle = '#808080';
+    bCtx.fillRect(0, 0, 512, 512);
+
+    // Natural fine sand micro-grain noise
+    const imgData = ctx.getImageData(0, 0, 512, 512);
+    const d = imgData.data;
+    const bImg = bCtx.getImageData(0, 0, 512, 512);
+    const bd = bImg.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const n = (hash01(i * 1.7) - 0.5) * 28;
+      d[i] = Math.max(0, Math.min(255, d[i] + n));
+      d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n * 0.92));
+      d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n * 0.80));
+      const bn = Math.max(0, Math.min(255, bd[i] + n));
+      bd[i] = bd[i + 1] = bd[i + 2] = bn;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    bCtx.putImageData(bImg, 0, 0);
+
+    // Organic gentle sand ripple curves from tidal wash
+    ctx.lineWidth = 2.5;
+    bCtx.lineWidth = 2.5;
+    for (let y = 16; y < 512; y += 24) {
+      const light = hash01(y * 11) > 0.5;
+      ctx.strokeStyle = light ? 'rgba(255, 248, 230, 0.35)' : 'rgba(120, 95, 60, 0.20)';
+      bCtx.strokeStyle = light ? '#9c9c9c' : '#686868';
+      ctx.beginPath();
+      bCtx.beginPath();
+      ctx.moveTo(0, y);
+      bCtx.moveTo(0, y);
+      ctx.bezierCurveTo(128, y + 6, 384, y - 6, 512, y);
+      bCtx.bezierCurveTo(128, y + 6, 384, y - 6, 512, y);
+      ctx.stroke();
+      bCtx.stroke();
+    }
+
+    const tex = new CanvasTexture(cv);
+    tex.colorSpace = SRGBColorSpace;
+    tex.wrapS = tex.wrapT = RepeatWrapping;
+    tex.repeat.set(4, 4);
+
+    const bumpTex = new CanvasTexture(bCv);
+    bumpTex.wrapS = bumpTex.wrapT = RepeatWrapping;
+    bumpTex.repeat.set(4, 4);
+
+    return new MeshStandardMaterial({
+      map: tex,
+      bumpMap: bumpTex,
+      bumpScale: 0.06,
+      roughness: 0.92,
+      metalness: 0.02
+    });
+  }
+
+  // Smooth, organic rounded coastal granite boulders (Exact Reference Image!)
+  function buildSculptedRockGeo(seed = 1) {
+    const geo = new IcosahedronGeometry(1, 2);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const n1 = Math.sin(x * 2.8 + seed) * 0.10;
+      const n2 = Math.cos(y * 3.2 + seed * 1.5) * 0.08;
+      const n3 = Math.sin(z * 2.5 + seed * 2.0) * 0.08;
+      const yFlatten = y < -0.1 ? y * 0.5 : (y * 0.95 + 0.05);
+      const scale = 1 + n1 + n2 + n3;
+      pos.setXYZ(i, x * scale, yFlatten * scale, z * scale);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  // Smooth natural tropical island cay / atoll mound
+  function buildIslandTerrainGeo(seed = 1) {
+    const geo = new SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const angle = Math.atan2(z, x);
+      const coastWobble = 1 + Math.sin(angle * 3 + seed) * 0.12 + Math.cos(angle * 5 + seed * 1.8) * 0.06;
+      pos.setXYZ(i, x * coastWobble, y, z * coastWobble);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  const islandSoilMat = createRealisticIslandSoilMat();
+  const islandTurfMat = createRealisticIslandTurfMat();
+  const photoRockMat = createRealisticRockMat();
+
+  const islandSandGeo = buildIslandTerrainGeo(1);
+  const islandTurfGeo = buildIslandTerrainGeo(2);
+  const rockGeoA = buildSculptedRockGeo(3);
+  const rockGeoB = buildSculptedRockGeo(7);
+  const rockGeoC = buildSculptedRockGeo(11);
+
+  const treeTexCache = new Map();
+  function loadTreeTexture(name) {
+    if (typeof document === 'undefined') return null;
+    if (!treeTexCache.has(name)) {
+      const map = new TextureLoader().load(new URL('./assets/street/' + name + '.webp', import.meta.url).href);
+      map.colorSpace = SRGBColorSpace;
+      map.wrapS = RepeatWrapping;
+      treeTexCache.set(name, map);
+    }
+    return treeTexCache.get(name);
+  }
+
+  const islandTreeMats = new Map();
+  function getIslandTreeMaterial(species) {
+    if (!islandTreeMats.has(species)) {
+      const tex = loadTreeTexture(species);
+      islandTreeMats.set(species, new MeshStandardMaterial({
+        map: tex,
+        alphaTest: 0.45,
+        side: DoubleSide,
+        roughness: 0.85,
+        color: 0xf5f3e8
+      }));
+    }
+    return islandTreeMats.get(species);
+  }
+
+  const islandSwayingTrees = [];
+  function addRealisticIslandTree(parent, x, y, z, height, isPalm = true, seedOffset = 0) {
+    const species = isPalm ? 'palm' : 'neem';
+    const mat = getIslandTreeMaterial(species);
+    const width = height * (isPalm ? 0.82 : 1.08);
+
+    const treeGroup = new Group();
+    treeGroup.position.set(x, y, z);
+    parent.add(treeGroup);
+
+    // Cross-plane intersecting double quads (Exact School Map realistic 3D foliage volume!)
+    for (const rotY of [0, Math.PI / 2]) {
+      const plane = new Mesh(planeGeo, mat);
+      plane.scale.set(width, height, 1);
+      plane.position.y = height / 2;
+      plane.rotation.y = rotY;
+      plane.castShadow = plane.receiveShadow = true;
+      treeGroup.add(plane);
+    }
+
+    const seed = Math.abs(x * 3.7 + z * 5.1 + height * 2.3 + seedOffset);
+    islandSwayingTrees.push({ group: treeGroup, seed, height });
+    return treeGroup;
+  }
+
   function buildCoastalIsland(hasLighthouse) {
     const isl = new Group();
-    // Sandy beach ring + layered rocky hill + tropical green foliage
-    part(isl, sandMat, 0, 0.45, 0, 19, 1.3, 15, sphere);
-    part(isl, rockB, -1.8, 3.2, -0.5, 11.5, 5.4, 9.5, rockGeo);
-    part(isl, rockA, 4.5, 2.2, 2.0, 8.2, 3.8, 7.2, rockGeo);
-    part(isl, shrubDeep, -2.5, 6.8, -0.8, 7.8, 3.4, 6.8, sphere);
-    part(isl, shrubBright, 3.2, 4.8, 1.5, 5.4, 2.6, 4.8, sphere);
-    // White surf ring around the island shoreline
-    const iFoam = new Mesh(ringGeo, foamMat);
-    iFoam.rotation.x = Math.PI / 2;
-    iFoam.position.set(0, 0.25, 0);
-    iFoam.scale.set(42, 34, 0.45);
-    isl.add(iFoam);
     if (hasLighthouse) {
-      part(isl, metroWhite, -1.5, 9.5, 0, 1.45, 4.5, 1.45, cyl12);
-      part(isl, lhRed, -1.5, 12.6, 0, 1.25, 2.4, 1.25, cyl12);
-      part(isl, metroWhite, -1.5, 14.8, 0, 1.08, 2.2, 1.08, cyl12);
-      part(isl, lhRed, -1.5, 16.5, 0, 1.02, 1.2, 1.02, cyl12);
-      part(isl, warmLamp, -1.5, 17.8, 0, 1.05, 1.35, 1.05, cyl12);
-      part(isl, lhRed, -1.5, 19.1, 0, 1.25, 1.45, 1.25, coneGeo);
-      lighthouseBeacon.position.set(-1.5, 17.8, 0);
+      // Right Island: Picturesque Lighthouse Promontory across the bay (Exact Reference Image!)
+      // 1. Natural Golden Beach Sand Base
+      part(isl, islandSoilMat, 0, 0.45, 0, 26, 1.4, 20, islandSandGeo);
+
+      // 2. Lush Green Grassy Island Knoll (School Map turf.webp)
+      part(isl, islandTurfMat, -1.2, 1.8, -0.6, 17, 3.2, 13, islandTurfGeo);
+
+      // 3. Natural Rounded Granite Coastal Rocks
+      part(isl, photoRockMat, -3.2, 2.4, -1.5, 9.5, 4.2, 7.8, rockGeoA);
+      part(isl, photoRockMat, 5.0, 1.0, 2.0, 6.2, 2.6, 4.8, rockGeoB);
+      part(isl, photoRockMat, -6.0, 0.8, 3.0, 5.4, 2.2, 4.4, rockGeoC);
+
+      // 4. White frothing ocean surf foam ring pulsing around the shoreline
+      const iFoam = new Mesh(ringGeo, foamMat);
+      iFoam.rotation.x = Math.PI / 2;
+      iFoam.position.set(0, 0.22, 0);
+      iFoam.scale.set(34, 26, 0.45);
+      isl.add(iFoam);
+      isl.userData.foam = iFoam;
+
+      // 5. Authentic School Map 3D Foliage (palm.webp & neem.webp with wind-sway animation!)
+      addRealisticIslandTree(isl, 3.5, 1.2, 2.2, 11.5, true, 1);
+      addRealisticIslandTree(isl, 5.2, 0.8, -1.2, 10.2, true, 2);
+      addRealisticIslandTree(isl, -4.2, 1.4, 2.8, 12.0, true, 3);
+      addRealisticIslandTree(isl, -5.5, 0.9, -1.8, 9.8, true, 4);
+      addRealisticIslandTree(isl, 2.2, 2.6, -3.2, 13.0, true, 5);
+      addRealisticIslandTree(isl, -1.8, 3.0, 3.5, 11.0, true, 6);
+      addRealisticIslandTree(isl, 4.8, 1.6, 3.8, 9.2, true, 7);
+      addRealisticIslandTree(isl, 0.8, 3.8, 1.5, 8.6, false, 8);
+      addRealisticIslandTree(isl, -2.8, 4.0, -1.2, 7.8, false, 9);
+      addRealisticIslandTree(isl, 2.8, 3.2, -1.5, 8.2, false, 10);
+
+      // 6. Iconic Red-and-White Banded Maritime Lighthouse with Iron Balcony Gallery!
+      part(isl, photoRockMat, -3.2, 4.8, -1.5, 2.4, 0.8, 2.4, cyl12); // Stone plinth
+      part(isl, metroWhite, -3.2, 6.8, -1.5, 1.5, 3.2, 1.5, cyl12);
+      part(isl, lhRed, -3.2, 9.2, -1.5, 1.3, 2.0, 1.3, cyl12);
+      part(isl, metroWhite, -3.2, 10.9, -1.5, 1.2, 1.6, 1.2, cyl12);
+      part(isl, lhRed, -3.2, 12.3, -1.5, 1.1, 1.2, 1.1, cyl12);
+      part(isl, darkMetal, -3.2, 13.1, -1.5, 1.7, 0.14, 1.7, cyl12); // Gallery deck
+      part(isl, steel, -3.2, 13.4, -1.5, 1.65, 0.45, 1.65, cyl12);   // Safety railing
+      part(isl, warmLamp, -3.2, 14.1, -1.5, 1.05, 1.2, 1.05, cyl12); // Glass lantern chamber
+      part(isl, lhRed, -3.2, 15.3, -1.5, 1.25, 1.3, 1.25, coneGeo);  // Conical roof cap
+      part(isl, steel, -3.2, 16.2, -1.5, 0.08, 0.8, 0.08, cyl12);    // Lightning rod spire
+      lighthouseBeacon.position.set(-3.2, 14.1, -1.5);
       isl.add(lighthouseBeacon);
       for (const dir of [-1, 1]) {
         const beam = new Mesh(coneGeo, beaconBeamMat);
@@ -1031,14 +1561,51 @@ export function createRoadEventsScene(scene) {
         beam.scale.set(3.2, 32, 3.2);
         lighthouseBeacon.add(beam);
       }
+    } else {
+      // Left Island: Lush Tropical Palm Paradise across the bay (Exact Reference Image!)
+      // 1. Natural Golden Beach Sand Base
+      part(isl, islandSoilMat, 0, 0.45, 0, 28, 1.5, 22, islandSandGeo);
+
+      // 2. Lush Green Grassy Island Knoll (School Map turf.webp)
+      part(isl, islandTurfMat, 1.0, 1.8, 0.5, 19, 3.4, 15, islandTurfGeo);
+
+      // 3. Natural Rounded Granite Coastal Rocks
+      part(isl, photoRockMat, 4.5, 1.0, -2.2, 7.8, 3.2, 5.8, rockGeoA);
+      part(isl, photoRockMat, -5.2, 0.9, 2.8, 6.5, 2.8, 5.2, rockGeoB);
+      part(isl, photoRockMat, 2.2, 0.7, 3.8, 5.2, 2.2, 4.2, rockGeoC);
+
+      // 4. White frothing ocean surf foam ring pulsing around the shoreline
+      const iFoam = new Mesh(ringGeo, foamMat);
+      iFoam.rotation.x = Math.PI / 2;
+      iFoam.position.set(0, 0.22, 0);
+      iFoam.scale.set(36, 28, 0.45);
+      isl.add(iFoam);
+      isl.userData.foam = iFoam;
+
+      // 5. Authentic School Map 3D Foliage (palm.webp & neem.webp with wind-sway animation!)
+      addRealisticIslandTree(isl, -3.0, 2.2, 2.4, 13.5, true, 11);
+      addRealisticIslandTree(isl, -5.0, 1.2, 3.8, 11.8, true, 12);
+      addRealisticIslandTree(isl, -6.2, 0.8, -1.2, 12.5, true, 13);
+      addRealisticIslandTree(isl, 2.8, 1.8, 3.0, 11.0, true, 14);
+      addRealisticIslandTree(isl, 4.8, 0.9, -2.4, 12.2, true, 15);
+      addRealisticIslandTree(isl, -1.5, 3.2, -3.0, 14.0, true, 16);
+      addRealisticIslandTree(isl, 2.2, 2.4, -3.6, 10.5, true, 17);
+      addRealisticIslandTree(isl, -5.8, 1.4, 1.5, 12.8, true, 18);
+      addRealisticIslandTree(isl, 0.5, 4.2, 0.5, 9.5, false, 19);
+      addRealisticIslandTree(isl, -2.4, 4.0, 1.0, 8.8, false, 20);
+      addRealisticIslandTree(isl, 1.8, 3.6, -1.0, 8.2, false, 21);
+      addRealisticIslandTree(isl, -3.6, 3.2, -1.8, 8.5, false, 22);
     }
     return isl;
   }
+
+  // Position islands at scenic middle-distance in the ocean bay (Exact Reference Image!)
   const islandRight = buildCoastalIsland(true);
+  islandRight.scale.set(1.2, 1.15, 1.2);
   islandRight.position.set(78, SEA_Y, -165);
   const islandLeft = buildCoastalIsland(false);
-  islandLeft.scale.set(1.35, 1.15, 1.25);
-  islandLeft.position.set(-92, SEA_Y, -210);
+  islandLeft.scale.set(1.25, 1.2, 1.25);
+  islandLeft.position.set(-88, SEA_Y, -195);
   seaWorld.add(islandRight, islandLeft);
 
   // Floating Port (Red) & Starboard (Green) Ocean Channel Navigation Buoys with bobbing surf rings!
@@ -1063,6 +1630,7 @@ export function createRoadEventsScene(scene) {
     { mesh: buildSeaBuoy(false), x: 13.5, offset: 158, span: 220 }
   ];
   for (const sb of seaBuoys) seaWorld.add(sb.mesh);
+
 
   // Flock of 8 Animated Soaring White Seagulls flapping over the turquoise ocean!
   const seagulls = [];
@@ -1113,6 +1681,51 @@ export function createRoadEventsScene(scene) {
   scene.add(tunLoop);
   tunLoop.visible = false;
   const CAVE_ROOF_Y = 7.45;
+  // Exact Reference Image 3 Twin Cascading 3D Waterfalls pouring down cavern walls
+  function createWaterfallMat() {
+    if (typeof document === 'undefined') {
+      return getMat('reWaterfallFb', { color: 0x38bdf8, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.8 });
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 256;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return getMat('reWaterfallFb', { color: 0x38bdf8, roughness: 0.1 });
+    const g = ctx.createLinearGradient(0, 0, 128, 0);
+    g.addColorStop(0, 'rgba(14, 165, 233, 0.35)');
+    g.addColorStop(0.2, 'rgba(56, 189, 248, 0.75)');
+    g.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)');
+    g.addColorStop(0.8, 'rgba(56, 189, 248, 0.75)');
+    g.addColorStop(1, 'rgba(14, 165, 233, 0.35)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 256);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    for (let x = 8; x < 120; x += 12) {
+      for (let y = 0; y < 256; y += 16) {
+        const h = 8 + ((x * 7 + y * 13) % 24);
+        ctx.fillRect(x, y, 3, h);
+      }
+    }
+    const tex = new CanvasTexture(cv);
+    tex.colorSpace = SRGBColorSpace;
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
+    tex.repeat.set(1, 2);
+    const mat = new MeshStandardMaterial({
+      map: tex,
+      emissiveMap: tex,
+      emissive: 0x38bdf8,
+      emissiveIntensity: 0.82,
+      roughness: 0.12,
+      metalness: 0.25,
+      transparent: true,
+      opacity: 0.84,
+      side: DoubleSide
+    });
+    mat.userData = { tex };
+    return mat;
+  }
+  const waterfallMat = createWaterfallMat();
+
   function buildCaveBay() {
     const bay = new Group();
     // Dark charcoal asphalt road + crisp yellow outer stripes + white dashed lane dividers (overlap seals curves!)
@@ -1159,6 +1772,10 @@ export function createRoadEventsScene(scene) {
       const chevMat = side === -1 ? chevLeft : chevRight;
       part(bay, darkMetal, side * 4.06, 2.55, 0, 0.14, 1.56, 2.86);
       part(bay, chevMat, side * 3.97, 2.55, 0, 0.06, 1.40, 2.64);
+
+      // Cascading 3D Waterfall sheets pouring down rock walls + frothing splash pools at base
+      part(bay, waterfallMat, side * 4.38, 3.85, 0, 0.14, 6.2, 3.4);
+      part(bay, foamMat, side * 4.15, 0.32, 0, 0.95, 0.28, 3.8);
     }
     return bakeGroup(bay);
   }
@@ -1200,54 +1817,124 @@ export function createRoadEventsScene(scene) {
   part(tunExitPortal, steel, 0, 8.92, 0, 11.4, 0.14, 0.16);
   part(tunExitPortal, exitPortalSignMat('TUNNEL EXIT · SUNLIGHT'), 0, 8.25, 0.88, 6.6, 0.95, 0.10);
 
+  // Exact Reference Image 3 Swirling Cosmic Blue Energy Vortex Portal at Metro Tunnel Horizon
+  function createCosmicPortalMat() {
+    if (typeof document === 'undefined') {
+      return getMat('rePortalFb', { color: 0x00f0ff, roughness: 0.1, emissive: 0x00f0ff, emissiveIntensity: 1.2 });
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 256;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return getMat('rePortalFb', { color: 0x00f0ff, roughness: 0.1 });
+    const cx = 128, cy = 128;
+    const g = ctx.createRadialGradient(cx, cy, 6, cx, cy, 126);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.2, '#00f0ff');
+    g.addColorStop(0.5, '#2563eb');
+    g.addColorStop(0.85, '#0c1a40');
+    g.addColorStop(1, 'rgba(12, 26, 64, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 3.5;
+    for (let arm = 0; arm < 5; arm++) {
+      const base = arm * Math.PI * 0.4;
+      ctx.beginPath();
+      for (let r = 8; r < 120; r += 2) {
+        const th = base + r * 0.095;
+        const x = cx + Math.cos(th) * r;
+        const y = cy + Math.sin(th) * r;
+        if (r === 8) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    const tex = new CanvasTexture(cv);
+    tex.colorSpace = SRGBColorSpace;
+    return new MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 0.92,
+      side: DoubleSide,
+      depthWrite: false
+    });
+  }
+  const cosmicPortalMat = createCosmicPortalMat();
+  const tunnelCosmicPortal = new Group();
+  tunnelCosmicPortal.name = 'tunnel-cosmic-portal';
+  scene.add(tunnelCosmicPortal);
+  tunnelCosmicPortal.visible = false;
+  const pDisc1 = new Mesh(planeGeo, cosmicPortalMat);
+  pDisc1.scale.set(24, 24, 1);
+  const pDisc2 = new Mesh(planeGeo, cosmicPortalMat);
+  pDisc2.scale.set(18, 18, 1);
+  pDisc2.position.z = 0.4;
+  const pCore = new Mesh(sphere, new MeshBasicMaterial({ color: 0xe0f7ff, transparent: true, opacity: 0.95 }));
+  pCore.scale.set(2.4, 2.4, 0.8);
+  tunnelCosmicPortal.add(pDisc1, pDisc2, pCore);
+
   // ---------------------------------------------------------------------------
   // 4. ANIMATED OVERHEAD ELEVATED METRO VIADUCT BRIDGES + WHITE/BLUE METRO TRAINS
-  //    2 pooled bridges so distant viaducts + speeding trains appear smoothly from 310m away!
+  //    Baked templates drop 285 draw calls down to ~24 across all 3 pooled bridges!
   // ---------------------------------------------------------------------------
-  function buildMetroViaduct() {
-    const bridge = new Group();
+  function buildMetroViaductTemplates() {
+    const deckRaw = new Group();
     for (const side of [-1, 1]) {
       // Deep piers reach cleanly down below SEA_Y so overhead viaducts over the Glass Sea-Bridge never float!
-      part(bridge, concrete, side * 6.3, 0.25, 0, 2.0, 11.5, 2.2);
-      part(bridge, hazard, side * 6.3, 0.68, 0, 2.14, 1.15, 2.34);
-      part(bridge, hazard, side * 4.6, 6.55, 1.62, 2.1, 0.68, 0.14);
-      part(bridge, darkMetal, side * 6.3, 3.2, 1.12, 0.66, 2.55, 0.10);
-      part(bridge, cyanLed, side * 6.3, 3.2, 1.18, 0.44, 2.30, 0.08);
-      part(bridge, concrete, side * 6.3, 5.85, 0, 3.0, 0.85, 2.5);
+      part(deckRaw, concrete, side * 6.3, 0.25, 0, 2.0, 11.5, 2.2);
+      part(deckRaw, hazard, side * 6.3, 0.68, 0, 2.14, 1.15, 2.34);
+      part(deckRaw, hazard, side * 4.6, 6.55, 1.62, 2.1, 0.68, 0.14);
+      part(deckRaw, darkMetal, side * 6.3, 3.2, 1.12, 0.66, 2.55, 0.10);
+      part(deckRaw, cyanLed, side * 6.3, 3.2, 1.18, 0.44, 2.30, 0.08);
+      part(deckRaw, concrete, side * 6.3, 5.85, 0, 3.0, 0.85, 2.5);
+      // Extensive marine bridge piers descending deep into the ocean every 44m across the whole horizon!
+      for (let px = 28; px <= 780; px += 44) {
+        part(deckRaw, concrete, side * px, -1.0, 0, 2.6, 14.0, 2.6);
+        part(deckRaw, concreteDark, side * px, 5.85, 0, 3.4, 0.85, 2.8);
+        part(deckRaw, hazard, side * px, 0.68, 0, 2.8, 1.25, 2.8);
+      }
     }
-    part(bridge, concrete, 0, 6.75, 0, 140, 1.15, 3.2);
-    part(bridge, concreteDark, 0, 7.36, 0, 140, 0.14, 3.35);
-    for (const lx of [-8.8, -2.6, 2.6, 8.8]) {
-      part(bridge, cyanLed, lx, 6.14, 0.9, 1.85, 0.18, 0.45);
+    // Continuous trans-bay viaduct deck spanning 1600m edge-to-edge across the screen horizon
+    part(deckRaw, concrete, 0, 6.75, 0, 1600, 1.15, 3.2);
+    part(deckRaw, concreteDark, 0, 7.36, 0, 1600, 0.14, 3.35);
+    for (let lx = -780; lx <= 780; lx += 24) {
+      part(deckRaw, cyanLed, lx, 6.14, 0.9, 1.85, 0.18, 0.45);
     }
     for (const rz of [-1.55, 1.55]) {
-      part(bridge, steel, 0, 7.95, rz, 140, 0.14, 0.12);
-      for (let px = -66; px <= 66; px += 4.0) part(bridge, steel, px, 7.65, rz, 0.14, 0.62, 0.14);
+      part(deckRaw, steel, 0, 7.95, rz, 1600, 0.14, 0.12);
+      for (let px = -792; px <= 792; px += 8.0) part(deckRaw, steel, px, 7.65, rz, 0.14, 0.62, 0.14);
     }
-    const train = new Group();
-    train.position.set(0, 7.45, 0);
-    bridge.add(train);
+    const trainRaw = new Group();
     for (let car = 0; car < 4; car++) {
       const cx = -11.4 + car * 7.6;
       const isEnd = car === 0 || car === 3;
       const carLen = isEnd ? 7.2 : 7.0;
-      part(train, metroWhite, cx, 1.25, 0, carLen, 2.15, 2.08);
-      part(train, metroBlue, cx, 0.56, 0, carLen + 0.04, 0.42, 2.12);
-      part(train, darkMetal, cx, 0.18, 0, carLen - 0.6, 0.34, 1.78);
-      part(train, metroGlass, cx, 1.48, 0, carLen - 0.85, 0.86, 2.14);
-      for (const dx of [-2.0, 0, 2.0]) part(train, metroWhite, cx + dx, 1.48, 0, 0.24, 0.92, 2.16);
-      if (car < 3) part(train, darkMetal, cx + 3.8, 1.22, 0, 0.65, 1.90, 1.85);
+      part(trainRaw, metroWhite, cx, 1.25, 0, carLen, 2.15, 2.08);
+      part(trainRaw, metroBlue, cx, 0.56, 0, carLen + 0.04, 0.42, 2.12);
+      part(trainRaw, darkMetal, cx, 0.18, 0, carLen - 0.6, 0.34, 1.78);
+      part(trainRaw, metroGlass, cx, 1.48, 0, carLen - 0.85, 0.86, 2.14);
+      for (const dx of [-2.0, 0, 2.0]) part(trainRaw, metroWhite, cx + dx, 1.48, 0, 0.24, 0.92, 2.16);
+      if (car < 3) part(trainRaw, darkMetal, cx + 3.8, 1.22, 0, 0.65, 1.90, 1.85);
       if (isEnd) {
         const dir = car === 3 ? 1 : -1;
         const noseX = cx + dir * 3.85;
-        const nose = part(train, metroWhite, noseX, 1.10, 0, 1.15, 1.85, 2.02);
+        const nose = part(trainRaw, metroWhite, noseX, 1.10, 0, 1.15, 1.85, 2.02);
         nose.rotation.z = -dir * 0.28;
-        const cabGlass = part(train, metroGlass, noseX + dir * 0.18, 1.48, 0, 0.92, 0.88, 1.86);
+        const cabGlass = part(trainRaw, metroGlass, noseX + dir * 0.18, 1.48, 0, 0.92, 0.88, 1.86);
         cabGlass.rotation.z = -dir * 0.35;
-        part(train, whiteLed, noseX + dir * 0.56, 0.65, 0.62, 0.12, 0.22, 0.34);
-        part(train, whiteLed, noseX + dir * 0.56, 0.65, -0.62, 0.12, 0.22, 0.34);
+        part(trainRaw, whiteLed, noseX + dir * 0.56, 0.65, 0.62, 0.12, 0.22, 0.34);
+        part(trainRaw, whiteLed, noseX + dir * 0.56, 0.65, -0.62, 0.12, 0.22, 0.34);
       }
     }
+    return { deckTpl: bakeGroup(deckRaw), trainTpl: bakeGroup(trainRaw) };
+  }
+  const metroTpls = buildMetroViaductTemplates();
+  function buildMetroViaduct() {
+    const bridge = new Group();
+    bridge.add(metroTpls.deckTpl.clone());
+    const train = metroTpls.trainTpl.clone();
+    train.position.set(0, 7.45, 0);
+    bridge.add(train);
     bridge.visible = false;
     scene.add(bridge);
     return { bridge, train };
@@ -1321,7 +2008,7 @@ export function createRoadEventsScene(scene) {
     }
   }
   for (const sx of [0.62, -0.58]) part(heliBody, heliRedDark, sx, -0.74, 0, 0.06, 1.25, 0.06, cyl12).rotation.x = Math.PI / 2;
-  // 3-blade dark main rotor
+  // 3-blade dark main rotor with high-speed motion blur disc (Exact Reference Image!)
   const heliRotor = new Group();
   heliRotor.position.set(-0.15 * 1.25, 1.36 * 1.25, 0);
   helicopter.add(heliRotor);
@@ -1331,31 +2018,117 @@ export function createRoadEventsScene(scene) {
     heliRotor.add(blade);
     part(blade, darkMetal, 3.0, 0, 0, 6.0, 0.04, 0.28);
   }
-
-  const blimp = new Group();
-  scene.add(blimp);
-  part(blimp, metroWhite, 0, 0, 0, 7.6, 2.8, 2.8, sphere);
-  part(blimp, metroBlue, 0, -0.1, 0, 7.1, 0.72, 2.85, sphere);
-  part(blimp, cyanLed, 0.4, 0, 2.72, 1.35, 1.35, 0.18);
-  part(blimp, metroBlue, -6.2, 0, 0, 2.4, 3.4, 0.18);
-  part(blimp, metroBlue, -6.2, 0, 0, 2.4, 0.18, 3.4);
-  part(blimp, darkMetal, 0.3, -2.75, 0, 2.8, 0.85, 0.92);
-
-  // ---------------------------------------------------------------------------
-  // 6. RAIN REFLECTIVE WATER PUDDLES & FLOATING LEAVES
-  // ---------------------------------------------------------------------------
-  const puddleMat = new MeshStandardMaterial({
-    color: 0x38bdf8, roughness: 0.05, metalness: 0.85, transparent: true, opacity: 0.48
+  const rotorBlurMat = new MeshBasicMaterial({
+    color: 0x1e293b, transparent: true, opacity: 0.30, side: DoubleSide, depthWrite: false
   });
-  const puddles = [];
-  for (let i = 0; i < 6; i++) {
-    const p = new Mesh(cyl16, puddleMat);
-    p.scale.set(0.95 + (i % 3) * 0.35, 0.015, 1.65 + (i % 2) * 0.85);
-    p.visible = false;
-    scene.add(p);
-    puddles.push({ mesh: p, lane: (i % 3) - 1, offset: i * 24 });
+  const rotorBlurDisc = new Mesh(ringGeo, rotorBlurMat);
+  rotorBlurDisc.rotation.x = Math.PI / 2;
+  rotorBlurDisc.scale.set(7.6, 7.6, 1);
+  heliRotor.add(rotorBlurDisc);
+
+  const tailRotorBlur = new Mesh(ringGeo, rotorBlurMat);
+  tailRotorBlur.scale.set(1.4, 1.4, 1);
+  tailRotor.add(tailRotorBlur);
+
+  // Dynamic Glass Floor Reflection of Red Helicopter (Exact Reference Image 1 & 6!)
+  const heliFloorReflection = new Group();
+  heliFloorReflection.visible = false;
+  scene.add(heliFloorReflection);
+  const heliReflectBody = new Group();
+  heliReflectBody.scale.set(1.18, -0.25, 1.18);
+  heliFloorReflection.add(heliReflectBody);
+
+  const heliReflectMat = new MeshBasicMaterial({
+    color: 0xef4444, transparent: true, opacity: 0.40, depthWrite: false
+  });
+  const heliReflectDark = new MeshBasicMaterial({
+    color: 0x7f1d1d, transparent: true, opacity: 0.34, depthWrite: false
+  });
+  const heliReflectGlass = new MeshBasicMaterial({
+    color: 0x93c5fd, transparent: true, opacity: 0.30, depthWrite: false
+  });
+
+  part(heliReflectBody, heliReflectMat, 0.05, 0, 0, 1.75, 0.86, 0.84, sphere);
+  part(heliReflectBody, heliReflectMat, 1.25, -0.30, 0, 0.78, 0.42, 0.66, sphere);
+  part(heliReflectBody, heliReflectGlass, 1.20, 0.12, 0, 0.98, 0.70, 0.76, sphere);
+  const reflBoom = new Mesh(boomGeo, heliReflectMat);
+  reflBoom.rotation.z = Math.PI / 2;
+  reflBoom.position.set(-2.75, 0.30, 0);
+  reflBoom.scale.set(1, 3.3, 1);
+  heliReflectBody.add(reflBoom);
+  part(heliReflectBody, heliReflectMat, -4.42, 0.82, 0, 0.55, 1.15, 0.07);
+  for (const sz of [-0.78, 0.78]) {
+    const rskid = part(heliReflectBody, heliReflectDark, 0.05, -1.22, sz, 0.08, 2.7, 0.08, cyl12);
+    rskid.rotation.z = Math.PI / 2;
+  }
+  const heliReflectRotor = new Mesh(ringGeo, new MeshBasicMaterial({
+    color: 0xef4444, transparent: true, opacity: 0.25, side: DoubleSide, depthWrite: false
+  }));
+  heliReflectRotor.rotation.x = Math.PI / 2;
+  heliReflectRotor.position.set(-0.15 * 1.18, 0.05, 0);
+  heliReflectRotor.scale.set(6.8, 6.8, 1);
+  heliFloorReflection.add(heliReflectRotor);
+
+  // Iconic White & Blue "SKYLINE" Zeppelin Blimp (Exact Reference Image!)
+  function createBlimpTexture() {
+    if (typeof document === 'undefined') return metroWhite;
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 256;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return metroWhite;
+    // Pure white hull
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 512, 256);
+    // Rich royal blue lower hull stripe
+    ctx.fillStyle = '#0369a1';
+    ctx.fillRect(0, 185, 512, 71);
+    // Vibrant cyan accent pinstripe
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillRect(0, 178, 512, 7);
+    // Bold, crisp blue "SKYLINE" lettering with subtle shadow
+    ctx.font = '900 68px "Arial Black", "Impact", "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(2, 132, 199, 0.25)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SKYLINE', 258, 107);
+    ctx.fillStyle = '#0284c7';
+    ctx.fillText('SKYLINE', 256, 105);
+
+    const tex = new CanvasTexture(cv);
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = ClampToEdgeWrapping;
+    return new MeshStandardMaterial({
+      map: tex, roughness: 0.25, metalness: 0.15
+    });
   }
 
+  const blimpMat = createBlimpTexture();
+  const blimp = new Group();
+  scene.add(blimp);
+  // Main aerodynamic hull
+  part(blimp, metroWhite, 0, 0, 0, 8.2, 3.1, 3.1, sphere);
+  // Blue lower belly
+  part(blimp, metroBlue, 0, -0.35, 0, 7.8, 1.2, 3.05, sphere);
+  // Side "SKYLINE" branding decals on both flanks
+  for (const sz of [-1, 1]) {
+    const decal = part(blimp, blimpMat, 0.2, 0.3, sz * 2.85, 6.2, 2.0, 0.06);
+    if (sz < 0) decal.rotation.y = Math.PI;
+  }
+  // Cyan LED navigation lights
+  part(blimp, cyanLed, 4.0, 0, 0, 0.25, 0.25, 0.25, sphere);
+  part(blimp, cyanLed, 0.2, -0.85, 2.95, 0.18, 0.18, 0.18, sphere);
+  part(blimp, cyanLed, 0.2, -0.85, -2.95, 0.18, 0.18, 0.18, sphere);
+  // Tail fins (cruciform stabilizers in royal blue)
+  part(blimp, metroBlue, -6.6, 0, 0, 2.6, 3.8, 0.18);
+  part(blimp, metroBlue, -6.6, 0, 0, 2.6, 0.18, 3.8);
+  // Lower gondola control cabin
+  part(blimp, darkMetal, 0.3, -3.1, 0, 3.2, 0.95, 1.05);
+  part(blimp, warmLamp, 0.3, -3.1, 0.54, 2.6, 0.35, 0.08);
+  part(blimp, warmLamp, 0.3, -3.1, -0.54, 2.6, 0.35, 0.08);
+
+  // ---------------------------------------------------------------------------
+  // 6. FLOATING LEAVES (for sunny park/college runs, smooth performance)
+  // ---------------------------------------------------------------------------
   const leafMat = new MeshStandardMaterial({ color: 0x4ade80, roughness: 0.7, side: DoubleSide });
   const leaves = [];
   for (let i = 0; i < 18; i++) {
@@ -1366,21 +2139,72 @@ export function createRoadEventsScene(scene) {
     leaves.push({ mesh: lf, seed: i * 1.73 + 0.5 });
   }
 
+  // Exact Reference Image 1 & 2 Branching Electric Sky Lightning Flashes
+  const lightningTex = typeof document === 'undefined'
+    ? null
+    : new TextureLoader().load(new URL('./assets/lightning.png', import.meta.url).href);
+  if (lightningTex) lightningTex.colorSpace = SRGBColorSpace;
+
+  // Exact Reference Image 1 & 2 Branching Electric Sky Lightning Flashes
+  const lightningMat = new MeshBasicMaterial({
+    map: lightningTex || null,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.98,
+    side: DoubleSide,
+    depthWrite: false
+  });
+  const lightningBolts = new Group();
+  lightningBolts.name = 'sky-lightning';
+  scene.add(lightningBolts);
+  const bolt1 = new Mesh(planeGeo, lightningMat);
+  bolt1.scale.set(54, 44, 1);
+  bolt1.position.set(0, 0, 0);
+  const bolt2 = new Mesh(planeGeo, lightningMat);
+  bolt2.scale.set(44, 36, 1);
+  bolt2.position.set(-18, 4, 8);
+  bolt2.rotation.y = 0.3;
+  lightningBolts.add(bolt1, bolt2);
+
   return (state, weather) => {
     const running = state.mode === 'running' || state.mode === 'countdown' || state.mode === 'starting';
     const isPark = state.map === 'itpark';
     const night = weather?.night || 0;
     const rain = weather?.rain || 0;
 
+    // Fast path for School & College: Glass Bridge, Cave, Sea World, Metro Viaducts, Helicopter & Blimp are IT Park–only!
+    if (!isPark) {
+      portalArch.visible = false;
+      portalPreview.visible = false;
+      skyLoop.visible = false;
+      tunLoop.visible = false;
+      seaWorld.visible = false;
+      skyExitArch.visible = false;
+      tunExitPortal.visible = false;
+      departHeadland.visible = false;
+      returnHeadland.visible = false;
+      helicopter.visible = false;
+      blimp.visible = false;
+      heliFloorReflection.visible = false;
+      for (const p of bridgePylons) p.visible = false;
+      for (const mb of metroBridges) mb.bridge.visible = false;
+      for (const lf of leaves) lf.mesh.visible = false;
+      lightningBolts.visible = false;
+      tunnelCosmicPortal.visible = false;
+      return;
+    }
+
     // 1. Update Straight 0° Image-2 Twin-Portal & Continuous 1,000m Glass Bridge / Underpass Loop
     const plan = forkPlanAt(state.distance);
     const startRelZ = plan.start - state.distance;
     const endRelZ = plan.end - state.distance;
     const chosen = state.activeBranch;
+    const onPodium = state.mode === 'ready' || state.mode === 'select';
+    const isBridgePreview = isPark && onPodium;
 
     // Approach Twin-Portal Arch (front signs + center pier + planter) visible far ahead from 350m (beyond fog)!
-    const forksOn = Boolean(state.enableForks);
-    const showArch = running && forksOn && startRelZ > -14 && startRelZ < 350;
+    const forksOn = isPark && Boolean(state.enableForks);
+    const showArch = !isBridgePreview && running && forksOn && startRelZ > -14 && startRelZ < 350;
     portalArch.visible = showArch;
     if (showArch) rightSign.material = underpassForkSignMat(isPark);
     if (showArch) {
@@ -1393,7 +2217,7 @@ export function createRoadEventsScene(scene) {
     }
 
     // Twin-Portal Approach Sleeves (Left Glass Bridge Ramp | Right Underpass Tunnel) visible from 350m!
-    const showPreview = running && forksOn && !chosen && startRelZ >= -1 && startRelZ < 350;
+    const showPreview = !isBridgePreview && running && forksOn && !chosen && startRelZ >= -1 && startRelZ < 350;
     portalPreview.visible = showPreview;
     if (showPreview) {
       portalPreview.position.set(curveRelX(plan.start, state), curveRelY(plan.start, state), -startRelZ);
@@ -1401,63 +2225,91 @@ export function createRoadEventsScene(scene) {
     }
 
     // Continuous 1,000m Full-Width 3-Lane Curved Glass Bridge Loop + Extra-Realistic Ocean Sea View!
-    const onSky = (running || ['paused','falling','captured','crashed'].includes(state.mode)) && chosen === 'skybridge' && state.distance >= plan.start - 1 && state.distance <= plan.end + 4;
+    const onSky = isBridgePreview || ((running || ['paused','falling','captured','crashed'].includes(state.mode)) && chosen === 'skybridge' && state.distance >= plan.start - 1 && state.distance <= plan.end + 4);
     skyLoop.visible = onSky;
     if (onSky) {
-      const firstBay = Math.max(0,Math.floor((state.distance-plan.start-40)/BAY_LEN));
-      for (let offset=0; offset<skyBays.length; offset++) {
-        const n = firstBay + offset;
-        const bay = skyBays[n % skyBays.length];
-        const start = plan.start + n*BAY_LEN;
-        const length = Math.min(BAY_LEN,plan.end-start);
-        bay.visible = length > 0;
-        if (bay.visible) {
-          const bayCenter = start + length / 2;
-          const bayWorldY = branchCurveY(bayCenter, state);
-          bay.position.set(curveRelX(bayCenter, state), curveRelY(bayCenter, state), state.distance - bayCenter);
-          bay.rotation.y = -Math.atan(curveSlopeAt(bayCenter, state));
-          bay.scale.z = length / BAY_LEN;
-          // Show solid coastal peninsula land deck under buildings for the first ~5s & last ~5s (ZERO floating buildings!)
-          if (bay.userData.quay) {
-            bay.userData.quay.visible = (bayCenter <= plan.start + COAST_SHORE_LEN) || (bayCenter >= plan.end - COAST_SHORE_LEN);
-          }
+      if (isBridgePreview) {
+        // Lay out Glass Bridge bays starting directly under runner stretching into ocean horizon
+        for (let offset = 0; offset < skyBays.length; offset++) {
+          const bay = skyBays[offset];
+          const bayZ = 8 - offset * BAY_LEN;
+          bay.position.set(0, 0, bayZ);
+          bay.rotation.y = 0;
+          bay.scale.z = 1;
+          bay.visible = bayZ > -340;
+          if (bay.userData.quay) bay.userData.quay.visible = false;
           if (bay.userData.surfs) {
             for (const surf of bay.userData.surfs) {
-              surf.position.y = SEA_Y + 0.22 - bayWorldY;
+              surf.position.y = SEA_Y + 0.22;
             }
           }
         }
-      }
-      // Position dramatic rocky coastal headlands at the exact edge where shore meets pure open ocean!
-      for (const [hl, worldZ] of [[departHeadland, plan.start + COAST_SHORE_LEN], [returnHeadland, plan.end - COAST_SHORE_LEN]]) {
-        const relZ = worldZ - state.distance;
-        const vis = relZ > -28 && relZ < 350;
-        hl.visible = vis;
-        if (vis) {
-          const wy = branchCurveY(worldZ, state);
-          hl.position.set(curveRelX(worldZ, state), curveRelY(worldZ, state), -relZ);
-          hl.rotation.y = -Math.atan(curveSlopeAt(worldZ, state));
-          for (const surf of hl.userData.surfs || []) {
-            surf.position.y = SEA_Y + 0.24 - wy;
+        // Position iconic Cable-Stayed Pylon Tower directly in view behind runner at Z = -56
+        bridgePylons[0].visible = true;
+        bridgePylons[0].position.set(0, 0, -56);
+        bridgePylons[0].rotation.y = 0;
+        bridgePylons[1].visible = true;
+        bridgePylons[1].position.set(0, 0, -176);
+        bridgePylons[1].rotation.y = 0;
+        for (let pi = 2; pi < bridgePylons.length; pi++) bridgePylons[pi].visible = false;
+        departHeadland.visible = false;
+        returnHeadland.visible = false;
+      } else {
+        const firstBay = Math.max(0,Math.floor((state.distance-plan.start-40)/BAY_LEN));
+        for (let offset=0; offset<skyBays.length; offset++) {
+          const n = firstBay + offset;
+          const bay = skyBays[n % skyBays.length];
+          const start = plan.start + n*BAY_LEN;
+          const length = Math.min(BAY_LEN,plan.end-start);
+          bay.visible = length > 0;
+          if (bay.visible) {
+            const bayCenter = start + length / 2;
+            const bayWorldY = branchCurveY(bayCenter, state);
+            bay.position.set(curveRelX(bayCenter, state), curveRelY(bayCenter, state), state.distance - bayCenter);
+            bay.rotation.y = -Math.atan(curveSlopeAt(bayCenter, state));
+            bay.scale.z = length / BAY_LEN;
+            // Show solid coastal peninsula land deck under buildings for the first ~5s & last ~5s (ZERO floating buildings!)
+            if (bay.userData.quay) {
+              bay.userData.quay.visible = (bayCenter <= plan.start + COAST_SHORE_LEN) || (bayCenter >= plan.end - COAST_SHORE_LEN);
+            }
+            if (bay.userData.surfs) {
+              for (const surf of bay.userData.surfs) {
+                surf.position.y = SEA_Y + 0.22 - bayWorldY;
+              }
+            }
           }
         }
-      }
-      // Gently pulse waterline sea-foam rings around ocean bridge piers
-      for (let i = 0; i < pierFoams.length; i++) {
-        const pulse = 1 + Math.sin(state.time * 2.4 + i * 0.9) * 0.14;
-        pierFoams[i].scale.set(2.45 * pulse, 2.75 * pulse, 0.35);
-      }
-      // Position 3 cable-stayed sea-bridge pylon towers along the curved 1,000m Glass Bridge
-      const origin = plan.start + 56;
-      const firstPylon = origin + Math.max(0,Math.ceil((state.distance-48-origin)/PYLON_STRIDE))*PYLON_STRIDE;
-      for (let pi = 0; pi < bridgePylons.length; pi++) {
-        const pWorld = firstPylon + pi * PYLON_STRIDE;
-        const pRel = pWorld - state.distance;
-        const vis = pWorld < plan.end - 28 && pRel >= -48 && pRel < 360;
-        bridgePylons[pi].visible = vis;
-        if (vis) {
-          bridgePylons[pi].position.set(curveRelX(pWorld, state), curveRelY(pWorld, state), -pRel);
-          bridgePylons[pi].rotation.y = -Math.atan(curveSlopeAt(pWorld, state));
+        // Position dramatic rocky coastal headlands at the exact edge where shore meets pure open ocean!
+        for (const [hl, worldZ] of [[departHeadland, plan.start + COAST_SHORE_LEN], [returnHeadland, plan.end - COAST_SHORE_LEN]]) {
+          const relZ = worldZ - state.distance;
+          const vis = relZ > -28 && relZ < 350;
+          hl.visible = vis;
+          if (vis) {
+            const wy = branchCurveY(worldZ, state);
+            hl.position.set(curveRelX(worldZ, state), curveRelY(worldZ, state), -relZ);
+            hl.rotation.y = -Math.atan(curveSlopeAt(worldZ, state));
+            for (const surf of hl.userData.surfs || []) {
+              surf.position.y = SEA_Y + 0.24 - wy;
+            }
+          }
+        }
+        // Gently pulse waterline sea-foam rings around ocean bridge piers
+        for (let i = 0; i < pierFoams.length; i++) {
+          const pulse = 1 + Math.sin(state.time * 2.4 + i * 0.9) * 0.14;
+          pierFoams[i].scale.set(2.45 * pulse, 2.75 * pulse, 0.35);
+        }
+        // Position 3 cable-stayed sea-bridge pylon towers along the curved 1,000m Glass Bridge
+        const origin = plan.start + 56;
+        const firstPylon = origin + Math.max(0,Math.ceil((state.distance-48-origin)/PYLON_STRIDE))*PYLON_STRIDE;
+        for (let pi = 0; pi < bridgePylons.length; pi++) {
+          const pWorld = firstPylon + pi * PYLON_STRIDE;
+          const pRel = pWorld - state.distance;
+          const vis = pWorld < plan.end - 28 && pRel >= -48 && pRel < 360;
+          bridgePylons[pi].visible = vis;
+          if (vis) {
+            bridgePylons[pi].position.set(curveRelX(pWorld, state), curveRelY(pWorld, state), -pRel);
+            bridgePylons[pi].rotation.y = -Math.atan(curveSlopeAt(pWorld, state));
+          }
         }
       }
     } else {
@@ -1492,8 +2344,8 @@ export function createRoadEventsScene(scene) {
       }
       // Subtle ocean heave + keep ocean surface anchored at true sea level below curved arch
       seaSwellMesh.position.y = SEA_Y + 0.18 + Math.sin(t * 1.6) * 0.05;
-      seaWorld.position.y = onSky ? -branchCurveY(state.distance, state) : 0;
-      seaWorld.position.z = onSky ? 0 : Math.min(0, -(startRelZ - 14));
+      seaWorld.position.y = onSky && !isBridgePreview ? -branchCurveY(state.distance, state) : 0;
+      seaWorld.position.z = isBridgePreview ? 0 : (onSky ? 0 : Math.min(0, -(startRelZ - 14)));
 
       // Dancing sun/moon reflection glints across the ocean
       for (const g of sunGlints) {
@@ -1516,9 +2368,6 @@ export function createRoadEventsScene(scene) {
         bt.mesh.position.set(bt.x + Math.sin(t * 0.35 + bi) * 2.4, SEA_Y + 0.08 + Math.sin(t * 2.1 + bi * 1.4) * 0.14, 18 - bRel);
         bt.mesh.rotation.set(Math.sin(t * 1.7 + bi) * 0.04, Math.PI, Math.cos(t * 1.9 + bi) * 0.055);
       }
-      // Distant Ocean Cruise Liner gliding slowly across far bay
-      cruiseShip.position.x = -95 + ((t * 1.8) % 190);
-      cruiseShip.position.y = SEA_Y + 0.12 + Math.sin(t * 0.9) * 0.08;
       // Floating red/green ocean channel buoys bobbing beside the Glass Sea-Bridge
       for (let sbi = 0; sbi < seaBuoys.length; sbi++) {
         const sb = seaBuoys[sbi];
@@ -1528,9 +2377,20 @@ export function createRoadEventsScene(scene) {
       }
       // Subtle coastal bay parallax on distant islands + rotating warm lighthouse beacon
       const bayProg = onSky ? Math.max(0, Math.min(1, (state.distance - plan.start) / Math.max(1, plan.end - plan.start))) : 0;
-      islandRight.position.z = -185 + bayProg * 55;
-      islandLeft.position.z = -225 + bayProg * 65;
+      islandRight.position.z = -165 + bayProg * 25;
+      islandLeft.position.z = -195 + bayProg * 28;
       lighthouseBeacon.rotation.y = t * 0.85;
+
+      // Real wind sway animation for all island trees (School map realism!)
+      for (const st of islandSwayingTrees) {
+        const wind = Math.sin(t * 2.2 + st.seed) * 0.045 + Math.cos(t * 1.5 + st.seed * 1.8) * 0.022;
+        st.group.rotation.z = wind;
+        st.group.rotation.x = Math.sin(t * 1.8 + st.seed * 1.2) * 0.028;
+      }
+      // Breathing foam surf along island shorelines
+      const foamPulse = 1 + Math.sin(t * 1.8) * 0.06;
+      if (islandRight.userData.foam) islandRight.userData.foam.scale.set(34 * foamPulse, 26 * foamPulse, 0.45);
+      if (islandLeft.userData.foam) islandLeft.userData.foam.scale.set(36 * foamPulse, 28 * foamPulse, 0.45);
       // Soaring flock of seagulls banking & flapping over the water
       for (const sg of seagulls) {
         const flap = Math.sin(t * 6.5 + sg.phase) * 0.55;
@@ -1591,47 +2451,103 @@ export function createRoadEventsScene(scene) {
       if (mb.bridge.visible) {
         mb.bridge.position.set(curveRelX(metroWorldZ, state), curveRelY(metroWorldZ, state), -metroRelZ);
         mb.bridge.rotation.y = -Math.atan(curveSlopeAt(metroWorldZ, state));
-        const sweep = ((state.time * 16 + mIdx * 29) % 148) - 74;
+        const sweep = ((state.time * 24 + mIdx * 55) % 960) - 480;
         mb.train.position.x = (mIdx % 2 === 0 ? 1 : -1) * sweep;
       }
     }
 
-    // 3. Sky Ambient Helicopter & Futuristic Blimp (Image 1!)
+    // 3. Sky Ambient Helicopter & Futuristic "SKYLINE" Blimp (Exact Reference Image!)
     const showSkyCraft = (isPark || onSky || onTun) && night < 0.7 && rain < 0.65;
     helicopter.visible = showSkyCraft;
     blimp.visible = showSkyCraft;
     if (showSkyCraft) {
-      const hx = ((state.time * 4.5 + 18) % 64) - 32;
-      helicopter.position.set(hx, 15.5 + Math.sin(state.time * 1.8) * 0.45, -58);
-      helicopter.rotation.y = 0.08;
-      heliRotor.rotation.y = state.time * 24;
-      tailRotor.rotation.z = state.time * 38;
+      const t = state.time || 0;
+      if (isBridgePreview) {
+        // Showcase Map Selection Preview: stable hero framing matching Reference Image!
+        helicopter.position.set(-11.2, 15.2, -45);
+        helicopter.rotation.set(0.05, 0.22, 0.08);
+        blimp.position.set(15.8, 17.2, -68);
+        blimp.rotation.set(0, Math.PI + 0.12, 0);
+      } else {
+        // Running Gameplay: Continuous cinematic flight crossing the entire sky from screen edge to screen edge!
+        // Red AS350 Helicopter sweeps continuously from off-screen left (x = -190) to off-screen right (x = +190)
+        const heliSpan = 380;
+        const heliX = ((t * 16.5 + 190) % heliSpan) - 190;
+        const heliZ = onSky ? -65 : -130;
+        const heliY = onSky ? (17.5 + Math.sin(t * 1.4) * 0.5) : (22.5 + Math.sin(t * 1.4) * 0.5);
+        helicopter.position.set(heliX, heliY, heliZ);
+        helicopter.rotation.set(0.04, Math.PI / 2 + 0.05, -0.05);
 
-      const bx = 26 - ((state.time * 1.4) % 52);
-      blimp.position.set(bx, 18.2 + Math.sin(state.time * 0.9) * 0.5, -78);
-      blimp.rotation.y = Math.PI + 0.12;
+        // Futuristic "SKYLINE" Blimp cruises majestically in the opposite direction from off-screen right to off-screen left
+        const blimpSpan = 420;
+        const blimpX = 210 - ((t * 6.2) % blimpSpan);
+        const blimpZ = onSky ? -85 : -155;
+        const blimpY = onSky ? (21.5 + Math.sin(t * 0.6) * 0.4) : (27.5 + Math.sin(t * 0.6) * 0.4);
+        blimp.position.set(blimpX, blimpY, blimpZ);
+        blimp.rotation.set(0, -Math.PI / 2 - 0.04, 0);
+      }
+      heliRotor.rotation.y = t * 44;
+      tailRotor.rotation.z = t * 58;
     }
 
-    // 4. Rain Water Puddles on Wet Asphalt (skip on Glass Bridge & inside Underpass!)
-    const showPuddles = running && rain > 0.12 && !onSky && !onTun;
-    for (const p of puddles) {
-      p.mesh.visible = showPuddles;
-      if (!showPuddles) continue;
-      const rel = ((p.offset - (state.distance % 144)) + 144) % 144;
-      p.mesh.position.set(p.lane * 2.15, 0.11, -(rel - 12));
+    // Dynamic Glass Floor Helicopter Reflection (Exact Reference Image!)
+    const isHeliOverBridge = onSky && Math.abs(helicopter.position.x) < 45;
+    const showHeliReflect = isHeliOverBridge && showSkyCraft;
+    heliFloorReflection.visible = showHeliReflect;
+    if (showHeliReflect) {
+      const t = state.time || 0;
+      const rx = curveRelX(state.distance + 22, state) - 2.85 + (helicopter.position.x + 11.2) * 0.16;
+      const ry = curveRelY(state.distance + 22, state) + 0.068;
+      heliFloorReflection.position.set(rx, ry, -22.5);
+      heliFloorReflection.rotation.y = -Math.atan(curveSlopeAt(state.distance + 22, state)) + 0.08;
+      heliReflectBody.rotation.z = Math.sin(t * 2.2) * 0.04;
+      const fade = Math.max(0, 1 - Math.abs(helicopter.position.x) / 45);
+      heliReflectMat.opacity = (0.36 + Math.sin(t * 3.5) * 0.06) * fade;
     }
 
     // 5. Floating Leaves on College & School sunny runs (skip inside Underpass!)
     const showLeaves = running && !isPark && !onTun && rain < 0.4;
-    for (const lf of leaves) {
-      lf.mesh.visible = showLeaves;
-      if (!showLeaves) continue;
-      const t = state.time * 1.6 + lf.seed;
-      const lx = Math.sin(t * 1.3) * 5.8;
-      const ly = ((6.5 - (t * 1.1) % 6.2) + 6.2) % 6.2 + 0.35;
-      const lz = -(((lf.seed * 19 + state.time * 12) % 42) + 2);
-      lf.mesh.position.set(lx, ly, lz);
-      lf.mesh.rotation.set(t * 2.1, t * 1.7, Math.sin(t) * 0.8);
+    if (!showLeaves) {
+      if (leaves[0]?.mesh.visible) {
+        for (const lf of leaves) lf.mesh.visible = false;
+      }
+    } else {
+      for (const lf of leaves) {
+        lf.mesh.visible = true;
+        const t = state.time * 1.6 + lf.seed;
+        const lx = Math.sin(t * 1.3) * 5.8;
+        const ly = ((6.5 - (t * 1.1) % 6.2) + 6.2) % 6.2 + 0.35;
+        const lz = -(((lf.seed * 19 + state.time * 12) % 42) + 2);
+        lf.mesh.position.set(lx, ly, lz);
+        lf.mesh.rotation.set(t * 2.1, t * 1.7, Math.sin(t) * 0.8);
+      }
+    }
+
+    const t = state.time || 0;
+
+    // 6. Cascading 3D Waterfalls UV Scroll inside Metro Tunnel (Panel 3)
+    if (waterfallMat.userData?.tex) {
+      waterfallMat.userData.tex.offset.y = -(t * 4.2) % 1;
+    }
+
+    // 8. Electric Branching Sky Lightning Flashes (Reference Image)
+    const flashCycle = (t + 1.2) % 6.8;
+    const isStormRaining = (isPark || onSky) && !onTun && (weather?.rain ?? 0) > 0.15 && (weather?.stormDark ?? 0) > 0.15;
+    const isLightningActive = isStormRaining && (flashCycle < 0.24);
+    const flashFlicker = flashCycle < 0.07 || (flashCycle > 0.11 && flashCycle < 0.20);
+    lightningBolts.visible = isLightningActive && flashFlicker;
+    if (lightningBolts.visible) {
+      lightningBolts.position.set(onSky ? -24 : 32, 34, onSky ? -130 : -220);
+    }
+
+    // 10. Swirling Cosmic Blue Energy Portal at Tunnel Horizon (Panel 3)
+    tunnelCosmicPortal.visible = onTun;
+    if (onTun) {
+      pDisc1.rotation.z = t * 1.8;
+      pDisc2.rotation.z = -t * 2.3;
+      pCore.scale.setScalar(2.2 + Math.sin(t * 4.5) * 0.35);
+      tunnelCosmicPortal.position.set(curveRelX(state.distance + 220, state), curveRelY(state.distance + 220, state) + 3.6, -220);
+      tunnelCosmicPortal.rotation.y = -Math.atan(curveSlopeAt(state.distance + 220, state));
     }
   };
 }

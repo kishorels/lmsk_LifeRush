@@ -194,7 +194,8 @@ export function createSchoolEntrance(scene) {
     body.visible=!isCollege&&!isPark;collegeBody.visible=isCollege;parkBody.visible=isPark;
     const entry=state.entryVan??SCHOOL_VAN;
     vehicle.position.set((entry.lane-SCHOOL_VAN.lane)*2.2,0,SCHOOL_VAN.rear-entry.rear);
-    campus.visible=state.distance<entry.front+28;
+    const onPodium=state.mode==='ready'||state.mode==='select';
+    campus.visible=state.distance<entry.front+28 && !(isPark && onPodium);
     coins.forEach((coin,i)=>{
       coin.visible=!(state.roofCoins & (1<<i));
       spinCoin(coin,state.time,i,roof+.58);

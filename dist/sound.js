@@ -1,4 +1,5 @@
 import {flightPhase} from './airliner.js';
+import {hasCollegeRain, hasItParkRain} from './weather.js';
 
 const SAMPLES = {
  coin: './assets/coins_collect.mp3',
@@ -10,6 +11,10 @@ const SAMPLES = {
  damage: './assets/damage.mp3',
  male_hurt: './assets/male_hurt.mp3',
  female_hurt: './assets/female_hurt.mp3',
+ male_oh_no: './assets/male_oh_no.wav',
+ female_oh_no: './assets/female_oh_no.wav',
+ thunder: './assets/thunder_sound.mp3',
+ rain: './assets/rain_sound.mp3',
 };
 
 const audioCache = new Map();
@@ -26,12 +31,14 @@ function getAudio(key) {
 }
 
 export function createSound() {
- let context, master, enabled = true, jetNoise, jetVoice, bgm = null, audioUnlocked = false;
+ let context, master, enabled = true, jetNoise, jetVoice, bgm = null, rainAudio = null, rainPlaying = false, audioUnlocked = false;
  const volumes={music:1,coins:1,powerups:1,movement:1,damage:1,villain:1,ambience:1};
  let currentCategory='movement';
  const level=category=>volumes[category]??1;
  const buffers = new Map();
  let loadingSamples = false;
+ let lastCollegeRainActive = false;
+ let lastThunderTime = -99;
 
  function loadSamples() {
   if (loadingSamples || !context?.decodeAudioData || typeof fetch === 'undefined') return;
@@ -112,6 +119,40 @@ export function createSound() {
   if (bgm && !bgm.paused) bgm.pause();
  }
 
+ function initRainAudio() {
+  if (typeof Audio === 'undefined') return;
+  if (!rainAudio) {
+   try {
+    rainAudio = new Audio(new URL(SAMPLES.rain, import.meta.url).href);
+    rainAudio.loop = true;
+    rainAudio.volume = 0.55 * level('ambience');
+   } catch (e) {
+    console.warn('Init rain audio error:', e);
+   }
+  }
+ }
+
+ function startRainAudio() {
+  initRainAudio();
+  if (!rainAudio || !enabled || rainPlaying) return;
+  rainPlaying = true;
+  try {
+   rainAudio.volume = 0.55 * level('ambience');
+   const p = rainAudio.play();
+   if (p !== undefined) p.catch(() => {});
+  } catch {}
+ }
+
+ function stopRainAudio() {
+  if (rainAudio && rainPlaying) {
+   rainPlaying = false;
+   try {
+    rainAudio.pause();
+    rainAudio.currentTime = 0;
+   } catch {}
+  }
+ }
+
  function unlock() {
   if (audioUnlocked && context && context.state === 'running') return;
   audioUnlocked = true;
@@ -178,7 +219,7 @@ export function createSound() {
  }
 
  function play(name, cause, character = 'male') {
-  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',nitro:'powerups',shoes:'powerups',nearMiss:'coins',upgrade:'coins',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement',tap:'movement'})[name]||'movement';
+  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',nitro:'powerups',shoes:'powerups',nearMiss:'coins',upgrade:'coins',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement',tap:'movement',oh_no:'damage',thunder:'ambience'})[name]||'movement';
   if (name === 'jump') tone(240, 730, 0.19, 0.10, 'triangle');
   else if (name === 'slide') tone(410, 65, 0.20, 0.10, 'sawtooth');
   else if (name === 'roofCoin') {
@@ -189,10 +230,18 @@ export function createSound() {
   }
   else if (name === 'hit') {
    playSample('damage', 0.95);
-   if (String(character).includes('female') || String(character).includes('woman')) {
+   if (String(character).includes('female') || String(character).includes('woman') || String(character).includes('girl')) {
     playSample('female_hurt', 1.0);
    } else {
     playSample('male_hurt', 1.0);
+   }
+  }
+  else if (name === 'oh_no') {
+   const isFemale = String(character).includes('female') || String(character).includes('woman') || String(character).includes('girl');
+   if (isFemale) {
+    playSample('female_oh_no', 1.0);
+   } else {
+    playSample('male_oh_no', 1.0);
    }
   }
   else if (name === 'horn') {
@@ -270,6 +319,9 @@ export function createSound() {
   else if (name === 'swag') {
    playSample('swag', 0.95);
   }
+  else if (name === 'thunder') {
+   playSample('thunder', 0.95);
+  }
  }
 
  return {
@@ -280,21 +332,53 @@ export function createSound() {
   setVolumes(next){
    for(const key of Object.keys(volumes))if(Number.isFinite(Number(next?.[key])))volumes[key]=Math.max(0,Math.min(1,Number(next[key])));
    if(bgm)bgm.volume=.45*volumes.music;
+   if(rainAudio)rainAudio.volume=0.55*level('ambience');
   },
   getVolumes(){return {...volumes};},
   setEnabled(value) {
    enabled = value;
    if (master) master.gain.value = enabled ? 0.65 : 0;
    if (value) { startBgm(); unlock(); }
-   else { pauseBgm(); }
+   else { pauseBgm(); stopRainAudio(); }
   },
-  update(s) {
+  update(s, character = 'male') {
    flyover(s);
-   if (s.mode !== 'running') return;
-   for (const bus of s.items) {
-    if (bus.type === 'bus' && !bus.roofRide && (!bus.encounter || bus.started) && !bus.horned && bus.z - s.distance < 65 && bus.z > s.distance) {
-     bus.horned = true;
-     play('horn');
+   if (!s || s.mode !== 'running') {
+    lastCollegeRainActive = false;
+    stopRainAudio();
+    return;
+   }
+   const isCollegeRain = s.map === 'college' && hasCollegeRain(s);
+   const isParkRain = s.map === 'itpark' && hasItParkRain(s);
+   const inTunnel = s.map === 'itpark' && s.activeBranch === 'underpass';
+   const shouldPlayRain = enabled && (isCollegeRain || (isParkRain && !inTunnel));
+
+   if (shouldPlayRain) {
+    startRainAudio();
+   } else {
+    stopRainAudio();
+   }
+
+   if (isCollegeRain && !lastCollegeRainActive) {
+    play('oh_no', null, character);
+   }
+   lastCollegeRainActive = isCollegeRain;
+
+   if (isParkRain && !inTunnel && enabled) {
+    const t = s.time || 0;
+    const flashCycle = (t + 1.2) % 6.8;
+    if (flashCycle < 0.12 && (t - lastThunderTime) > 4.5) {
+     lastThunderTime = t;
+     play('thunder');
+    }
+   }
+
+   if (Array.isArray(s.items)) {
+    for (const bus of s.items) {
+     if (bus.type === 'bus' && !bus.roofRide && (!bus.encounter || bus.started) && !bus.horned && bus.z - s.distance < 65 && bus.z > s.distance) {
+      bus.horned = true;
+      play('horn');
+     }
     }
    }
   }
