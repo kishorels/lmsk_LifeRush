@@ -14,8 +14,23 @@ const SAMPLES = {
  male_oh_no: './assets/male_oh_no.wav',
  female_oh_no: './assets/female_oh_no.wav',
  thunder: './assets/thunder_sound.mp3',
- rain: './assets/rain_sound.mp3',
 };
+
+let sharedAudioContext = null;
+export function getSharedAudioContext() {
+ if (typeof window === 'undefined') return null;
+ const AudioCtx = window.AudioContext || window.webkitAudioContext;
+ if (!AudioCtx) return null;
+ if (!sharedAudioContext) {
+  try {
+   sharedAudioContext = new AudioCtx();
+  } catch {}
+ }
+ if (sharedAudioContext && sharedAudioContext.state === 'suspended') {
+  sharedAudioContext.resume().catch(() => {});
+ }
+ return sharedAudioContext;
+}
 
 const audioCache = new Map();
 function getAudio(key) {
@@ -36,6 +51,7 @@ export function createSound() {
  let currentCategory='movement';
  const level=category=>volumes[category]??1;
  const buffers = new Map();
+ const clonePool = new Map();
  let loadingSamples = false;
  let lastCollegeRainActive = false;
  let lastThunderTime = -99;
@@ -58,9 +74,9 @@ export function createSound() {
       .catch(() => {});
     } catch {}
    }
-   setTimeout(next, 140);
+   setTimeout(next, 45);
   };
-  setTimeout(next, 900);
+  setTimeout(next, 60);
  }
 
  function playSample(key, volume = 0.8) {
@@ -83,10 +99,29 @@ export function createSound() {
   try {
    const a = getAudio(key);
    if (a) {
-    const clone = a.cloneNode();
-    clone.volume = Math.min(1, volume * (enabled ? 1 : 0));
-    clone.play().catch(() => {});
-    return true;
+    if (a.paused || a.ended) {
+     a.volume = Math.min(1, volume * (enabled ? 1 : 0));
+     a.currentTime = 0;
+     a.play().catch(() => {});
+     return true;
+    }
+    let pool = clonePool.get(key);
+    if (!pool) {
+     pool = [];
+     clonePool.set(key, pool);
+    }
+    let recycled = pool.find(el => el.paused || el.ended);
+    if (!recycled && pool.length < 3) {
+     recycled = a.cloneNode();
+     recycled.onended = () => { recycled.pause(); };
+     pool.push(recycled);
+    }
+    if (recycled) {
+     recycled.volume = Math.min(1, volume * (enabled ? 1 : 0));
+     recycled.currentTime = 0;
+     recycled.play().catch(() => {});
+     return true;
+    }
    }
   } catch {}
   return false;
@@ -123,7 +158,7 @@ export function createSound() {
   if (typeof Audio === 'undefined') return;
   if (!rainAudio) {
    try {
-    rainAudio = new Audio(new URL(SAMPLES.rain, import.meta.url).href);
+    rainAudio = new Audio(new URL('./assets/rain_sound.mp3', import.meta.url).href);
     rainAudio.loop = true;
     rainAudio.volume = 0.55 * level('ambience');
    } catch (e) {
@@ -148,7 +183,6 @@ export function createSound() {
    rainPlaying = false;
    try {
     rainAudio.pause();
-    rainAudio.currentTime = 0;
    } catch {}
   }
  }
@@ -157,13 +191,12 @@ export function createSound() {
   if (audioUnlocked && context && context.state === 'running') return;
   audioUnlocked = true;
   try {
-   context ??= new (window.AudioContext || window.webkitAudioContext)();
-   if (!master) {
+   context = getSharedAudioContext();
+   if (context && !master) {
     master = context.createGain();
     master.connect(context.destination);
    }
-   master.gain.value = enabled ? 0.65 : 0;
-   context.resume().catch(() => {});
+   if (master) master.gain.value = enabled ? 0.65 : 0;
    loadSamples();
   } catch {}
  }
@@ -385,15 +418,8 @@ export function createSound() {
  };
 }
 
-let globalUiCtx = null;
 function uiAudioContext() {
-  const AudioCtx = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext));
-  if (!AudioCtx) return null;
-  if (!globalUiCtx) globalUiCtx = new AudioCtx();
-  if (globalUiCtx.state === 'suspended') {
-    try { globalUiCtx.resume().catch(() => {}); } catch {}
-  }
-  return globalUiCtx;
+  return getSharedAudioContext();
 }
 
 export function playUiClick(enabled = true) {
