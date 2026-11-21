@@ -14,7 +14,7 @@ function texture(name, color = true) {
     const map = new TextureLoader().load(new URL('./assets/street/' + name + '.webp', import.meta.url).href);
     if (color) map.colorSpace = SRGBColorSpace;
     map.wrapS = map.wrapT = RepeatWrapping;
-    map.anisotropy = 4;
+    map.anisotropy = 8;
     textures.set(name, map);
   }
   return textures.get(name);
@@ -224,7 +224,7 @@ export function streetSurfaces(scene, box) {
       techDeckTex.colorSpace = SRGBColorSpace;
       techDeckTex.wrapS = techDeckTex.wrapT = RepeatWrapping;
       techDeckTex.repeat.set(1, STRIP_LEN / 16);
-      techDeckTex.anisotropy = 4;
+      techDeckTex.anisotropy = 8;
       scrolling.push({ map: techDeckTex, span: 16 });
     }
 
@@ -265,7 +265,7 @@ export function streetSurfaces(scene, box) {
       techWalkTex.colorSpace = SRGBColorSpace;
       techWalkTex.wrapS = techWalkTex.wrapT = RepeatWrapping;
       techWalkTex.repeat.set(2, STRIP_LEN / 8);
-      techWalkTex.anisotropy = 4;
+      techWalkTex.anisotropy = 8;
       scrolling.push({ map: techWalkTex, span: 8 });
     }
   }

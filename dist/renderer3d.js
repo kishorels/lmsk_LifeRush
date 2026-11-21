@@ -4,13 +4,13 @@ import {createGuardEffect} from './guard-effect.js?v=3.0.0';
 import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.6';
 import {createSideTraffic} from './side-vehicles.js?v=3.2.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.3.9';
+import {createSky} from './sky-scene.js?v=3.4.0';
 import {createCampus} from './campus-scene.js?v=3.2.6';
 import {createCollegeCampus} from './college-scene.js?v=3.2.6';
 import {createItParkCampus} from './itpark-scene.js?v=3.2.6';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.0.3';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.1.1';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.3.9';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.4.0';
 import {createTraffic} from './traffic-scene.js?v=3.2.1';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.0.3';
@@ -19,14 +19,37 @@ import {loadChaserModel} from './chaser-model.js?v=3.0.0';
 import {loadRunnerModel} from './runner-model.js?v=3.3.0';
 import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.2.6';
 export function createRenderer(canvas, callbacks = {}){
- let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});}
+ let renderer;
+ try{
+   renderer=new T.WebGLRenderer({
+     canvas,
+     antialias:true,
+     alpha:false,
+     powerPreference:'high-performance',
+     precision:'highp',
+     stencil:false
+   });
+ }catch{
+   renderer=new T.WebGLRenderer({canvas,antialias:false,alpha:false});
+ }
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
  let contextLost=false;canvas.addEventListener?.('webglcontextlost',()=>{contextLost=true;},false);canvas.addEventListener?.('webglcontextrestored',()=>{contextLost=false;},false);
  const isTouchDevice=typeof navigator!=='undefined'&&navigator.maxTouchPoints>0;
- renderer.setPixelRatio(Math.min(devicePixelRatio||1,isTouchDevice?1.0:1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.18;
+ const dpr=typeof window!=='undefined'?(window.devicePixelRatio||1):1;
+ // Native high-density pixel ratio (up to 2.0) ensures crystal-clear 1080p/Retina/4K sharpness on mobile devices without blur
+ renderer.setPixelRatio(Math.min(dpr, 2.0));
+ renderer.shadowMap.enabled=true;
+ renderer.shadowMap.type=T.PCFSoftShadowMap;
+ renderer.outputColorSpace=T.SRGBColorSpace;
+ renderer.toneMapping=T.ACESFilmicToneMapping;
+ renderer.toneMappingExposure=1.24;
  const scene=new T.Scene();scene.background=new T.Color('#64d6ff');scene.fog=new T.Fog('#78dcff',150,325);
  const camera=new T.PerspectiveCamera(57,1,.1,375);camera.position.set(0,1.52,3.65);camera.lookAt(0,.98,0);
- const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);const sun=new T.DirectionalLight(0xfff4d6,3.55);sun.position.set(-15,26,15);sun.castShadow=true;const sm=isTouchDevice?512:1024;sun.shadow.mapSize.set(sm,sm);Object.assign(sun.shadow.camera,{left:-12,right:12,top:14,bottom:-18,near:4,far:52});sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
+ const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);
+ const sun=new T.DirectionalLight(0xfff4d6,3.65);sun.position.set(-15,26,15);sun.castShadow=true;
+ sun.shadow.mapSize.set(1024, 1024);
+ Object.assign(sun.shadow.camera,{left:-12,right:12,top:14,bottom:-18,near:4,far:52});
+ sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
  const mats=new Map();function mat(c){if(!mats.has(c))mats.set(c,new T.MeshStandardMaterial({color:c,roughness:.78}));return mats.get(c);}
  const cube=new T.BoxGeometry(1,1,1),sphere=new T.SphereGeometry(1,12,8),cyl=new T.CylinderGeometry(1,1,1,8),cone=new T.ConeGeometry(1,1,7),ringGeometry=new T.TorusGeometry(.32,.075,6,16);
  function mesh(g,c,parent,x,y,z,sx=1,sy=1,sz=1,shadow=false){const m=new T.Mesh(g,mat(c));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=shadow;m.receiveShadow=true;parent.add(m);return m;}

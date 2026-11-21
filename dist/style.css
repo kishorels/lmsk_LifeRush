@@ -1920,9 +1920,17 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   transform: scale(1.12);
 }
 
-/* Crisp vibrant Pixar-style color grading matching reference look */
+/* Crisp hardware-accelerated direct GPU display with zero blur */
+#world {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
 .game:not(.is-char-loading) #world {
-  filter: saturate(1.30) contrast(1.08) brightness(1.04);
+  filter: none;
 }
 
 /* v3.1.3 Settings: default 2-power selector */
