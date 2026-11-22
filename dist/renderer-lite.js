@@ -2,7 +2,7 @@ import {branchForkClearance} from './road-events.js';
 import {pickupTypes} from './progression.js';
 import {drawLitePowerup} from './pickup-models.js';
 import {drawLiteCoin} from './coin.js';
-import {createLiteScenery} from './lite-scenery.js?v=1.0.6';
+import {createLiteScenery} from './lite-scenery.js?v=2.2.1';
 import {createLiteCollegeRain} from './college-rain-lite.js';
 import {sceneWeather,hasCollegeRain,weatherColor} from './weather.js';
 import {campusAnchor,campusKind,CAMPUS_SLOTS,roadCurveX} from './campus-layout.js';
@@ -12,7 +12,7 @@ import {CAPTURE_GESTURE_START,SWEEP_SECONDS,height,chasePose,capturePose,isCaptu
 export function createLiteRenderer(canvas){let s,character,w=600,h=700;const ctx=canvas.getContext('2d');
 function resize(){const r=canvas.getBoundingClientRect();w=r.width||390;h=r.height||780;const d=Math.min(devicePixelRatio||1,2);canvas.width=w*d;canvas.height=h*d;ctx?.setTransform(d,0,0,d,0,0);}new ResizeObserver(resize).observe(canvas);
 const poly=(points,color)=>{ctx.fillStyle=color;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();};
-function project(x,z,y=0){const p=10/(z+10);const curveX=(s?.map==='college'&&z>0)?(roadCurveX((s.distance||0)+Math.max(0,z-3),'college')-roadCurveX(s.distance||0,'college'))*.38:0;return {x:w/2+(x+curveX-s.x*.55)*w*.15*p,y:h*.30+h*.75*p-y*h*.12*p,k:h*.12*p};}
+function project(x,z,y=0){const p=10/(z+10);const curveX=s?.map==='finalrun'?roadCurveX(s.distance+z-3,'finalrun')-roadCurveX(s.distance,'finalrun'):(s?.map==='college'&&z>0)?(roadCurveX((s.distance||0)+Math.max(0,z-3),'college')-roadCurveX(s.distance||0,'college'))*.38:0;return {x:w/2+(x+curveX-s.x*.55)*w*.15*p,y:h*.30+h*.75*p-y*h*.12*p,k:h*.12*p};}
 function box(x,z,width,height,depth,front,side='#a46e43',top='#d0a46b',y=0,visibleSide){
   const left=x-width/2,right=x+width/2,far=z+depth,high=y+height;
   const shape=(points,color)=>poly(points.map(point=>{const p=project(...point);return [p.x,p.y];}),color);
@@ -450,7 +450,7 @@ if(seaBridge){
  ctx.fillStyle=water;ctx.fillRect(0,h*.31,w,h*.69);ctx.restore();
 }
 const flight=flightPhase(s.time);if(flight<1){ctx.save();const proximity=1/Math.max(.065,1-.98*flight);ctx.translate(w*(.56-.012*proximity),h*(.30-.048*proximity));ctx.rotate(-Math.PI/2);ctx.scale(w*proximity/3600,w*proximity/3600);drawAirliner(ctx);ctx.restore();}
-sceneryArt.road(s.distance,weather);
+if(s.map!=='finalrun')sceneryArt.road(s.distance,weather);
 const collegeRain=hasCollegeRain(s);
 if(collegeRain){
  collegeRainArt ??= createLiteCollegeRain(ctx,project);

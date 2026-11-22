@@ -1,12 +1,12 @@
 import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
 import {createPickupModels,makeCoin} from './pickup-models.js?v=3.4.8';
 import {createGuardEffect} from './guard-effect.js?v=3.4.8';
-import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.8';
+import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.9';
 import {createSideTraffic} from './side-vehicles.js?v=3.2.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.4.2';
+import {createSky} from './sky-scene.js?v=3.4.3';
 import {createCampus} from './campus-scene.js?v=3.2.8';
-import {createVillageRoute} from './village-scene.js?v=1.0.6';
+import {createVillageRoute} from './village-scene.js?v=2.2.1';
 import {createCollegeCampus} from './college-scene.js?v=3.2.6';
 import {createItParkCampus} from './itpark-scene.js?v=3.2.6';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.4.2';
@@ -459,7 +459,7 @@ export function createRenderer(canvas, callbacks = {}){
  if(Math.abs(targetFov-camera.fov)>.12){camera.fov+=(targetFov-camera.fov)*Math.min(1,(dt||.016)*6);camera.updateProjectionMatrix();}
  const collegeRun=!inSelect&&s.map==='college'&&!s.activeBranch;
  const branchCurved=!inSelect&&(s.activeBranch==='skybridge'||s.activeBranch==='underpass');
- const curvedRun=collegeRun||branchCurved;
+ const curvedRun=collegeRun||branchCurved||s.map==='finalrun';
  const camCurveX=curvedRun?curveRelX(Math.max(0,s.distance-6.8),s):0;
  const camCurveY=curvedRun?curveRelY(Math.max(0,s.distance-6.8),s):0;
  const bendX=curvedRun?curveRelX(s.distance+(branchCurved?16:12),s)*(branchCurved?.40:.35):0;

@@ -335,7 +335,7 @@ export function streetSurfaces(scene, box) {
     const exitY = showAheadExit ? curveRelY(bEnd, branchState) : 0;
     const exitZShift = showAheadExit ? -(endRelZ + 35) : 0;
 
-    schoolGroup.visible = !isCollege && !isPark && (!onBranch || showAheadExit);
+    schoolGroup.visible = !isFinalRun && !isCollege && !isPark && (!onBranch || showAheadExit);
     finalRunGround.visible = isFinalRun;
     road.color.copy(dry).lerp(wet, weather.rain);
     collegeGroup.visible = isCollege && (!onBranch || showAheadExit);

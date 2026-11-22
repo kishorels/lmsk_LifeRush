@@ -2,8 +2,8 @@ import {createPowerControls} from './power-controls.js?v=3.3.0';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.2.5';
 import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.4.8';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE} from './engine.js?v=3.2.5';
-import {createRenderer} from './renderer3d.js?v=3.5.5';
-import {createLiteRenderer} from './renderer-lite.js?v=3.2.5';
+import {createRenderer} from './renderer3d.js?v=3.6.1';
+import {createLiteRenderer} from './renderer-lite.js?v=3.3.1';
 
 import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
 import {initializeBuildProfile} from './build-profile.js';

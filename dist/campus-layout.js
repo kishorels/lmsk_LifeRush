@@ -8,6 +8,10 @@ export function campusKind(anchor){return Math.floor((anchor-CAMPUS_START)/CAMPU
 
 // Smooth Kodaikanal-style S-curves and gentle mountain slopes on the College map.
 export function roadCurveX(distance, map = 'school') {
+ if (map === 'finalrun') {
+   const entry=smootherstep((distance-45)/70), exit=smootherstep((9850-distance)/100);
+   return entry*exit*(13*Math.sin(distance/51)+6*Math.sin(distance/29));
+ }
  if (map !== 'college') return 0;
  const ramp = Math.max(0, Math.min(1, (distance - 22) / 55));
  const ease = ramp * ramp * (3 - 2 * ramp);
@@ -59,7 +63,7 @@ export function branchCurveY(worldZ, state) {
 }
 
 export function roadCurveSlope(distance, map = 'school') {
- if (map !== 'college') return 0;
+ if (map !== 'college' && map !== 'finalrun') return 0;
  const dx = 0.25;
  return (roadCurveX(distance + dx, map) - roadCurveX(distance - dx, map)) / (2 * dx);
 }
@@ -77,8 +81,7 @@ export function curveRelX(worldZ, state) {
  if (state.activeBranch === 'skybridge' || state.activeBranch === 'underpass') {
   return branchCurveX(worldZ, state) - branchCurveX(state.distance || 0, state);
  }
- if (state.map !== 'college') return 0;
- return roadCurveX(worldZ, 'college') - roadCurveX(state.distance || 0, 'college');
+ return roadCurveX(worldZ,state.map) - roadCurveX(state.distance || 0,state.map);
 }
 
 export function curveRelY(worldZ, state) {

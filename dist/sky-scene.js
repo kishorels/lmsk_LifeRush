@@ -186,6 +186,9 @@ export function createSky(scene,sun,ambient){
     baseHor.lerp(parkHor,vivid);
   }
 
+  if(s.map==='finalrun' && night<.45 && weather.rain<.35){
+    baseTop.set('#858ce3');baseHor.set('#ffdfbf');
+  }
   top.copy(baseTop);
   horizon.copy(baseHor);
   if(isPark && flashFlicker){
