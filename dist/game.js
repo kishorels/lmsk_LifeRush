@@ -1,7 +1,7 @@
 import {GRANDFATHER_GATE} from './grandfather-route.js';
 import {createPowerControls} from './power-controls.js?v=3.3.0';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.6.8';
-import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.4.8';
+import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.8.2';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE} from './engine.js?v=3.6.8';
 import {createRenderer} from './renderer3d.js?v=3.8.1';
 import {createLiteRenderer} from './renderer-lite.js?v=3.3.1';
@@ -792,12 +792,18 @@ function enterGameFromSplash() {
     if (v) {
       v.muted = true;
       v.pause();
-      v.removeAttribute('src');
-      v.load();
     }
   } catch {}
   playEnterSound(sound);
-  if (sound) { effects.unlock(); effects.startBgm(); }
+  if (sound) {
+    effects.unlock();
+    // Wait briefly until the soft entry chime finishes & splash video audio settles before starting BGM on Android.
+    setTimeout(() => {
+      if (sound && !game.classList.contains('mode-splash') && !finalIntroActive && !collegeIntroActive) {
+        effects.startBgm();
+      }
+    }, 240);
+  }
   setScreenMode('select');
   showHub('home');
   if (!playerName) {
