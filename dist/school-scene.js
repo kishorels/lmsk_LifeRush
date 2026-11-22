@@ -3,7 +3,7 @@ import {campusMaterial, roadsideTree, curveRelX, curveRelY} from './street-mater
 import {buildBus, buildCollegeVehicle} from './bus-model.js';
 import {buildRedShuttleCart} from './itpark-models.js?v=3.0.3';
 import { BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SRGBColorSpace } from './vendor/three.module.js';
-import { SCHOOL_GATE, SCHOOL_VAN, ROOF_COINS } from './engine.js';
+import { SCHOOL_GATE, FINALRUN_GATE, SCHOOL_VAN, ROOF_COINS } from './engine.js?v=3.2.5';
 
 export function createSchoolEntrance(scene) {
   const campus = new Group();
@@ -76,7 +76,8 @@ export function createSchoolEntrance(scene) {
     roadsideTree(campus, side*7.5, -38-side*2, 7.5, false, side*.36);
     roadsideTree(campus, side*16, -30, 10, false, -side*.35);
   }
-  const gate = -SCHOOL_GATE;
+  const gateDistance=FINALRUN_GATE;
+  const gate=-SCHOOL_GATE;
   const schoolSigns=new Group(),collegeSigns=new Group();
   const parkSigns=new Group(),classicWings=new Group(),parkWings=new Group();
   campus.add(schoolSigns,collegeSigns,parkSigns,classicWings,parkWings);
@@ -187,15 +188,16 @@ export function createSchoolEntrance(scene) {
   return state=>{
     const isCollege=state.map==='college';
     const isPark=state.map==='itpark';
-    campus.position.set(curveRelX(0,state),curveRelY(0,state),state.distance);
+    const mapGate=state.map==='finalrun'?gateDistance:SCHOOL_GATE;
+    campus.position.set(curveRelX(0,state),curveRelY(0,state),state.distance-(mapGate-SCHOOL_GATE));
     parkSigns.visible=isPark;parkWings.visible=isPark;
     classicWings.visible=!isPark;
     schoolSigns.visible=!isCollege&&!isPark;collegeSigns.visible=isCollege;
     body.visible=!isCollege&&!isPark;collegeBody.visible=isCollege;parkBody.visible=isPark;
     const entry=state.entryVan??SCHOOL_VAN;
-    vehicle.position.set((entry.lane-SCHOOL_VAN.lane)*2.2,0,SCHOOL_VAN.rear-entry.rear);
+    vehicle.position.set((entry.lane-SCHOOL_VAN.lane)*2.2,0,SCHOOL_VAN.rear-entry.rear+(mapGate>SCHOOL_GATE?mapGate-SCHOOL_GATE:0));
     const onPodium=state.mode==='ready'||state.mode==='select';
-    campus.visible=state.distance<entry.front+28 && !(isPark && onPodium);
+    campus.visible=state.distance<entry.front+28+(mapGate-SCHOOL_GATE) && !(isPark && onPodium);
     coins.forEach((coin,i)=>{
       coin.visible=!(state.roofCoins & (1<<i));
       spinCoin(coin,state.time,i,roof+.58);

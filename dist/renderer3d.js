@@ -1,11 +1,12 @@
 import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
 import {createPickupModels,makeCoin} from './pickup-models.js?v=3.4.8';
 import {createGuardEffect} from './guard-effect.js?v=3.4.8';
-import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.6';
+import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.8';
 import {createSideTraffic} from './side-vehicles.js?v=3.2.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
 import {createSky} from './sky-scene.js?v=3.4.2';
-import {createCampus} from './campus-scene.js?v=3.2.6';
+import {createCampus} from './campus-scene.js?v=3.2.8';
+import {createVillageRoute} from './village-scene.js?v=1.0.6';
 import {createCollegeCampus} from './college-scene.js?v=3.2.6';
 import {createItParkCampus} from './itpark-scene.js?v=3.2.6';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.4.2';
@@ -13,11 +14,11 @@ import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,bu
 import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.4.2';
 import {createTraffic} from './traffic-scene.js?v=3.4.2';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=3.0.3';
+import {createSchoolEntrance} from './school-scene.js?v=3.0.5';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
 import {loadChaserModel} from './chaser-model.js?v=3.0.0';
 import {loadRunnerModel} from './runner-model.js?v=3.3.0';
-import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.2.6';
+import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.2.8';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;
  try{
@@ -60,6 +61,7 @@ export function createRenderer(canvas, callbacks = {}){
  const ball=(p,c,x,y,z,sx,sy=sx,sz=sx,sh=false)=>mesh(sphere,c,p,x,y,z,sx,sy,sz,sh);
  const updateStreet=streetSurfaces(scene,box);
  let updateCampus=null;
+ let updateVillage=null;
  let updateCollege=null;
  let updateItPark=null;
  function updatePark(state, weather) {
@@ -359,8 +361,16 @@ export function createRenderer(canvas, callbacks = {}){
    roadEventsActive=false;
  }
  updatePark(s,weather);
- if(s.map==='college'){if(!updateCollege)updateCollege=createCollegeCampus(scene);updateCollege(s);if(updateCampus)updateCampus(s,weather);}
- else{if(!onPodium||podiumChanged){if(!updateCampus&&!onPodium&&s.map!=='itpark')updateCampus=createCampus(scene);if(updateCampus)updateCampus(s,weather);}if(updateCollege)updateCollege(s);}
+ if(s.map==='school'){
+   if(!onPodium||podiumChanged){
+     if(!updateCampus&&!onPodium)updateCampus=createCampus(scene);
+     if(updateCampus)updateCampus(s,weather);
+   }
+ }else if(updateCampus)updateCampus(s,weather);
+ if(s.map==='finalrun'){if(!updateVillage)updateVillage=createVillageRoute(scene);updateVillage(s);}
+ else if(updateVillage)updateVillage(s);
+ if(s.map==='college'){if(!updateCollege)updateCollege=createCollegeCampus(scene);updateCollege(s);}
+ else if(updateCollege)updateCollege(s);
  updateChaserModel(s);
  podium.position.set(0,.09,s.distance);
  podium.visible=onPodium;

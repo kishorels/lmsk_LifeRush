@@ -1,9 +1,9 @@
 import {createPowerControls} from './power-controls.js?v=3.3.0';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.2.3';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.2.5';
 import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.4.8';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE} from './engine.js?v=3.2.3';
-import {createRenderer} from './renderer3d.js?v=3.4.8';
-import {createLiteRenderer} from './renderer-lite.js?v=3.1.9';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE} from './engine.js?v=3.2.5';
+import {createRenderer} from './renderer3d.js?v=3.5.5';
+import {createLiteRenderer} from './renderer-lite.js?v=3.2.5';
 
 import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
 import {initializeBuildProfile} from './build-profile.js';
@@ -210,13 +210,14 @@ try{
   const canAccessPark = isLocalTest || parkOpen(profile);
   const canAccessCollege = isCollegeUnlocked();
   let savedMap = 'school';
-  if (rawSavedMap === 'itpark' && canAccessPark) savedMap = 'itpark';
+  if (rawSavedMap === 'finalrun') savedMap = 'finalrun';
+  else if (rawSavedMap === 'itpark' && canAccessPark) savedMap = 'itpark';
   else if (rawSavedMap === 'college' && canAccessCollege) savedMap = 'college';
   else if (rawSavedMap === 'school') savedMap = 'school';
   else if (canAccessCollege) savedMap = 'college';
 
   if (!canAccessCollege && !isLocalTest) {
-    selectedMap = 'school';
+    selectedMap = savedMap === 'finalrun' ? 'finalrun' : 'school';
     equippedCharId = (savedChar === 'female' || savedChar === 'college-woman') ? 'female' : 'male';
   } else {
     selectedMap = savedMap;
@@ -465,12 +466,11 @@ function syncMapHeaderUI() {
     button.classList.toggle('selected',active);
     button.setAttribute('aria-pressed',String(active));
   });
-  const school=selectedMap==='school';
-  if($('hub-map-name')) $('hub-map-name').textContent=selectedMap==='itpark'?'IT PARK':school?'SCHOOL CAMPUS':'COLLEGE CAMPUS';
-  if(selectedMap==='itpark' && $('hub-map-name')) $('hub-map-name').textContent='IT PARK';
-  if($('hub-outfit-name')) $('hub-outfit-name').textContent=school?'School uniform':'Casual outfit';
+  const school=selectedMap==='school', finalRun=selectedMap==='finalrun';
+  if($('hub-map-name')) $('hub-map-name').textContent=selectedMap==='itpark'?'IT PARK':school?'SCHOOL CAMPUS':finalRun?'THE FINAL RUN':'COLLEGE CAMPUS';
+  if($('hub-outfit-name')) $('hub-outfit-name').textContent=(school||finalRun)?'School uniform':'Casual outfit';
   const loc = document.querySelector('.hud-top-bar .location');
-  if(loc) loc.innerHTML=selectedMap==='itpark'?(IC_ITPARK+' IT PARK'):school?(IC_SCHOOL+' RUNVERSE SCHOOL'):(IC_COLLEGE+' RUNVERSE COLLEGE');
+  if(loc) loc.innerHTML=selectedMap==='itpark'?(IC_ITPARK+' IT PARK'):school?(IC_SCHOOL+' RUNVERSE SCHOOL'):finalRun?(IC_SCHOOL+' THE FINAL RUN'):(IC_COLLEGE+' RUNVERSE COLLEGE');
 }
 
 function updateCarouselUI() {
@@ -551,7 +551,7 @@ function selectUnlockedCharacter(id) {
   activePreviewCharId = entry.id;
   character = entry.gender;
   if (!isLocalTest) {
-    if (selectedMap !== 'itpark' || entry.map === 'school') selectedMap = entry.map;
+    if (selectedMap !== 'finalrun' && (selectedMap !== 'itpark' || entry.map === 'school')) selectedMap = entry.map;
   }
   s.map = selectedMap;
   carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === entry.id));
@@ -606,10 +606,10 @@ function selectMap(map, fromUser = false){
     }
     return;
   }
-  selectedMap=map==='itpark'?'itpark':map==='college'?'college':'school';
+  selectedMap=map==='finalrun'?'finalrun':map==='itpark'?'itpark':map==='college'?'college':'school';
   s.map=selectedMap;
   if (!isLocalTest) {
-    if (selectedMap !== 'school') {
+    if (selectedMap === 'college' || selectedMap === 'itpark') {
       if (!equippedCharId.startsWith('college-')) {
         equippedCharId = character === 'female' ? 'college-woman' : 'college-man';
       }
@@ -1011,7 +1011,7 @@ function start(){
   powerControls.choose(availablePowers(playerLevel(profile.xp)),beginRun);
 }
 function beginRun(chosen){
-  if (!isCollegeUnlocked()) {
+  if (!isCollegeUnlocked() && selectedMap !== 'finalrun') {
     selectedMap = 'school';
     equippedCharId = character === 'female' ? 'female' : 'male';
     carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
@@ -1037,7 +1037,7 @@ function beginRun(chosen){
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
   if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
   setScreenMode('running');
-  $('toast').textContent=selectedMap==='itpark'?'IT Park · Follow the shuttle roof ramp':selectedMap==='college'?'College rush · Find the next roof ramp':'School rush · Find the next roof ramp';
+  $('toast').textContent=selectedMap==='finalrun'?'Village road · Reach the school at 10,000m':selectedMap==='itpark'?'IT Park · Follow the shuttle roof ramp':selectedMap==='college'?'College rush · Find the next roof ramp':'School rush · Find the next roof ramp';
   effects.setEnabled(sound);
   effects.unlock();
   if(sound) effects.startBgm?.();
@@ -1056,7 +1056,7 @@ function pause(){
   if($('btn-revive')) $('btn-revive').hidden = true;
   if($('btn-share-score')) $('btn-share-score').hidden = true;
   setScreenMode('gameover');
-  const mapName = selectedMap === 'itpark' ? 'IT Park' : selectedMap === 'college' ? 'College' : 'School';
+  const mapName = selectedMap === 'finalrun' ? 'The Final Run' : selectedMap === 'itpark' ? 'IT Park' : selectedMap === 'college' ? 'College' : 'School';
   show('Take a breath.', `Your ${mapName} run will be right here.`, 'RESUME RUN', 'PAUSED');
 }
 
@@ -1090,7 +1090,7 @@ function show(title,message,button,tag){
 }
 
 let runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
-function crash(){
+function crash(completed=false){
   if (s.map === 'college') profile.collegeBest = Math.max(profile.collegeBest,Math.floor(s.distance));
   const previousBest = best;
   const runDist = Math.floor(s.distance);
@@ -1109,7 +1109,7 @@ function crash(){
   recordRunMissions(deltaDist, deltaCoins + deltaBonus, deltaNear);
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
   if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
-  effects.play('over');
+  effects.play(completed?'bell':'over');
   setScreenMode('gameover');
   const isCol=selectedMap==='college';
   const hint={
@@ -1137,7 +1137,10 @@ function crash(){
   if (challengeBanner) {
     challengeBanner.hidden = false;
     challengeBanner.classList.remove('is-loser-taunt', 'is-new-record');
-    if (previousBest > 0 && runDist < previousBest) {
+    if (completed) {
+      challengeBanner.classList.add('is-new-record');
+      challengeBanner.innerHTML = '<span class="challenge-headline">SCHOOL REACHED · 10,000m!</span><span class="challenge-sub">The village road run is complete. Your school journey starts here.</span>';
+    } else if (previousBest > 0 && runDist < previousBest) {
       const gap = previousBest - runDist;
       challengeBanner.classList.add('is-loser-taunt');
       challengeBanner.innerHTML = `<span class="challenge-headline">ARE YOU A LOSER?!</span><span class="challenge-sub">You stopped ${gap.toLocaleString()}m short of your ${previousBest.toLocaleString()}m record (${pct}%) - try again to beat it!</span>`;
@@ -1151,14 +1154,17 @@ function crash(){
     }
   }
   
+  const resultMessage=completed
+    ? '10,000 m · Village road complete · '+(s.coins+bonusCoins)+' coins'+(bonusCoins?' (+'+bonusCoins+' bonus)':'')+(s.nearMissCount?' · '+s.nearMissCount+' close calls':'')+'.'
+    : runDist+' m | '+(s.coins+bonusCoins)+' coins'+(bonusCoins?' (+'+bonusCoins+' bonus)':'')+(s.nearMissCount?' · '+s.nearMissCount+' close calls':'')+'. '+hint;
   show(
-    'ACADEMIC REPORT CARD',
-    runDist+' m | '+(s.coins + bonusCoins)+' coins'+(bonusCoins ? ` (+${bonusCoins} bonus)` : '')+(s.nearMissCount ? ` · ${s.nearMissCount} close calls` : '')+'. '+hint,
+    completed?'SCHOOL REACHED!':'ACADEMIC REPORT CARD',
+    resultMessage,
     'RUN AGAIN',
-    'REPORT CARD'
+    completed?'MAP COMPLETE':'REPORT CARD'
   );
   if ($('btn-revive')) {
-    const canRevive = !s.revivedOnce && totalCoins >= REVIVE_COST;
+    const canRevive = !completed && !s.revivedOnce && totalCoins >= REVIVE_COST;
     $('btn-revive').hidden = !canRevive;
   }
   if ($('btn-share-score')) {
@@ -1302,6 +1308,12 @@ function tick(t) {
   }
 
   step(s, dt);
+  const finishGate=s.map==='finalrun'?FINALRUN_GATE:Infinity;
+  if(old==='running'&&s.mode==='running'&&distanceBefore<finishGate&&s.distance>=finishGate){
+    s.distance=finishGate;
+    s.speed=0;
+    s.mode='finished';
+  }
   powerControls.update();
   try { effects.update(s, character); } catch (err) { if (!loopErrorLogged) { loopErrorLogged = true; console.error('Sound update error:', err); } }
   
@@ -1319,7 +1331,8 @@ function tick(t) {
     if (navigator.vibrate) try { navigator.vibrate(80); } catch {}
   }
   game.classList.toggle('capture', isCapture(s));
-  if (old !== 'crashed' && s.mode === 'crashed') crash();
+  if(old==='running'&&s.mode==='finished') crash(true);
+  else if (old !== 'crashed' && s.mode === 'crashed') crash();
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) effects.play('laugh');
   if (old === 'captured' && captureBefore < CAPTURE_GESTURE_START && s.capture >= CAPTURE_GESTURE_START) effects.play('swag');
 
@@ -1445,7 +1458,7 @@ function tick(t) {
       : '10,000m · 10k Goal Open! Collect 20,000 Coins to unlock College!';
   }
 
-  if (s.mode === 'running' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
+  if (s.mode === 'running' && s.map === 'school' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {
     $('toast').textContent = 'Campus pickup zone · Look for the next roof ramp';
   }
   if (s.mode === 'running' && distanceBefore < s.entryVan.rear && s.distance >= s.entryVan.rear && s.floor > 1) {
@@ -1476,7 +1489,7 @@ function tick(t) {
   // Dynamic Location HUD update matching active branch & map
   const locEl = hudLocationEl || document.querySelector('.hud-top-bar .location');
   if (locEl) {
-    let locText = selectedMap === 'itpark' ? (IC_ITPARK + ' IT PARK') : (selectedMap === 'school' ? (IC_SCHOOL + ' RUNVERSE SCHOOL') : (IC_COLLEGE + ' RUNVERSE COLLEGE'));
+    let locText = selectedMap === 'itpark' ? (IC_ITPARK + ' IT PARK') : (selectedMap === 'school' ? (IC_SCHOOL + ' RUNVERSE SCHOOL') : selectedMap === 'finalrun' ? (IC_SCHOOL + ' THE FINAL RUN') : (IC_COLLEGE + ' RUNVERSE COLLEGE'));
     if (selectedMap === 'itpark') {
       if (s.activeBranch === 'skybridge') locText = IC_ITPARK + ' SKY BRIDGE';
       else if (s.activeBranch === 'underpass') locText = IC_ITPARK + ' METRO TUNNEL';

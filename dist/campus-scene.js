@@ -114,7 +114,7 @@ export function createCampus(scene) {
  const slots=Array.from({length:CAMPUS_SLOTS},(_,slot)=>{const root=new Group();scene.add(root);return{slot,root,kind:-1};});
  const cache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
  const glazing=mats.get(0x276fa0);
- return (s,weather)=>{if(glazing)glazing.emissiveIntensity=(weather?.night||0)*.38;for(const item of slots){const baseVis=s.map!=='college' && s.map!=='itpark';if(!baseVis){item.root.visible=false;continue;}const anchor=campusAnchor(item.slot,s.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,s);
+ return (s,weather)=>{if(glazing)glazing.emissiveIntensity=(weather?.night||0)*.38;for(const item of slots){const baseVis=s.map==='school';if(!baseVis){item.root.visible=false;continue;}const anchor=campusAnchor(item.slot,s.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,s);
   if(clr.hide){item.root.visible=false;continue;}
   item.root.visible=true;
   if(item.kind!==kind){item.root.clear();if(!cache[item.slot].has(kind))cache[item.slot].set(kind,templates[kind].clone());item.root.add(cache[item.slot].get(kind));item.kind=kind;}

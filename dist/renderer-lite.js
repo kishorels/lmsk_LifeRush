@@ -2,13 +2,13 @@ import {branchForkClearance} from './road-events.js';
 import {pickupTypes} from './progression.js';
 import {drawLitePowerup} from './pickup-models.js';
 import {drawLiteCoin} from './coin.js';
-import {createLiteScenery} from './lite-scenery.js';
+import {createLiteScenery} from './lite-scenery.js?v=1.0.6';
 import {createLiteCollegeRain} from './college-rain-lite.js';
 import {sceneWeather,hasCollegeRain,weatherColor} from './weather.js';
 import {campusAnchor,campusKind,CAMPUS_SLOTS,roadCurveX} from './campus-layout.js';
 import {drawAirliner,flightPhase} from './airliner.js';
 import {repeatedVans,sideVehicleX} from './traffic-rules.js';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,height,chasePose,capturePose,isCapture,SCHOOL_GATE,ROLL_DURATION,FALL_DURATION,HIT_DURATION} from './engine.js';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,height,chasePose,capturePose,isCapture,SCHOOL_GATE,FINALRUN_GATE,ROLL_DURATION,FALL_DURATION,HIT_DURATION} from './engine.js';
 export function createLiteRenderer(canvas){let s,character,w=600,h=700;const ctx=canvas.getContext('2d');
 function resize(){const r=canvas.getBoundingClientRect();w=r.width||390;h=r.height||780;const d=Math.min(devicePixelRatio||1,2);canvas.width=w*d;canvas.height=h*d;ctx?.setTransform(d,0,0,d,0,0);}new ResizeObserver(resize).observe(canvas);
 const poly=(points,color)=>{ctx.fillStyle=color;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();};
@@ -257,24 +257,26 @@ function mutant(pose, z){
   ctx.restore();
 }
 function school(scenery) {
-  const relative = at => 3+at-s.distance;
+  const finalRun=s.map==='finalrun',gateDistance=finalRun?FINALRUN_GATE:SCHOOL_GATE,shift=gateDistance-SCHOOL_GATE;
+  const relative = at => 3+at+shift-s.distance;
   const gate = relative(SCHOOL_GATE);
-  if (gate > -.9) scenery.push({z:gate,draw:()=>{
+  if (gate > -.9 && gate < 190) scenery.push({z:gate,draw:()=>{
     for(const side of [-1,1])box(side*4,gate,.66,4.72,.65,'#ffedc7','#d9ae8a','#fff5cf');
     box(0,gate,8.05,1.18,.30,'#19505d','#153e49','#21a895',3.84);
     const p=project(0,gate,4.36);
     ctx.fillStyle='#fff3db';ctx.textAlign='center';ctx.font='900 '+p.k*.31+'px system-ui';
     ctx.fillText(s.map==='college'?'RUNVERSE COLLEGE':s.map==='itpark'?'LMSK IT PARK':'RUNVERSE SCHOOL',p.x,p.y);
   }});
-  const van=s.entryVan,x=van.lane*2.2,ramp=relative(van.ramp),rear=relative(van.rear),front=relative(van.front);
+  const van=s.entryVan,x=van.lane*2.2,vanShift=0;
+  const vanRelative=at=>3+at+vanShift-s.distance,ramp=vanRelative(van.ramp),rear=vanRelative(van.rear),front=vanRelative(van.front);
   for (const side of [-1,1]) {
     const z=Math.max(-1,relative(15));
-    if(relative(35)>-1) scenery.push({z,draw:()=>campusBuilding(side*8.2,z,Math.max(1,relative(35)-z),side<0?4.75:3.8,side<0?0:2)});
+    if(relative(35)>-1&&z<190) scenery.push({z,draw:()=>campusBuilding(side*8.2,z,Math.max(1,relative(35)-z),side<0?4.75:3.8,side<0?0:2)});
   }
-  if(front>-.9)scenery.push({z:Math.max(-1,rear),draw:()=>{
+  if(front>-.9&&front<190)scenery.push({z:Math.max(-1,rear),draw:()=>{
     sceneryArt.bus(x,rear,front,van.width,van.roof,true);
   }});
-  if(rear>-.9)scenery.push({z:Math.max(-1,ramp),draw:()=>{
+  if(rear>-.9&&ramp<190)scenery.push({z:Math.max(-1,ramp),draw:()=>{
     const near=Math.max(-1,ramp);
     const y=van.roof*(near-ramp)/(rear-ramp);
     const left=x-van.width/2,right=x+van.width/2;
@@ -290,8 +292,8 @@ function school(scenery) {
     }
   }});
   s.entryCoins.forEach((at,i)=>{
-    const z=relative(at);
-    if(z<-.9||(s.roofCoins&(1<<i)))return;
+    const z=vanRelative(at);
+    if(z<-.9||z>190||(s.roofCoins&(1<<i)))return;
     scenery.push({z:Math.max(-1,rear)-.03,draw:()=>{
       const p=project(x,z,van.roof+.58);
       drawLiteCoin(ctx,p,s.time,i);
@@ -471,7 +473,9 @@ if(s.map==='itpark' && s.activeBranch==='underpass'){
   }});
  }
 }
-school(scenery);traffic(scenery);for(let slot=0;slot<CAMPUS_SLOTS;slot++){
+school(scenery);traffic(scenery);
+if(s.map==='finalrun')scenery.push(...sceneryArt.village(s.distance,s.time));
+else for(let slot=0;slot<CAMPUS_SLOTS;slot++){
  const anchor=campusAnchor(slot,s.distance),kind=campusKind(anchor),z=anchor-s.distance+3;
  const coast=seaBridge ? branchForkClearance(anchor,s) : null;
  if(coast?.hide || z+16<0||z-16>180)continue;

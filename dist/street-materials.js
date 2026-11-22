@@ -28,6 +28,9 @@ export function streetSurfaces(scene, box) {
   }
   const scrolling = [];
   const schoolGroup = new Group();
+  const finalRunGround = new Group();
+  finalRunGround.visible = false;
+  schoolGroup.add(finalRunGround);
   const collegeGroup = new Group();
   collegeGroup.visible = false;
   scene.add(schoolGroup, collegeGroup);
@@ -43,7 +46,16 @@ export function streetSurfaces(scene, box) {
     surface.material = new MeshStandardMaterial({color:tint, map, roughness:.96});
     return surface.material;
   }
-  strip('turf', 0, -.34, 280, .3, 5, 56, 0xd7cfac);
+  const turfMaterial = strip('turf', 0, -.34, 280, .3, 5, 56, 0xd7cfac);
+  if (turfMaterial.map) {
+    const ruralTurf = new MeshStandardMaterial({color:0x8dbf68,map:turfMaterial.map,roughness:.96});
+    for (const side of [-1,1]) {
+      const field = box(finalRunGround,0xffffff,side*73.5,-.17,STRIP_Z,133,.02,STRIP_LEN);
+      field.material = ruralTurf;
+      const verge = box(finalRunGround,0x8dbf68,side*6,.018,STRIP_Z,1.45,.04,STRIP_LEN);
+      verge.material = ruralTurf;
+    }
+  }
   box(schoolGroup, 0x9b8e75, 0, -.12, STRIP_Z, 14, .3, STRIP_LEN);
   const road = strip('asphalt', 0, .02, 7.1, .14, 16, 1, 0xffffff);
   strip('pavers', -4.4, .06, 1.65, .22, 3.3, 1, 0xffffff);
@@ -310,6 +322,7 @@ export function streetSurfaces(scene, box) {
   return (distance, weather, map = 'school', activeBranch = null, branchState = null) => {
     const isCollege = map === 'college';
     const isPark = map === 'itpark';
+    const isFinalRun = map === 'finalrun';
     const onPodium = branchState && (branchState.mode === 'ready' || branchState.mode === 'select');
     const onSkybridge = activeBranch === 'skybridge' || (isPark && onPodium);
     const inUnderpass = activeBranch === 'underpass';
@@ -323,6 +336,7 @@ export function streetSurfaces(scene, box) {
     const exitZShift = showAheadExit ? -(endRelZ + 35) : 0;
 
     schoolGroup.visible = !isCollege && !isPark && (!onBranch || showAheadExit);
+    finalRunGround.visible = isFinalRun;
     road.color.copy(dry).lerp(wet, weather.rain);
     collegeGroup.visible = isCollege && (!onBranch || showAheadExit);
     itParkGroup.visible = isPark && (!onBranch || showAheadExit);

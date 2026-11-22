@@ -7,7 +7,7 @@ export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95, IN
 export const MAGNET_RADIUS = 18, CAPTURE_GESTURE_START = 2.55;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
-export const SCHOOL_GATE = 11;
+export const SCHOOL_GATE = 11, FINALRUN_GATE = 10000;
 export const SCHOOL_VAN = Object.freeze({ lane: 1, ramp: 22, rear: 32, front: 54, roof: 1.72, width: 1.94 });
 export function routeVans(distance,seed=0) { return [entryVan(seed),...repeatedVans(distance,seed)]; }
 export const ROOF_COINS = Object.freeze([35, 41, 47, 53]);
