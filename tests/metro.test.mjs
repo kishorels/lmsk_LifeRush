@@ -1,9 +1,68 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fresh,step} from '../dist/engine.js';
-import {Box3,Group} from '../dist/vendor/three.module.js';
+import {Box3,Group,Matrix4,Scene} from '../dist/vendor/three.module.js';
 import {createTraffic} from '../dist/traffic-scene.js';
 import {buildWDP4DTrain,buildRailRampWagon} from '../dist/wdp4d-train.js';
+import {createRoadEventsScene} from '../dist/itpark-events-scene.js';
+import {curveRelX,curveRelY,curveSlopeAt} from '../dist/campus-layout.js';
+
+test('IT Park keeps one moving vehicle model until its route changes it into a train',()=>{
+ const scene=new Group(), render=createTraffic(scene);
+ const bus={type:'bus',collegeKind:'semi',z:110,lane:0,length:10.5,roof:2.8,velocity:18};
+ const state=Object.assign(fresh(2),{map:'itpark',mode:'running',distance:80,items:[bus]});
+ render(state);
+ const truck=scene.children.find(o=>o.position.z===-30);
+ assert.ok(truck?.userData.wheels.length);
+ for(let i=1;i<=4;i++){
+  bus.z--;state.time+=1/18;
+  render(state);
+  assert.equal(truck.parent,scene);
+  assert.equal(truck.position.z,state.distance-bus.z);
+  assert.ok(truck.userData.wheels[0].rotation.x<0);
+ }
+ Object.assign(bus,{metro:true,length:12});
+ render(state);
+ assert.equal(truck.parent,null);
+ assert.ok(scene.getObjectByName('metro-train'));
+});
+
+test('instanced tunnel walls and transparent panels follow the full curve up to the exit',()=>{
+ const scene=new Scene(), render=createRoadEventsScene(scene);
+ for(const start of [220,1670]){
+  const state={map:'itpark',mode:'running',activeBranch:'underpass',branchStart:start,branchEnd:start+1000,time:5};
+  for(const d of [0,183.9,184.1,720,997]){
+   state.distance=start+d;
+   render(state,{night:0,rain:0});
+   scene.updateMatrixWorld();
+   const tunnel=scene.getObjectByName('metro-tunnel');
+   const panels=tunnel.children.filter(o=>o.isGroup&&o.visible);
+   const walls=tunnel.children.filter(o=>o.isInstancedMesh&&o.visible);
+   const first=Math.max(0,Math.floor((d-32)/16));
+   const count=Math.min(24,Math.ceil(1000/16)-first);
+   assert.equal(panels.length,count);
+   assert.ok(walls.length>0&&walls.every(o=>!o.material.transparent));
+   const instancedCenters=new Set();
+   for(const wall of walls){
+    for(let i=0;i<wall.count;i++){
+     const m=new Matrix4();wall.getMatrixAt(i,m);
+     instancedCenters.add(Math.round(-m.elements[14]));
+    }
+   }
+   assert.equal(instancedCenters.size,count);
+   for(const [i,panel] of panels.entries()){
+    const from=(first+i)*16,length=Math.min(16,1000-from),center=start+from+length/2;
+    assert.ok(instancedCenters.has(center-start));
+    const expected=new Group();
+    expected.position.set(curveRelX(center,state),curveRelY(center,state),state.distance-center);
+    expected.rotation.y=-Math.atan(curveSlopeAt(center,state));
+    expected.scale.z=length/16;expected.updateMatrix();
+    assert.ok(panel.matrixWorld.elements.every((v,j)=>Math.abs(v-expected.matrix.elements[j])<1e-6));
+    assert.ok(panel.children.every(o=>o.material.transparent));
+   }
+  }
+ }
+});
 
 test('right IT Park fork preserves a moving train roof and matches the carriage to its collision span',()=>{
  for(const lane of [-1,1]){

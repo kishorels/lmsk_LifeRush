@@ -7,11 +7,14 @@ import {
   CylinderGeometry,
   DodecahedronGeometry,
   DoubleSide,
+  DynamicDrawUsage,
   Group,
   IcosahedronGeometry,
+  InstancedMesh,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Object3D,
   PlaneGeometry,
   RepeatWrapping,
   SphereGeometry,
@@ -19,40 +22,15 @@ import {
   TextureLoader,
   TorusGeometry
 } from './vendor/three.module.js';
-import { forkPlanAt, METRO_FIRST, METRO_STRIDE } from './road-events.js';
-import { branchCurveY, curveRelX, curveRelY, curveSlopeAt, roadCurveSlope } from './campus-layout.js';
 import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
+import { forkPlanAt, METRO_FIRST, METRO_STRIDE } from './road-events.js';
+import { branchCurveX, branchCurveY, curveRelX, curveRelY, curveSlopeAt, roadCurveSlope } from './campus-layout.js';
+import { bakeGroup } from './bake-static-meshes.js';
 
 const cube = new BoxGeometry(1, 1, 1);
-const rockGeo = new DodecahedronGeometry(1, 1);
+const rockGeo = new DodecahedronGeometry(1, 0);
 const boomGeo = new CylinderGeometry(0.16, 0.34, 1, 12);
 const coneGeo = new ConeGeometry(1, 1, 10);
-
-// Bake a static template into one mesh per material (keeps mobile draw calls low).
-function bakeGroup(group) {
-  group.updateMatrixWorld(true);
-  const batches = new Map();
-  group.traverse(o => {
-    if (!o.isMesh) return;
-    const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
-    for (const key of Object.keys(geo.attributes)) {
-      if (key !== 'position' && key !== 'normal' && key !== 'uv') geo.deleteAttribute(key);
-    }
-    if (!geo.attributes.normal) geo.computeVertexNormals();
-    if (!batches.has(o.material)) batches.set(o.material, []);
-    batches.get(o.material).push(geo);
-  });
-  const out = new Group();
-  for (const [mat, list] of batches) {
-    const mergedGeo = list.length === 1 ? list[0] : mergeGeometries(list, false);
-    if (!mergedGeo) { for (const geo of list) geo.dispose(); continue; }
-    const mesh = new Mesh(mergedGeo, mat);
-    mesh.receiveShadow = true;
-    out.add(mesh);
-    if (list.length > 1) for (const geo of list) geo.dispose();
-  }
-  return out;
-}
 
 function hash01(n) {
   const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -482,11 +460,12 @@ export function createRoadEventsScene(scene) {
         color: 0x6ce0ff, roughness: 0.04, metalness: 0.46, transparent: true, opacity: 0.50, emissive: 0x0284c7, emissiveIntensity: 0.24
       });
     }
+    const S = 256;
     const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 512;
+    cv.width = S; cv.height = S;
     const ctx = cv.getContext('2d');
     const emCv = document.createElement('canvas');
-    emCv.width = 512; emCv.height = 512;
+    emCv.width = S; emCv.height = S;
     const emCtx = emCv.getContext('2d');
     if (!ctx || !emCtx) {
       return getMat('reSkyGlass:fb', {
@@ -494,72 +473,55 @@ export function createRoadEventsScene(scene) {
       });
     }
 
-    // Deep crystal azure translucent glass tint
     ctx.fillStyle = 'rgba(14, 165, 233, 0.45)';
-    ctx.fillRect(0, 0, 512, 512);
+    ctx.fillRect(0, 0, S, S);
     emCtx.fillStyle = '#000000';
-    emCtx.fillRect(0, 0, 512, 512);
+    emCtx.fillRect(0, 0, S, S);
 
     const cols = 4, rows = 8;
-    const pw = 512 / cols;
-    const ph = 512 / rows;
+    const pw = S / cols;
+    const ph = S / rows;
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const x = c * pw;
         const y = r * ph;
 
-        // Inner bevel refraction highlight showing 19mm architectural glass edge thickness
         ctx.strokeStyle = 'rgba(125, 211, 252, 0.55)';
-        ctx.lineWidth = 1.8;
-        ctx.strokeRect(x + 3, y + 3, pw - 6, ph - 6);
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(x + 2, y + 2, pw - 4, ph - 4);
 
-        // Anti-slip ceramic traction frit dot grid (leaves central inspection window clear for deep ocean view)
+        // Anti-slip ceramic traction frit dot grid (leaves central inspection window clear for ocean view)
         ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
-        for (let fx = x + 10; fx < x + pw - 10; fx += 14) {
-          for (let fy = y + 10; fy < y + ph - 10; fy += 12) {
-            // Leave center 40% open for crystal-clear sea and wave visibility below!
+        for (let fx = x + 6; fx < x + pw - 5; fx += 8) {
+          for (let fy = y + 6; fy < y + ph - 5; fy += 7) {
             const dx = Math.abs(fx - (x + pw / 2));
             const dy = Math.abs(fy - (y + ph / 2));
             if (dx < pw * 0.28 && dy < ph * 0.28) continue;
-            ctx.beginPath();
-            ctx.arc(fx, fy, 1.4, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillRect(fx, fy, 1.5, 1.5);
           }
         }
 
-        // Structural silicone expansion joint
         ctx.strokeStyle = 'rgba(8, 51, 68, 0.75)';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.strokeRect(x, y, pw, ph);
 
-        // Stainless steel spider clamp discs and countersunk hex bolts at panel corners
-        for (const [bx, by] of [[x + 6, y + 6], [x + pw - 6, y + 6], [x + 6, y + ph - 6], [x + pw - 6, y + ph - 6]]) {
-          // Steel clamp disc
+        for (const [bx, by] of [[x + 3.5, y + 3.5], [x + pw - 3.5, y + 3.5], [x + 3.5, y + ph - 3.5], [x + pw - 3.5, y + ph - 3.5]]) {
           ctx.fillStyle = '#cbd5e1';
-          ctx.beginPath();
-          ctx.arc(bx, by, 4.5, 0, Math.PI * 2);
-          ctx.fill();
-          // Countersunk hex bolt head
+          ctx.beginPath(); ctx.arc(bx, by, 2.5, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = '#334155';
-          ctx.beginPath();
-          ctx.arc(bx, by, 2.0, 0, Math.PI * 2);
-          ctx.fill();
-          // Ambient cyan bolt illumination
+          ctx.beginPath(); ctx.arc(bx, by, 1.1, 0, Math.PI * 2); ctx.fill();
           emCtx.fillStyle = '#00f0ff';
-          emCtx.beginPath();
-          emCtx.arc(bx, by, 2.5, 0, Math.PI * 2);
-          emCtx.fill();
+          emCtx.beginPath(); emCtx.arc(bx, by, 1.5, 0, Math.PI * 2); emCtx.fill();
         }
       }
     }
 
-    // Embedded glowing cyan lane dividers (marking the 3 runner lanes directly inside the glass)
-    for (const lx of [128, 256, 384]) {
+    for (const lx of [64, 128, 192]) {
       ctx.fillStyle = 'rgba(0, 240, 255, 0.65)';
-      ctx.fillRect(lx - 2, 0, 4, 512);
+      ctx.fillRect(lx - 1, 0, 2, S);
       emCtx.fillStyle = '#00f0ff';
-      emCtx.fillRect(lx - 1.5, 0, 3, 512);
+      emCtx.fillRect(lx - 1, 0, 2, S);
     }
 
     const map = new CanvasTexture(cv);
@@ -698,16 +660,13 @@ export function createRoadEventsScene(scene) {
   portalArch.visible = false;
 
   // Center Divider Pier + Planter Box with Yellow/Black Hazard Base + Lush Emerald Shrub!
-  const centerPier = new Group();
-  portalArch.add(centerPier);
-  part(centerPier, concreteLight, 0, 2.75, 0, 1.38, 5.50, 1.72);
-  part(centerPier, concrete, 0, 5.58, 0, 1.56, 0.34, 1.92);
-  // 3 Stacked Glowing Electric-Cyan Upward Chevrons (^^^) on front face of center pier
-  part(centerPier, centerPierChevronsMat(), 0, 2.95, 0.89, 1.06, 1.88, 0.08);
-  // Front concrete planter box with yellow/black diagonal hazard trim + emerald bush
-  part(centerPier, concreteLight, 0, 0.56, 1.75, 1.32, 0.86, 1.96);
-  part(centerPier, concrete, 0, 1.02, 1.75, 1.44, 0.14, 2.08);
-  part(centerPier, hazard, 0, 0.18, 1.78, 1.38, 0.30, 2.02);
+  const centerPierRaw = new Group();
+  part(centerPierRaw, concreteLight, 0, 2.75, 0, 1.38, 5.50, 1.72);
+  part(centerPierRaw, concrete, 0, 5.58, 0, 1.56, 0.34, 1.92);
+  part(centerPierRaw, centerPierChevronsMat(), 0, 2.95, 0.89, 1.06, 1.88, 0.08);
+  part(centerPierRaw, concreteLight, 0, 0.56, 1.75, 1.32, 0.86, 1.96);
+  part(centerPierRaw, concrete, 0, 1.02, 1.75, 1.44, 0.14, 2.08);
+  part(centerPierRaw, hazard, 0, 0.18, 1.78, 1.38, 0.30, 2.02);
   const shrubClusters = [
     [0, 1.34, 1.75, 0.68, 0.44, 0.74, shrubDeep],
     [-0.36, 1.32, 1.52, 0.44, 0.38, 0.46, shrubBright],
@@ -717,28 +676,27 @@ export function createRoadEventsScene(scene) {
     [0.24, 1.42, 2.12, 0.40, 0.32, 0.42, shrubLime]
   ];
   for (const [sx, sy, sz, sw, sh, sd, sm] of shrubClusters) {
-    part(centerPier, sm, sx, sy, sz, sw, sh, sd, sphere);
+    part(centerPierRaw, sm, sx, sy, sz, sw, sh, sd, sphere);
   }
+  const centerPier = bakeGroup(centerPierRaw);
+  portalArch.add(centerPier);
 
-  // Right Tunnel Outer Pier + Concrete Header Lintel + Top Steel Guardrail (Image 2 exact!)
-  part(portalArch, concreteLight, 4.62, 2.55, 0, 0.96, 5.10, 1.72);
-  part(portalArch, concrete, 2.38, 4.55, 0, 5.36, 0.96, 1.78);
-  // Top horizontal steel safety railing above the Underpass concrete lintel
-  part(portalArch, steel, 2.42, 5.56, 0.48, 5.20, 0.12, 0.12);
-  part(portalArch, steel, 2.42, 5.24, 0.48, 5.20, 0.08, 0.08);
+  // Right Tunnel Outer Pier + Concrete Header Lintel + Top Steel Guardrail + Left Sign (baked!)
+  const archStaticRaw = new Group();
+  part(archStaticRaw, concreteLight, 4.62, 2.55, 0, 0.96, 5.10, 1.72);
+  part(archStaticRaw, concrete, 2.38, 4.55, 0, 5.36, 0.96, 1.78);
+  part(archStaticRaw, steel, 2.42, 5.56, 0.48, 5.20, 0.12, 0.12);
+  part(archStaticRaw, steel, 2.42, 5.24, 0.48, 5.20, 0.08, 0.08);
   for (let px = 0.75; px <= 4.65; px += 0.95) {
-    part(portalArch, steel, px, 5.32, 0.48, 0.10, 0.62, 0.10);
+    part(archStaticRaw, steel, px, 5.32, 0.48, 0.10, 0.62, 0.10);
   }
-
-  // TWO SEPARATE GLOWING ROYAL-BLUE HIGHWAY SIGN BOARDS (Image 2 signature!)
-  // Left Sign: [↖ Glass Bridge] | Right Sign: [Underpass ↘]
-  part(portalArch, darkMetal, -2.58, 5.28, 0.82, 4.02, 1.76, 0.16);
-  part(portalArch, glassBridgeSignMat(), -2.58, 5.28, 0.94, 3.92, 1.68, 0.08);
-  part(portalArch, steel, -0.82, 5.28, 0.72, 0.52, 0.18, 0.18);
-
-  part(portalArch, darkMetal, 2.58, 5.28, 0.82, 4.02, 1.76, 0.16);
+  part(archStaticRaw, darkMetal, -2.58, 5.28, 0.82, 4.02, 1.76, 0.16);
+  part(archStaticRaw, glassBridgeSignMat(), -2.58, 5.28, 0.94, 3.92, 1.68, 0.08);
+  part(archStaticRaw, steel, -0.82, 5.28, 0.72, 0.52, 0.18, 0.18);
+  part(archStaticRaw, darkMetal, 2.58, 5.28, 0.82, 4.02, 1.76, 0.16);
+  part(archStaticRaw, steel, 0.82, 5.28, 0.72, 0.52, 0.18, 0.18);
+  portalArch.add(bakeGroup(archStaticRaw));
   const rightSign = part(portalArch, underpassForkSignMat(), 2.58, 5.28, 0.94, 3.92, 1.68, 0.08);
-  part(portalArch, steel, 0.82, 5.28, 0.72, 0.52, 0.18, 0.18);
 
   // Twin-Portal Approach Preview Sleeves (visible while approaching plan.start; cleanly swaps to 1,000m loop at plan.start!)
   const portalPreview = new Group();
@@ -845,8 +803,6 @@ export function createRoadEventsScene(scene) {
   });
   const cableMat = getMat('reCable', { color: 0xe2f4ff, emissive: 0x38bdf8, emissiveIntensity: 0.32, roughness: 0.2, metalness: 0.85 });
   const skyBayCount = 24; // Even pool: alternate pier bays keep their world-space parity.
-  const skyBays = [];
-  const pierFoams = [];
   const BAY_OVERLAP = BAY_LEN + 0.65;
   const COAST_SHORE_LEN = 160; // ~5s coastal peninsula at start & return of Glass Bridge!
   const quayTurfMat = getMat('reQuayTurf', { color: 0x26b94c, roughness: 0.90 });
@@ -870,15 +826,15 @@ export function createRoadEventsScene(scene) {
   // Rocky Coastal Seawall Headland Cap facing the open sea at departure shore end & return shore start!
   function buildShoreHeadland(faceDir) {
     const h = new Group();
+    const staticRaw = new Group();
     for (const side of [-1, 1]) {
-      part(h, concrete, side * 52.0, -4.22, 0, 95.0, 8.4, 2.2);
-      part(h, metroWhite, side * 52.0, 0.06, 0, 95.0, 0.26, 2.45);
-      part(h, cyanLed, side * 14.0, 0.06, faceDir * 1.24, 19.0, 0.14, 0.16);
-      // Coastal boulders + breaking white surf along the rocky headland shoreline facing the ocean
+      part(staticRaw, concrete, side * 52.0, -4.22, 0, 95.0, 8.4, 2.2);
+      part(staticRaw, metroWhite, side * 52.0, 0.06, 0, 95.0, 0.26, 2.45);
+      part(staticRaw, cyanLed, side * 14.0, 0.06, faceDir * 1.24, 19.0, 0.14, 0.16);
       for (let r = 0; r < 6; r++) {
         const rx = side * (7.5 + r * 7.8);
         const rad = 1.9 + (r % 3) * 0.9;
-        part(h, r % 2 === 0 ? rockA : rockB, rx, SEA_Y + 0.65, faceDir * (2.2 + (r % 2) * 1.4), rad * 1.4, rad * 0.95, rad * 1.2, rockGeo);
+        part(staticRaw, r % 2 === 0 ? rockA : rockB, rx, SEA_Y + 0.65, faceDir * (2.2 + (r % 2) * 1.4), rad * 1.4, rad * 0.95, rad * 1.2, rockGeo);
       }
       const surfStrip = new Mesh(planeGeo, crestMat);
       surfStrip.rotation.x = -Math.PI / 2;
@@ -888,6 +844,7 @@ export function createRoadEventsScene(scene) {
       if (!h.userData.surfs) h.userData.surfs = [];
       h.userData.surfs.push(surfStrip);
     }
+    h.add(bakeGroup(staticRaw));
     h.visible = false;
     scene.add(h);
     return h;
@@ -895,10 +852,9 @@ export function createRoadEventsScene(scene) {
   const departHeadland = buildShoreHeadland(-1); // faces open ocean (-Z) at plan.start + 160
   const returnHeadland = buildShoreHeadland(1);  // faces open ocean (+Z) at plan.end - 160
 
-  // Bake Glass Bridge bay geometry into 2 shared templates (plain & pier) — drops ~1,008 draw calls to ~140!
-  function buildSkyBayDeckTemplate(withPier) {
+  // Instanced Glass Bridge: drops ~240+ per-bay draw calls down to ~14 total draw calls across all 24 bays!
+  function buildSkyBayDeckTemplate() {
     const g = new Group();
-    // Full 3-lane translucent glossy sky-blue glass deck + steel architectural grid (slight overlap seals curves!)
     part(g, skyGlassFloor, 0, 0.06, 0, 7.65, 0.12, BAY_OVERLAP);
     for (const gx of [-3.74, -1.25, 1.25, 3.74]) {
       part(g, steel, gx, 0.08, 0, 0.14, 0.14, BAY_OVERLAP);
@@ -906,14 +862,12 @@ export function createRoadEventsScene(scene) {
     for (const gz of [-6, -2, 2, 6]) {
       part(g, steel, 0, 0.08, gz, 7.82, 0.14, 0.14);
     }
-    // Deep structural diagonal steel cross-trusses visible through the translucent glass deck!
     for (const gz of [-4, 0, 4]) {
       const diag1 = part(g, steel, -1.25, -0.06, gz, 0.10, 0.12, 3.8);
       diag1.rotation.y = 0.58;
       const diag2 = part(g, steel, 1.25, -0.06, gz, 0.10, 0.12, 3.8);
       diag2.rotation.y = -0.58;
     }
-    // Glowing cyan lane guide accents & outer floor LED channels + sleek blue-glass side railings!
     for (const side of [-1, 1]) {
       part(g, cyanLed, side * 1.15, 0.13, 0, 0.09, 0.04, BAY_OVERLAP);
       part(g, blueSteel, side * 3.92, 1.26, 0, 0.22, 0.16, BAY_OVERLAP);
@@ -924,50 +878,56 @@ export function createRoadEventsScene(scene) {
         part(g, blueSteel, side * 3.92, 0.74, pz, 0.24, 1.18, 0.24);
         part(g, cyanLed, side * 3.80, 0.74, pz, 0.08, 0.78, 0.14);
       }
-      // Illuminated parapet curb edge pods (Exact Reference Image!)
       for (const pz of [-5.2, -1.8, 1.8, 5.2]) {
         part(g, steel, side * 3.68, 0.18, pz, 0.22, 0.14, 0.72);
         part(g, cyanLed, side * 3.56, 0.18, pz, 0.06, 0.10, 0.60);
       }
     }
-    if (withPier) {
-      part(g, concrete, 0, -0.35, 0, 8.2, 0.65, 1.15);
-      for (const side of [-1, 1]) {
-        part(g, concreteLight, side * 3.45, -3.70, 0, 0.92, 7.15, 1.05);
-        part(g, concreteDark, side * 3.45, SEA_Y - 1.1, 0, 1.28, 3.6, 1.48);
-      }
+    return bakeGroup(g);
+  }
+  function buildSkyPierTemplate() {
+    const g = new Group();
+    part(g, concrete, 0, -0.35, 0, 8.2, 0.65, 1.15);
+    for (const side of [-1, 1]) {
+      part(g, concreteLight, side * 3.45, -3.70, 0, 0.92, 7.15, 1.05);
+      part(g, concreteDark, side * 3.45, SEA_Y - 1.1, 0, 1.28, 3.6, 1.48);
     }
     return bakeGroup(g);
   }
-  const skyBayPlainTpl = buildSkyBayDeckTemplate(false);
-  const skyBayPierTpl = buildSkyBayDeckTemplate(true);
-
-  for (let i = 0; i < skyBayCount; i++) {
-    const bay = new Group();
-    skyLoop.add(bay);
-    skyBays.push(bay);
-    // Solid coastal waterfront peninsula quay (shown ONLY on first ~5s & last ~5s bays under the coastal buildings!)
-    const quay = quayTemplate.clone();
-    quay.visible = false;
-    bay.add(quay);
-    bay.userData.quay = quay;
-    const hasPier = i % 2 === 0;
-    bay.add((hasPier ? skyBayPierTpl : skyBayPlainTpl).clone());
-    // Waterline surf-foam rings under every alternate pier bay
-    if (hasPier) {
-      bay.userData.hasPier = true;
-      bay.userData.surfs = [];
-      for (const side of [-1, 1]) {
-        const surf = new Mesh(ringGeo, foamMat);
-        surf.rotation.x = Math.PI / 2;
-        surf.position.set(side * 3.45, SEA_Y + 0.22, 0);
-        surf.scale.set(2.45, 2.75, 0.35);
-        bay.add(surf);
-        bay.userData.surfs.push(surf);
-        pierFoams.push(surf);
-      }
-    }
+  function makeInstancedPool(tpl, maxCount, renderOrderOverride = 0) {
+    return tpl.children.map(child => {
+      const inst = new InstancedMesh(child.geometry, child.material, maxCount);
+      inst.receiveShadow = child.receiveShadow;
+      inst.frustumCulled = false;
+      inst.instanceMatrix.setUsage(DynamicDrawUsage);
+      if (child.material === skyGlassFloor) inst.renderOrder = 2;
+      else if (child.material === skyRailGlass) inst.renderOrder = 3;
+      else if (renderOrderOverride) inst.renderOrder = renderOrderOverride;
+      inst.count = 0;
+      skyLoop.add(inst);
+      return inst;
+    });
   }
+  const skyDeckInsts = makeInstancedPool(buildSkyBayDeckTemplate(), skyBayCount);
+  const skyPierInsts = makeInstancedPool(buildSkyPierTemplate(), Math.ceil(skyBayCount / 2) + 1);
+  const skyQuayInsts = makeInstancedPool(quayTemplate, skyBayCount);
+  const pierFoamInst = new InstancedMesh(ringGeo, foamMat, skyBayCount);
+  pierFoamInst.frustumCulled = false;
+  pierFoamInst.renderOrder = 1;
+  pierFoamInst.instanceMatrix.setUsage(DynamicDrawUsage);
+  pierFoamInst.count = 0;
+  skyLoop.add(pierFoamInst);
+  const skyDummy = new Object3D();
+  const foamDummy = new Object3D();
+  foamDummy.rotation.order = 'YXZ';
+  // Zero-mesh bay markers preserve world-space pier coordinates on glass-bridge-deck with 0 draw calls.
+  const skyBayMarkers = Array.from({ length: skyBayCount }, (_, i) => {
+    const marker = new Group();
+    marker.visible = false;
+    marker.userData.hasPier = i % 2 === 0;
+    skyLoop.add(marker);
+    return marker;
+  });
 
   // Iconic Cable-Stayed Sea-Bridge Pylon Towers spaced every 112m along the Glass Bridge
   const PYLON_STRIDE = 112;
@@ -1017,7 +977,7 @@ export function createRoadEventsScene(scene) {
 
   function createOceanTextures() {
     if (typeof document === 'undefined') return { colorMap: null, bumpMap: null, swellMap: null };
-    const size = 512;
+    const size = 256;
     const cCv = document.createElement('canvas');
     cCv.width = size; cCv.height = size;
     const cCtx = cCv.getContext('2d');
@@ -1029,7 +989,6 @@ export function createRoadEventsScene(scene) {
     const sCtx = sCv.getContext('2d');
     if (!cCtx || !bCtx || !sCtx) return { colorMap: null, bumpMap: null, swellMap: null };
 
-    // Deep azure-to-cerulean ocean water base with rich seamless periodic wave ripples
     const grad = cCtx.createLinearGradient(0, 0, size, size);
     grad.addColorStop(0, '#026aa7');
     grad.addColorStop(0.35, '#0388b8');
@@ -1041,12 +1000,11 @@ export function createRoadEventsScene(scene) {
     bCtx.fillRect(0, 0, size, size);
     sCtx.clearRect(0, 0, size, size);
 
-    // Layered multi-frequency seamless ocean waves (troughs + turquoise midtones + sunlit crests)
-    for (let i = 0; i < 160; i++) {
+    for (let i = 0; i < 84; i++) {
       const rx = hash01(i * 11 + 3) * size;
       const ry = hash01(i * 19 + 7) * size;
-      const rw = 42 + hash01(i * 23 + 5) * 95;
-      const rh = 7 + hash01(i * 29 + 1) * 14;
+      const rw = 22 + hash01(i * 23 + 5) * 48;
+      const rh = 4 + hash01(i * 29 + 1) * 7;
       const bright = i % 3 === 0;
       const dark = i % 3 === 1;
       for (const ox of [-size, 0, size]) {
@@ -1072,15 +1030,14 @@ export function createRoadEventsScene(scene) {
         }
       }
     }
-    // Crisp specular sea-foam sparkle streaks
-    for (let i = 0; i < 65; i++) {
+    for (let i = 0; i < 36; i++) {
       const sx = hash01(i * 37 + 13) * size;
       const sy = hash01(i * 41 + 17) * size;
-      const sl = 14 + hash01(i * 43 + 9) * 34;
+      const sl = 7 + hash01(i * 43 + 9) * 18;
       cCtx.fillStyle = 'rgba(235, 252, 255, 0.34)';
-      cCtx.fillRect(sx, sy, sl, 2.4);
+      cCtx.fillRect(sx, sy, sl, 1.5);
       sCtx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-      sCtx.fillRect(sx, sy, sl * 0.8, 2.0);
+      sCtx.fillRect(sx, sy, sl * 0.8, 1.5);
     }
 
     const colorMap = new CanvasTexture(cCv);
@@ -1129,43 +1086,38 @@ export function createRoadEventsScene(scene) {
 
   const seaSwellMesh = new Mesh(seaPlaneGeo, oceanSwellMat);
   seaSwellMesh.position.set(0, SEA_Y + 0.18, -145);
+  seaSwellMesh.renderOrder = 1;
   seaWorld.add(seaSwellMesh);
 
-  // Shimmering Sun-Glint / Moonlight reflection trail dancing toward the ocean horizon (soft radial feather!)
+  // Shimmering Sun-Glint reflection trail (8 glints -> 1 InstancedMesh!)
   const glintMat = new MeshBasicMaterial({
     color: 0xfff3c4, map: softGlintTex, transparent: true, opacity: 0.46, depthWrite: false
   });
-  const sunGlints = [];
-  for (let i = 0; i < 8; i++) {
-    const gw = 14 + i * 6.5;
-    const gd = 16 + i * 5.5;
-    const gMesh = new Mesh(planeGeo, glintMat);
-    gMesh.rotation.x = -Math.PI / 2;
-    gMesh.scale.set(gw, gd, 1);
-    gMesh.position.set(16 + i * 2.4, SEA_Y + 0.25, -42 - i * 32);
-    seaWorld.add(gMesh);
-    sunGlints.push({ mesh: gMesh, baseX: 16 + i * 2.4, z: -42 - i * 32, seed: i * 1.37 });
-  }
+  const sunGlintInst = new InstancedMesh(planeGeo, glintMat, 8);
+  sunGlintInst.frustumCulled = false;
+  sunGlintInst.renderOrder = 1;
+  sunGlintInst.instanceMatrix.setUsage(DynamicDrawUsage);
+  seaWorld.add(sunGlintInst);
+  const sunGlints = Array.from({ length: 8 }, (_, i) => ({
+    baseX: 16 + i * 2.4, z: -42 - i * 32, gd: 16 + i * 5.5, seed: i * 1.37
+  }));
 
-  // 18 Rolling Ocean Whitecap Foam Wave Crests gliding on both sides of the bridge (soft feathered foam!)
-  const waveCrests = [];
-  for (let i = 0; i < 18; i++) {
-    const side = i % 2 === 0 ? -1 : 1;
-    const wMesh = new Mesh(planeGeo, crestMat);
-    wMesh.rotation.x = -Math.PI / 2;
-    const wLen = 6.5 + (i % 4) * 3.0;
-    wMesh.scale.set(wLen, 1.45 + (i % 3) * 0.45, 1);
-    seaWorld.add(wMesh);
-    waveCrests.push({
-      mesh: wMesh,
-      side,
-      xOff: 10 + (i % 6) * 12,
-      zOff: (i * 19) % 280,
-      seed: i * 2.1
-    });
-  }
+  // 18 Rolling Ocean Whitecap Foam Wave Crests (18 meshes -> 1 InstancedMesh!)
+  const waveCrestInst = new InstancedMesh(planeGeo, crestMat, 18);
+  waveCrestInst.frustumCulled = false;
+  waveCrestInst.renderOrder = 1;
+  waveCrestInst.instanceMatrix.setUsage(DynamicDrawUsage);
+  seaWorld.add(waveCrestInst);
+  const waveCrests = Array.from({ length: 18 }, (_, i) => ({
+    side: i % 2 === 0 ? -1 : 1,
+    xOff: 10 + (i % 6) * 12,
+    zOff: (i * 19) % 280,
+    wLen: 6.5 + (i % 4) * 3.0,
+    wDep: 1.45 + (i % 3) * 0.45,
+    seed: i * 2.1
+  }));
 
-  // Luxury White Yachts & Sailboats with billowing sails + soft V-shaped foaming water wakes!
+  // Luxury White Yachts & Sailboats with billowing sails + soft V-shaped foaming water wakes (baked!)
   const hullWhite = getMat('reBoatW', { color: 0xf8fafc, roughness: 0.16, metalness: 0.22 });
   const hullNavy = getMat('reBoatN', { color: 0x1e3a8a, roughness: 0.24, metalness: 0.36 });
   const deckTeak = getMat('reBoatT', { color: 0xb47b47, roughness: 0.65 });
@@ -1174,7 +1126,6 @@ export function createRoadEventsScene(scene) {
 
   function buildBoat(isSailboat) {
     const b = new Group();
-    // Sculpted white hull + navy stripe + teak deck
     part(b, hullWhite, 0, 0.45, 0, 2.3, 0.95, 7.6);
     part(b, hullNavy, 0, 0.22, 0, 2.38, 0.36, 7.7);
     const bow = part(b, hullWhite, 0, 0.52, 4.4, 1.35, 0.92, 2.2, coneGeo);
@@ -1187,13 +1138,11 @@ export function createRoadEventsScene(scene) {
       const jib = part(b, sailMat, -0.06, 3.8, 1.95, 0.06, 4.4, 1.9);
       jib.rotation.y = 0.18;
     } else {
-      // Sleek Luxury Motor Yacht cabin & tinted wrap windshield
       part(b, hullWhite, 0, 1.65, -0.5, 1.85, 1.25, 4.2);
       part(b, metroGlass, 0, 1.72, 0.45, 1.90, 0.62, 2.5);
       part(b, hullWhite, 0, 2.45, -1.1, 1.55, 0.52, 2.4);
       part(b, cyanLed, 0, 1.12, 0, 2.28, 0.09, 6.2);
     }
-    // V-shaped white foaming wake trailing behind boat
     for (const ws of [-1, 1]) {
       const wake = new Mesh(planeGeo, wakeMat);
       wake.rotation.x = -Math.PI / 2;
@@ -1202,7 +1151,7 @@ export function createRoadEventsScene(scene) {
       wake.scale.set(0.85, 11.5, 1);
       b.add(wake);
     }
-    return b;
+    return bakeGroup(b);
   }
 
   const seaBoats = [
@@ -1228,42 +1177,41 @@ export function createRoadEventsScene(scene) {
     if (typeof document === 'undefined') {
       return getMat('reRockFb', { color: 0x8a8277, roughness: 0.85, metalness: 0.05 });
     }
+    const S = 128;
     const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 512;
+    cv.width = S; cv.height = S;
     const ctx = cv.getContext('2d');
     const bCv = document.createElement('canvas');
-    bCv.width = 512; bCv.height = 512;
+    bCv.width = S; bCv.height = S;
     const bCtx = bCv.getContext('2d');
     if (!ctx || !bCtx) return getMat('reRockFb', { color: 0x8a8277, roughness: 0.85, metalness: 0.05 });
 
-    // Warm natural sunlit coastal granite gradient (weathered grey-tan stone)
-    const grad = ctx.createLinearGradient(0, 0, 512, 512);
-    grad.addColorStop(0, '#aba399');    // Sunlit warm granite crown
-    grad.addColorStop(0.35, '#8e867b'); // Weathered coastal stone
-    grad.addColorStop(0.70, '#6e675e'); // Shaded granite crevices
-    grad.addColorStop(1, '#423b34');    // Wet waterline stone base
+    const grad = ctx.createLinearGradient(0, 0, S, S);
+    grad.addColorStop(0, '#aba399');
+    grad.addColorStop(0.35, '#8e867b');
+    grad.addColorStop(0.70, '#6e675e');
+    grad.addColorStop(1, '#423b34');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 512, 512);
-
+    ctx.fillRect(0, 0, S, S);
     bCtx.fillStyle = '#808080';
-    bCtx.fillRect(0, 0, 512, 512);
+    bCtx.fillRect(0, 0, S, S);
 
-    // Geological horizontal strata bands
-    for (let y = 0; y < 512; y += 14 + hash01(y * 13) * 18) {
+    for (let y = 0; y < S; y += 6 + hash01(y * 13) * 8) {
       const dark = hash01(y * 19) > 0.45;
       ctx.fillStyle = dark ? 'rgba(55, 48, 42, 0.28)' : 'rgba(235, 228, 220, 0.28)';
-      ctx.fillRect(0, y, 512, 2 + hash01(y * 23) * 4);
+      ctx.fillRect(0, y, S, 1.5 + hash01(y * 23) * 2);
       bCtx.fillStyle = dark ? '#656565' : '#9b9b9b';
-      bCtx.fillRect(0, y, 512, 2 + hash01(y * 23) * 4);
+      bCtx.fillRect(0, y, S, 1.5 + hash01(y * 23) * 2);
     }
 
-    // Granular mineral pebble noise (quartz, feldspar speckles)
-    const imgData = ctx.getImageData(0, 0, 512, 512);
+    const imgData = ctx.getImageData(0, 0, S, S);
     const d = imgData.data;
-    const bImg = bCtx.getImageData(0, 0, 512, 512);
+    const bImg = bCtx.getImageData(0, 0, S, S);
     const bd = bImg.data;
+    let seed = 48271;
     for (let i = 0; i < d.length; i += 4) {
-      const n = (hash01(i * 3.3) - 0.5) * 32;
+      seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
+      const n = (((seed >>> 24) / 255) - 0.5) * 32;
       d[i] = Math.max(0, Math.min(255, d[i] + n));
       d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n * 0.95));
       d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n * 0.90));
@@ -1273,33 +1221,26 @@ export function createRoadEventsScene(scene) {
     ctx.putImageData(imgData, 0, 0);
     bCtx.putImageData(bImg, 0, 0);
 
-    // Subtle granite fracture fissures
-    for (let i = 0; i < 35; i++) {
-      let cx = hash01(i * 31) * 512, cy = hash01(i * 37) * 512;
+    for (let i = 0; i < 16; i++) {
+      let cx = hash01(i * 31) * S, cy = hash01(i * 37) * S;
       ctx.strokeStyle = 'rgba(40, 34, 28, 0.65)';
-      ctx.lineWidth = 1.2 + hash01(i * 41) * 1.8;
+      ctx.lineWidth = 1.0;
       bCtx.strokeStyle = '#404040';
-      bCtx.lineWidth = ctx.lineWidth;
-      ctx.beginPath();
-      bCtx.beginPath();
-      ctx.moveTo(cx, cy);
-      bCtx.moveTo(cx, cy);
-      for (let s = 0; s < 4; s++) {
-        cx += (hash01(i * 47 + s * 13) - 0.5) * 36;
-        cy += hash01(i * 53 + s * 17) * 28;
-        ctx.lineTo(cx, cy);
-        bCtx.lineTo(cx, cy);
+      bCtx.lineWidth = 1.0;
+      ctx.beginPath(); bCtx.beginPath();
+      ctx.moveTo(cx, cy); bCtx.moveTo(cx, cy);
+      for (let s = 0; s < 3; s++) {
+        cx += (hash01(i * 47 + s * 13) - 0.5) * 14;
+        cy += hash01(i * 53 + s * 17) * 11;
+        ctx.lineTo(cx, cy); bCtx.lineTo(cx, cy);
       }
-      ctx.stroke();
-      bCtx.stroke();
+      ctx.stroke(); bCtx.stroke();
     }
-
-    // Coastal green moss clinging to crevices
-    for (let i = 0; i < 30; i++) {
-      const mx = hash01(i * 61) * 512, my = hash01(i * 67) * 350;
+    for (let i = 0; i < 14; i++) {
+      const mx = hash01(i * 61) * S, my = hash01(i * 67) * (S * 0.7);
       ctx.fillStyle = 'rgba(46, 125, 50, 0.40)';
       ctx.beginPath();
-      ctx.arc(mx, my, 8 + hash01(i * 71) * 16, 0, Math.PI * 2);
+      ctx.arc(mx, my, 3 + hash01(i * 71) * 5, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -1332,7 +1273,7 @@ export function createRoadEventsScene(scene) {
     turfMap.colorSpace = SRGBColorSpace;
     return new MeshStandardMaterial({
       map: turfMap,
-      color: 0x2e8540, // Vibrant lush tropical green (Exact Reference Image!)
+      color: 0x2e8540,
       roughness: 0.88,
       metalness: 0.04
     });
@@ -1342,33 +1283,33 @@ export function createRoadEventsScene(scene) {
     if (typeof document === 'undefined') {
       return getMat('reSoilFb', { color: 0xc49e65, roughness: 0.92 });
     }
+    const S = 128;
     const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 512;
+    cv.width = S; cv.height = S;
     const ctx = cv.getContext('2d');
     const bCv = document.createElement('canvas');
-    bCv.width = 512; bCv.height = 512;
+    bCv.width = S; bCv.height = S;
     const bCtx = bCv.getContext('2d');
     if (!ctx || !bCtx) return getMat('reSoilFb', { color: 0xc49e65, roughness: 0.92 });
 
-    // Warm tropical beach sand gradient (dry golden-tan to rich warm sand)
-    const grad = ctx.createLinearGradient(0, 0, 512, 512);
-    grad.addColorStop(0, '#f2dfbc');    // Sunlit dry golden beach sand
-    grad.addColorStop(0.35, '#e4ca9e'); // Warm coastal dune sand
-    grad.addColorStop(0.70, '#c9a874'); // Moist beach sand
-    grad.addColorStop(1, '#8f6e42');    // Wet tidal wash sand
+    const grad = ctx.createLinearGradient(0, 0, S, S);
+    grad.addColorStop(0, '#f2dfbc');
+    grad.addColorStop(0.35, '#e4ca9e');
+    grad.addColorStop(0.70, '#c9a874');
+    grad.addColorStop(1, '#8f6e42');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 512, 512);
-
+    ctx.fillRect(0, 0, S, S);
     bCtx.fillStyle = '#808080';
-    bCtx.fillRect(0, 0, 512, 512);
+    bCtx.fillRect(0, 0, S, S);
 
-    // Natural fine sand micro-grain noise
-    const imgData = ctx.getImageData(0, 0, 512, 512);
+    const imgData = ctx.getImageData(0, 0, S, S);
     const d = imgData.data;
-    const bImg = bCtx.getImageData(0, 0, 512, 512);
+    const bImg = bCtx.getImageData(0, 0, S, S);
     const bd = bImg.data;
+    let seed = 91827;
     for (let i = 0; i < d.length; i += 4) {
-      const n = (hash01(i * 1.7) - 0.5) * 28;
+      seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
+      const n = (((seed >>> 24) / 255) - 0.5) * 28;
       d[i] = Math.max(0, Math.min(255, d[i] + n));
       d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n * 0.92));
       d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n * 0.80));
@@ -1378,21 +1319,17 @@ export function createRoadEventsScene(scene) {
     ctx.putImageData(imgData, 0, 0);
     bCtx.putImageData(bImg, 0, 0);
 
-    // Organic gentle sand ripple curves from tidal wash
-    ctx.lineWidth = 2.5;
-    bCtx.lineWidth = 2.5;
-    for (let y = 16; y < 512; y += 24) {
+    ctx.lineWidth = 1.2;
+    bCtx.lineWidth = 1.2;
+    for (let y = 8; y < S; y += 12) {
       const light = hash01(y * 11) > 0.5;
       ctx.strokeStyle = light ? 'rgba(255, 248, 230, 0.35)' : 'rgba(120, 95, 60, 0.20)';
       bCtx.strokeStyle = light ? '#9c9c9c' : '#686868';
-      ctx.beginPath();
-      bCtx.beginPath();
-      ctx.moveTo(0, y);
-      bCtx.moveTo(0, y);
-      ctx.bezierCurveTo(128, y + 6, 384, y - 6, 512, y);
-      bCtx.bezierCurveTo(128, y + 6, 384, y - 6, 512, y);
-      ctx.stroke();
-      bCtx.stroke();
+      ctx.beginPath(); bCtx.beginPath();
+      ctx.moveTo(0, y); bCtx.moveTo(0, y);
+      ctx.bezierCurveTo(32, y + 3, 96, y - 3, S, y);
+      bCtx.bezierCurveTo(32, y + 3, 96, y - 3, S, y);
+      ctx.stroke(); bCtx.stroke();
     }
 
     const tex = new CanvasTexture(cv);
@@ -1481,47 +1418,36 @@ export function createRoadEventsScene(scene) {
     return islandTreeMats.get(species);
   }
 
-  const islandSwayingTrees = [];
-  function addRealisticIslandTree(parent, x, y, z, height, isPalm = true, seedOffset = 0) {
-    const species = isPalm ? 'palm' : 'neem';
-    const mat = getIslandTreeMaterial(species);
-    const width = height * (isPalm ? 0.82 : 1.08);
+  // Single merged cross-plane geometry for distant island trees (44 shadow draws -> 2 non-shadow InstancedMeshes per island!)
+  const crossTreeGeo = (() => {
+    const p1 = new PlaneGeometry(1, 1);
+    p1.translate(0, 0.5, 0);
+    const p2 = new PlaneGeometry(1, 1);
+    p2.rotateY(Math.PI / 2);
+    p2.translate(0, 0.5, 0);
+    const merged = mergeGeometries([p1, p2], false);
+    p1.dispose(); p2.dispose();
+    return merged;
+  })();
 
-    const treeGroup = new Group();
-    treeGroup.position.set(x, y, z);
-    parent.add(treeGroup);
-
-    // Cross-plane intersecting double quads (Exact School Map realistic 3D foliage volume!)
-    for (const rotY of [0, Math.PI / 2]) {
-      const plane = new Mesh(planeGeo, mat);
-      plane.scale.set(width, height, 1);
-      plane.position.y = height / 2;
-      plane.rotation.y = rotY;
-      plane.castShadow = plane.receiveShadow = true;
-      treeGroup.add(plane);
-    }
-
-    const seed = Math.abs(x * 3.7 + z * 5.1 + height * 2.3 + seedOffset);
-    islandSwayingTrees.push({ group: treeGroup, seed, height });
-    return treeGroup;
-  }
-
+  const islandTreeBatches = [];
   function buildCoastalIsland(hasLighthouse) {
     const isl = new Group();
+    const staticRaw = new Group();
+    const palmSpecs = [];
+    const neemSpecs = [];
+    const queueTree = (x, y, z, height, isPalm, seedOffset) => {
+      const width = height * (isPalm ? 0.82 : 1.08);
+      const seed = Math.abs(x * 3.7 + z * 5.1 + height * 2.3 + seedOffset);
+      (isPalm ? palmSpecs : neemSpecs).push({ x, y, z, width, height, seed });
+    };
     if (hasLighthouse) {
-      // Right Island: Picturesque Lighthouse Promontory across the bay (Exact Reference Image!)
-      // 1. Natural Golden Beach Sand Base
-      part(isl, islandSoilMat, 0, 0.45, 0, 26, 1.4, 20, islandSandGeo);
+      part(staticRaw, islandSoilMat, 0, 0.45, 0, 26, 1.4, 20, islandSandGeo);
+      part(staticRaw, islandTurfMat, -1.2, 1.8, -0.6, 17, 3.2, 13, islandTurfGeo);
+      part(staticRaw, photoRockMat, -3.2, 2.4, -1.5, 9.5, 4.2, 7.8, rockGeoA);
+      part(staticRaw, photoRockMat, 5.0, 1.0, 2.0, 6.2, 2.6, 4.8, rockGeoB);
+      part(staticRaw, photoRockMat, -6.0, 0.8, 3.0, 5.4, 2.2, 4.4, rockGeoC);
 
-      // 2. Lush Green Grassy Island Knoll (School Map turf.webp)
-      part(isl, islandTurfMat, -1.2, 1.8, -0.6, 17, 3.2, 13, islandTurfGeo);
-
-      // 3. Natural Rounded Granite Coastal Rocks
-      part(isl, photoRockMat, -3.2, 2.4, -1.5, 9.5, 4.2, 7.8, rockGeoA);
-      part(isl, photoRockMat, 5.0, 1.0, 2.0, 6.2, 2.6, 4.8, rockGeoB);
-      part(isl, photoRockMat, -6.0, 0.8, 3.0, 5.4, 2.2, 4.4, rockGeoC);
-
-      // 4. White frothing ocean surf foam ring pulsing around the shoreline
       const iFoam = new Mesh(ringGeo, foamMat);
       iFoam.rotation.x = Math.PI / 2;
       iFoam.position.set(0, 0.22, 0);
@@ -1529,29 +1455,27 @@ export function createRoadEventsScene(scene) {
       isl.add(iFoam);
       isl.userData.foam = iFoam;
 
-      // 5. Authentic School Map 3D Foliage (palm.webp & neem.webp with wind-sway animation!)
-      addRealisticIslandTree(isl, 3.5, 1.2, 2.2, 11.5, true, 1);
-      addRealisticIslandTree(isl, 5.2, 0.8, -1.2, 10.2, true, 2);
-      addRealisticIslandTree(isl, -4.2, 1.4, 2.8, 12.0, true, 3);
-      addRealisticIslandTree(isl, -5.5, 0.9, -1.8, 9.8, true, 4);
-      addRealisticIslandTree(isl, 2.2, 2.6, -3.2, 13.0, true, 5);
-      addRealisticIslandTree(isl, -1.8, 3.0, 3.5, 11.0, true, 6);
-      addRealisticIslandTree(isl, 4.8, 1.6, 3.8, 9.2, true, 7);
-      addRealisticIslandTree(isl, 0.8, 3.8, 1.5, 8.6, false, 8);
-      addRealisticIslandTree(isl, -2.8, 4.0, -1.2, 7.8, false, 9);
-      addRealisticIslandTree(isl, 2.8, 3.2, -1.5, 8.2, false, 10);
+      queueTree(3.5, 1.2, 2.2, 11.5, true, 1);
+      queueTree(5.2, 0.8, -1.2, 10.2, true, 2);
+      queueTree(-4.2, 1.4, 2.8, 12.0, true, 3);
+      queueTree(-5.5, 0.9, -1.8, 9.8, true, 4);
+      queueTree(2.2, 2.6, -3.2, 13.0, true, 5);
+      queueTree(-1.8, 3.0, 3.5, 11.0, true, 6);
+      queueTree(4.8, 1.6, 3.8, 9.2, true, 7);
+      queueTree(0.8, 3.8, 1.5, 8.6, false, 8);
+      queueTree(-2.8, 4.0, -1.2, 7.8, false, 9);
+      queueTree(2.8, 3.2, -1.5, 8.2, false, 10);
 
-      // 6. Iconic Red-and-White Banded Maritime Lighthouse with Iron Balcony Gallery!
-      part(isl, photoRockMat, -3.2, 4.8, -1.5, 2.4, 0.8, 2.4, cyl12); // Stone plinth
-      part(isl, metroWhite, -3.2, 6.8, -1.5, 1.5, 3.2, 1.5, cyl12);
-      part(isl, lhRed, -3.2, 9.2, -1.5, 1.3, 2.0, 1.3, cyl12);
-      part(isl, metroWhite, -3.2, 10.9, -1.5, 1.2, 1.6, 1.2, cyl12);
-      part(isl, lhRed, -3.2, 12.3, -1.5, 1.1, 1.2, 1.1, cyl12);
-      part(isl, darkMetal, -3.2, 13.1, -1.5, 1.7, 0.14, 1.7, cyl12); // Gallery deck
-      part(isl, steel, -3.2, 13.4, -1.5, 1.65, 0.45, 1.65, cyl12);   // Safety railing
-      part(isl, warmLamp, -3.2, 14.1, -1.5, 1.05, 1.2, 1.05, cyl12); // Glass lantern chamber
-      part(isl, lhRed, -3.2, 15.3, -1.5, 1.25, 1.3, 1.25, coneGeo);  // Conical roof cap
-      part(isl, steel, -3.2, 16.2, -1.5, 0.08, 0.8, 0.08, cyl12);    // Lightning rod spire
+      part(staticRaw, photoRockMat, -3.2, 4.8, -1.5, 2.4, 0.8, 2.4, cyl12);
+      part(staticRaw, metroWhite, -3.2, 6.8, -1.5, 1.5, 3.2, 1.5, cyl12);
+      part(staticRaw, lhRed, -3.2, 9.2, -1.5, 1.3, 2.0, 1.3, cyl12);
+      part(staticRaw, metroWhite, -3.2, 10.9, -1.5, 1.2, 1.6, 1.2, cyl12);
+      part(staticRaw, lhRed, -3.2, 12.3, -1.5, 1.1, 1.2, 1.1, cyl12);
+      part(staticRaw, darkMetal, -3.2, 13.1, -1.5, 1.7, 0.14, 1.7, cyl12);
+      part(staticRaw, steel, -3.2, 13.4, -1.5, 1.65, 0.45, 1.65, cyl12);
+      part(staticRaw, warmLamp, -3.2, 14.1, -1.5, 1.05, 1.2, 1.05, cyl12);
+      part(staticRaw, lhRed, -3.2, 15.3, -1.5, 1.25, 1.3, 1.25, coneGeo);
+      part(staticRaw, steel, -3.2, 16.2, -1.5, 0.08, 0.8, 0.08, cyl12);
       lighthouseBeacon.position.set(-3.2, 14.1, -1.5);
       isl.add(lighthouseBeacon);
       for (const dir of [-1, 1]) {
@@ -1562,19 +1486,12 @@ export function createRoadEventsScene(scene) {
         lighthouseBeacon.add(beam);
       }
     } else {
-      // Left Island: Lush Tropical Palm Paradise across the bay (Exact Reference Image!)
-      // 1. Natural Golden Beach Sand Base
-      part(isl, islandSoilMat, 0, 0.45, 0, 28, 1.5, 22, islandSandGeo);
+      part(staticRaw, islandSoilMat, 0, 0.45, 0, 28, 1.5, 22, islandSandGeo);
+      part(staticRaw, islandTurfMat, 1.0, 1.8, 0.5, 19, 3.4, 15, islandTurfGeo);
+      part(staticRaw, photoRockMat, 4.5, 1.0, -2.2, 7.8, 3.2, 5.8, rockGeoA);
+      part(staticRaw, photoRockMat, -5.2, 0.9, 2.8, 6.5, 2.8, 5.2, rockGeoB);
+      part(staticRaw, photoRockMat, 2.2, 0.7, 3.8, 5.2, 2.2, 4.2, rockGeoC);
 
-      // 2. Lush Green Grassy Island Knoll (School Map turf.webp)
-      part(isl, islandTurfMat, 1.0, 1.8, 0.5, 19, 3.4, 15, islandTurfGeo);
-
-      // 3. Natural Rounded Granite Coastal Rocks
-      part(isl, photoRockMat, 4.5, 1.0, -2.2, 7.8, 3.2, 5.8, rockGeoA);
-      part(isl, photoRockMat, -5.2, 0.9, 2.8, 6.5, 2.8, 5.2, rockGeoB);
-      part(isl, photoRockMat, 2.2, 0.7, 3.8, 5.2, 2.2, 4.2, rockGeoC);
-
-      // 4. White frothing ocean surf foam ring pulsing around the shoreline
       const iFoam = new Mesh(ringGeo, foamMat);
       iFoam.rotation.x = Math.PI / 2;
       iFoam.position.set(0, 0.22, 0);
@@ -1582,19 +1499,37 @@ export function createRoadEventsScene(scene) {
       isl.add(iFoam);
       isl.userData.foam = iFoam;
 
-      // 5. Authentic School Map 3D Foliage (palm.webp & neem.webp with wind-sway animation!)
-      addRealisticIslandTree(isl, -3.0, 2.2, 2.4, 13.5, true, 11);
-      addRealisticIslandTree(isl, -5.0, 1.2, 3.8, 11.8, true, 12);
-      addRealisticIslandTree(isl, -6.2, 0.8, -1.2, 12.5, true, 13);
-      addRealisticIslandTree(isl, 2.8, 1.8, 3.0, 11.0, true, 14);
-      addRealisticIslandTree(isl, 4.8, 0.9, -2.4, 12.2, true, 15);
-      addRealisticIslandTree(isl, -1.5, 3.2, -3.0, 14.0, true, 16);
-      addRealisticIslandTree(isl, 2.2, 2.4, -3.6, 10.5, true, 17);
-      addRealisticIslandTree(isl, -5.8, 1.4, 1.5, 12.8, true, 18);
-      addRealisticIslandTree(isl, 0.5, 4.2, 0.5, 9.5, false, 19);
-      addRealisticIslandTree(isl, -2.4, 4.0, 1.0, 8.8, false, 20);
-      addRealisticIslandTree(isl, 1.8, 3.6, -1.0, 8.2, false, 21);
-      addRealisticIslandTree(isl, -3.6, 3.2, -1.8, 8.5, false, 22);
+      queueTree(-3.0, 2.2, 2.4, 13.5, true, 11);
+      queueTree(-5.0, 1.2, 3.8, 11.8, true, 12);
+      queueTree(-6.2, 0.8, -1.2, 12.5, true, 13);
+      queueTree(2.8, 1.8, 3.0, 11.0, true, 14);
+      queueTree(4.8, 0.9, -2.4, 12.2, true, 15);
+      queueTree(-1.5, 3.2, -3.0, 14.0, true, 16);
+      queueTree(2.2, 2.4, -3.6, 10.5, true, 17);
+      queueTree(-5.8, 1.4, 1.5, 12.8, true, 18);
+      queueTree(0.5, 4.2, 0.5, 9.5, false, 19);
+      queueTree(-2.4, 4.0, 1.0, 8.8, false, 20);
+      queueTree(1.8, 3.6, -1.0, 8.2, false, 21);
+      queueTree(-3.6, 3.2, -1.8, 8.5, false, 22);
+    }
+    isl.add(bakeGroup(staticRaw));
+    for (const [species, specs] of [['palm', palmSpecs], ['neem', neemSpecs]]) {
+      if (!specs.length) continue;
+      const inst = new InstancedMesh(crossTreeGeo, getIslandTreeMaterial(species), specs.length);
+      inst.castShadow = false;
+      inst.receiveShadow = false;
+      inst.frustumCulled = false;
+      inst.instanceMatrix.setUsage(DynamicDrawUsage);
+      specs.forEach((sp, idx) => {
+        skyDummy.position.set(sp.x, sp.y, sp.z);
+        skyDummy.rotation.set(0, 0, 0);
+        skyDummy.scale.set(sp.width, sp.height, sp.width);
+        skyDummy.updateMatrix();
+        inst.setMatrixAt(idx, skyDummy.matrix);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      isl.add(inst);
+      islandTreeBatches.push({ inst, specs });
     }
     return isl;
   }
@@ -1608,7 +1543,7 @@ export function createRoadEventsScene(scene) {
   islandLeft.position.set(-88, SEA_Y, -195);
   seaWorld.add(islandRight, islandLeft);
 
-  // Floating Port (Red) & Starboard (Green) Ocean Channel Navigation Buoys with bobbing surf rings!
+  // Floating Port (Red) & Starboard (Green) Ocean Channel Navigation Buoys with bobbing surf rings (baked!)
   const buoyGreenMat = getMat('reBuoyG', { color: 0x10b981, roughness: 0.28 });
   const buoyLampR = getMat('reBuoyLR', { color: 0xff4d6d, emissive: 0xff2244, emissiveIntensity: 1.4, roughness: 0.1 });
   const buoyLampG = getMat('reBuoyLG', { color: 0x34d399, emissive: 0x10b981, emissiveIntensity: 1.4, roughness: 0.1 });
@@ -1623,7 +1558,7 @@ export function createRoadEventsScene(scene) {
     bFoam.position.set(0, 0.14, 0);
     bFoam.scale.set(2.8, 2.8, 0.3);
     g.add(bFoam);
-    return g;
+    return bakeGroup(g);
   }
   const seaBuoys = [
     { mesh: buildSeaBuoy(true), x: -13.5, offset: 48, span: 220 },
@@ -1655,21 +1590,21 @@ export function createRoadEventsScene(scene) {
   const oceanDayCol = new Color(0x0b9cd1), oceanSunsetCol = new Color(0x165b8c), oceanNightCol = new Color(0x071f3b), oceanRainCol = new Color(0x1e4d63);
   const glintDayCol = new Color(0xfff5cc), glintSunCol = new Color(0xffb454), glintNightCol = new Color(0xbfe0ff);
 
-  // Futuristic White & Cyan Glass Bridge Exit Archway + Coastal Seawall Landing at plan.end (1,000m finish!)
-  const skyExitArch = new Group();
+  // Futuristic White & Cyan Glass Bridge Exit Archway + Coastal Seawall Landing at plan.end (baked!)
+  const skyExitRaw = new Group();
+  for (const side of [-1, 1]) {
+    part(skyExitRaw, metroWhite, side * 4.45, 3.4, 0, 1.15, 6.8, 1.45);
+    part(skyExitRaw, cyanLed, side * 3.84, 3.4, 0, 0.16, 5.4, 0.34);
+  }
+  part(skyExitRaw, metroWhite, 0, 6.6, 0, 10.0, 1.15, 1.65);
+  part(skyExitRaw, cyanLed, 0, 5.98, 0, 7.8, 0.18, 0.38);
+  part(skyExitRaw, exitPortalSignMat('MAIN ROAD AHEAD'), 0, 6.6, 0.88, 6.4, 1.12, 0.10);
+  part(skyExitRaw, concrete, 0, -2.55, -0.6, 180, 4.6, 1.4);
+  part(skyExitRaw, metroWhite, 0, -0.18, -0.5, 180, 0.30, 1.75);
+  part(skyExitRaw, cyanLed, 0, -0.02, 0.28, 180, 0.12, 0.16);
+  const skyExitArch = bakeGroup(skyExitRaw);
   scene.add(skyExitArch);
   skyExitArch.visible = false;
-  for (const side of [-1, 1]) {
-    part(skyExitArch, metroWhite, side * 4.45, 3.4, 0, 1.15, 6.8, 1.45);
-    part(skyExitArch, cyanLed, side * 3.84, 3.4, 0, 0.16, 5.4, 0.34);
-  }
-  part(skyExitArch, metroWhite, 0, 6.6, 0, 10.0, 1.15, 1.65);
-  part(skyExitArch, cyanLed, 0, 5.98, 0, 7.8, 0.18, 0.38);
-  part(skyExitArch, exitPortalSignMat('MAIN ROAD AHEAD'), 0, 6.6, 0.88, 6.4, 1.12, 0.10);
-  // Waterfront concrete seawall & glowing promenade lip where sea meets continuation city boulevard!
-  part(skyExitArch, concrete, 0, -2.55, -0.6, 180, 4.6, 1.4);
-  part(skyExitArch, metroWhite, 0, -0.18, -0.5, 180, 0.30, 1.75);
-  part(skyExitArch, cyanLed, 0, -0.02, 0.28, 180, 0.12, 0.16);
 
   // ---------------------------------------------------------------------------
   // 3. SEAMLESS 1,000m ENDLESS LOOPING 3-LANE NEON UNDERPASS TUNNEL (IMAGE 2!)
@@ -1678,6 +1613,7 @@ export function createRoadEventsScene(scene) {
   //    CAVE STYLE: rugged boulder rock walls arching inward + a crystal GLASS SKYLIGHT roof
   //    down the middle so the sky, skyscrapers, helicopter & blimp stay visible overhead.
   const tunLoop = new Group();
+  tunLoop.name = 'metro-tunnel';
   scene.add(tunLoop);
   tunLoop.visible = false;
   const CAVE_ROOF_Y = 7.45;
@@ -1777,45 +1713,90 @@ export function createRoadEventsScene(scene) {
       part(bay, waterfallMat, side * 4.38, 3.85, 0, 0.14, 6.2, 3.4);
       part(bay, foamMat, side * 4.15, 0.32, 0, 0.95, 0.28, 3.8);
     }
+    const signalPink = getMat('metroPink', {color:0xff457e,emissive:0xcc1353,emissiveIntensity:.65});
+    for (const lane of [-1,0,1]) {
+      for (const dx of [-.60,.60]) part(bay,steel,lane*2.2+dx,.18,0,.085,.09,BAY_LEN);
+      for (let z=-7.5; z<8; z+=1.6) part(bay,darkMetal,lane*2.2,.12,z,1.66,.08,.27);
+    }
+    for (const side of [-1,1]) {
+      part(bay,side<0?signalPink:cyanLed,side*3.78,1.8,0,.1,.16,15.8);
+      part(bay,warmLamp,side*3.82,3.6,-5,.14,.46,.32);
+    }
     return bakeGroup(bay);
   }
+
   const caveTemplate = buildCaveBay();
-  const tunBays = [];
-  for (let i = 0; i < BAY_COUNT; i++) {
-    const bay = caveTemplate.clone();
-    tunLoop.add(bay);
-    tunBays.push(bay);
+  const glassTemplate = new Group();
+  for (const part of [...caveTemplate.children]) {
+    if (part.material.transparent) glassTemplate.add(part);
   }
-
-  const railBed = new Group();
-  const signalPink = getMat('metroPink', {color:0xff457e,emissive:0xcc1353,emissiveIntensity:.65});
-  for (const lane of [-1,0,1]) {
-    for (const dx of [-.60,.60]) part(railBed,steel,lane*2.2+dx,.18,0,.085,.09,BAY_LEN);
-    for (let z=-7.5; z<8; z+=1.6) part(railBed,darkMetal,lane*2.2,.12,z,1.66,.08,.27);
-  }
-  for (const side of [-1,1]) {
-    part(railBed,side<0?signalPink:cyanLed,side*3.78,1.8,0,.1,.16,15.8);
-    part(railBed,warmLamp,side*3.82,3.6,-5,.14,.46,.32);
-  }
-  const railTemplate = bakeGroup(railBed);
-  const railBays = tunBays.map(bay => {
-    const rails = railTemplate.clone();
-    bay.add(rails);
-    return rails;
+  // Short batches keep frustum culling effective around bends. Glass, water
+  // and foam remain individual meshes for back-to-front transparency sorting.
+  const baysPerBatch = 6;
+  const tunnelBatches = Array.from({ length: BAY_COUNT / baysPerBatch }, () => {
+    const opaque = caveTemplate.children.map(part => {
+      const mesh = new InstancedMesh(part.geometry, part.material, baysPerBatch);
+      mesh.receiveShadow = part.receiveShadow;
+      tunLoop.add(mesh);
+      return mesh;
+    });
+    const glass = Array.from({ length: baysPerBatch }, () => {
+      const bay = glassTemplate.clone();
+      bay.matrixAutoUpdate = false;
+      tunLoop.add(bay);
+      return bay;
+    });
+    return { opaque, glass };
   });
+  let lastTunnelBay, lastPlanStart, lastCurveStart, lastCurveEnd;
+  function positionTunnel(state, plan) {
+    const first = Math.max(0, Math.floor((state.distance - plan.start - 32) / BAY_LEN));
+    tunLoop.position.set(-branchCurveX(state.distance, state), -branchCurveY(state.distance, state), state.distance - plan.start);
+    if (first === lastTunnelBay && plan.start === lastPlanStart &&
+        state.branchStart === lastCurveStart && state.branchEnd === lastCurveEnd) return;
+    lastTunnelBay = first;
+    lastPlanStart = plan.start;
+    lastCurveStart = state.branchStart;
+    lastCurveEnd = state.branchEnd;
 
-  // Tall Sunlit Cave Exit Portal at plan.end (1,000m finish!) — high lintel so bus-roof runs never clip
-  const tunExitPortal = new Group();
+    let n = first;
+    for (const { opaque, glass } of tunnelBatches) {
+      let count = 0;
+      for (const bay of glass) {
+        const start = plan.start + n++ * BAY_LEN;
+        const length = Math.min(BAY_LEN, plan.end - start);
+        bay.visible = length > 0;
+        if (!bay.visible) continue;
+        const center = start + length / 2;
+        bay.position.set(branchCurveX(center, state), branchCurveY(center, state), plan.start - center);
+        bay.rotation.y = -Math.atan(curveSlopeAt(center, state));
+        bay.scale.z = length / BAY_LEN;
+        bay.updateMatrix();
+        for (const mesh of opaque) mesh.setMatrixAt(count, bay.matrix);
+        count++;
+      }
+      for (const mesh of opaque) {
+        mesh.count = count;
+        mesh.visible = count > 0;
+        mesh.instanceMatrix.needsUpdate = true;
+        if (count) mesh.computeBoundingSphere();
+      }
+    }
+  }
+
+  // Tall Sunlit Cave Exit Portal at plan.end (baked!)
+  const tunExitRaw = new Group();
+  for (const side of [-1, 1]) {
+    part(tunExitRaw, concreteLight, side * 5.15, 3.95, 0, 1.55, 7.9, 1.65);
+    part(tunExitRaw, hazard, side * 5.15, 1.45, 0, 1.62, 1.55, 1.72);
+    part(tunExitRaw, warmLamp, side * 5.15, 6.10, 0.88, 0.72, 0.50, 0.08);
+  }
+  part(tunExitRaw, concrete, 0, 8.25, 0, 11.9, 1.05, 1.65);
+  part(tunExitRaw, steel, 0, 8.92, 0, 11.4, 0.14, 0.16);
+  part(tunExitRaw, exitPortalSignMat('TUNNEL EXIT · SUNLIGHT'), 0, 8.25, 0.88, 6.6, 0.95, 0.10);
+  const tunExitPortal = bakeGroup(tunExitRaw);
   scene.add(tunExitPortal);
   tunExitPortal.visible = false;
-  for (const side of [-1, 1]) {
-    part(tunExitPortal, concreteLight, side * 5.15, 3.95, 0, 1.55, 7.9, 1.65);
-    part(tunExitPortal, hazard, side * 5.15, 1.45, 0, 1.62, 1.55, 1.72);
-    part(tunExitPortal, warmLamp, side * 5.15, 6.10, 0.88, 0.72, 0.50, 0.08);
-  }
-  part(tunExitPortal, concrete, 0, 8.25, 0, 11.9, 1.05, 1.65);
-  part(tunExitPortal, steel, 0, 8.92, 0, 11.4, 0.14, 0.16);
-  part(tunExitPortal, exitPortalSignMat('TUNNEL EXIT · SUNLIGHT'), 0, 8.25, 0.88, 6.6, 0.95, 0.10);
 
   // Exact Reference Image 3 Swirling Cosmic Blue Energy Vortex Portal at Metro Tunnel Horizon
   function createCosmicPortalMat() {
@@ -1955,69 +1936,68 @@ export function createRoadEventsScene(scene) {
   const heliBody = new Group();
   heliBody.scale.setScalar(1.25);
   helicopter.add(heliBody);
-  // Main cabin pod + lower chin + bubble canopy
-  part(heliBody, heliRed, 0.05, 0, 0, 1.75, 0.86, 0.84, sphere);
-  part(heliBody, heliRed, 1.25, -0.30, 0, 0.78, 0.42, 0.66, sphere);
-  part(heliBody, heliGlass, 1.20, 0.12, 0, 0.98, 0.70, 0.76, sphere);
-  part(heliBody, heliSeat, 0.85, -0.05, 0, 0.30, 0.34, 0.9);
-  // Side door windows
+  const heliStaticRaw = new Group();
+  part(heliStaticRaw, heliRed, 0.05, 0, 0, 1.75, 0.86, 0.84, sphere);
+  part(heliStaticRaw, heliRed, 1.25, -0.30, 0, 0.78, 0.42, 0.66, sphere);
+  part(heliStaticRaw, heliGlass, 1.20, 0.12, 0, 0.98, 0.70, 0.76, sphere);
+  part(heliStaticRaw, heliSeat, 0.85, -0.05, 0, 0.30, 0.34, 0.9);
   for (const sz of [-1, 1]) {
-    part(heliBody, heliGlass, 0.25, 0.20, sz * 0.80, 0.72, 0.52, 0.05);
-    part(heliBody, heliGlass, -0.55, 0.18, sz * 0.76, 0.55, 0.46, 0.05);
-    part(heliBody, darkMetal, -0.15, 0.10, sz * 0.83, 0.03, 0.70, 0.03);
-    // White livery stripes along cabin & boom
-    part(heliBody, metroWhite, 0.05, -0.38, sz * 0.80, 2.6, 0.07, 0.04);
-    part(heliBody, metroWhite, 0.05, -0.50, sz * 0.76, 2.4, 0.04, 0.04);
-    part(heliBody, metroWhite, -2.65, 0.32, sz * 0.24, 2.6, 0.05, 0.03);
+    part(heliStaticRaw, heliGlass, 0.25, 0.20, sz * 0.80, 0.72, 0.52, 0.05);
+    part(heliStaticRaw, heliGlass, -0.55, 0.18, sz * 0.76, 0.55, 0.46, 0.05);
+    part(heliStaticRaw, darkMetal, -0.15, 0.10, sz * 0.83, 0.03, 0.70, 0.03);
+    part(heliStaticRaw, metroWhite, 0.05, -0.38, sz * 0.80, 2.6, 0.07, 0.04);
+    part(heliStaticRaw, metroWhite, 0.05, -0.50, sz * 0.76, 2.4, 0.04, 0.04);
+    part(heliStaticRaw, metroWhite, -2.65, 0.32, sz * 0.24, 2.6, 0.05, 0.03);
   }
-  // Engine cowling hump + exhaust + rotor mast
-  part(heliBody, heliRed, -0.35, 0.74, 0, 0.98, 0.34, 0.50, sphere);
-  part(heliBody, heliRedDark, -0.95, 0.80, 0, 0.36, 0.20, 0.30, sphere);
-  const exhaust = part(heliBody, darkMetal, -1.25, 0.82, 0, 0.11, 0.30, 0.11, cyl12);
+  part(heliStaticRaw, heliRed, -0.35, 0.74, 0, 0.98, 0.34, 0.50, sphere);
+  part(heliStaticRaw, heliRedDark, -0.95, 0.80, 0, 0.36, 0.20, 0.30, sphere);
+  const exhaust = part(heliStaticRaw, darkMetal, -1.25, 0.82, 0, 0.11, 0.30, 0.11, cyl12);
   exhaust.rotation.z = Math.PI / 2;
-  part(heliBody, darkMetal, -0.15, 1.12, 0, 0.08, 0.36, 0.08, cyl12);
-  part(heliBody, darkMetal, -0.15, 1.32, 0, 0.18, 0.12, 0.18, sphere);
-  // Tapered tail boom + horizontal stabilizer + swept vertical fin
+  part(heliStaticRaw, darkMetal, -0.15, 1.12, 0, 0.08, 0.36, 0.08, cyl12);
+  part(heliStaticRaw, darkMetal, -0.15, 1.32, 0, 0.18, 0.12, 0.18, sphere);
   const boom = new Mesh(boomGeo, heliRed);
   boom.rotation.z = Math.PI / 2;
   boom.position.set(-2.75, 0.30, 0);
   boom.scale.set(1, 3.3, 1);
-  heliBody.add(boom);
-  part(heliBody, heliRed, -3.75, 0.34, 0, 0.42, 0.05, 1.35);
-  for (const sz of [-0.66, 0.66]) part(heliBody, heliRed, -3.75, 0.48, sz, 0.32, 0.30, 0.04);
-  const fin = part(heliBody, heliRed, -4.42, 0.82, 0, 0.55, 1.15, 0.07);
+  heliStaticRaw.add(boom);
+  part(heliStaticRaw, heliRed, -3.75, 0.34, 0, 0.42, 0.05, 1.35);
+  for (const sz of [-0.66, 0.66]) part(heliStaticRaw, heliRed, -3.75, 0.48, sz, 0.32, 0.30, 0.04);
+  const fin = part(heliStaticRaw, heliRed, -4.42, 0.82, 0, 0.55, 1.15, 0.07);
   fin.rotation.z = -0.32;
-  const lowFin = part(heliBody, heliRed, -4.30, 0.05, 0, 0.32, 0.45, 0.06);
+  const lowFin = part(heliStaticRaw, heliRed, -4.30, 0.05, 0, 0.32, 0.45, 0.06);
   lowFin.rotation.z = 0.35;
-  part(heliBody, metroWhite, -4.5, 1.25, 0, 0.32, 0.06, 0.08);
-  const tailRotor = new Group();
-  tailRotor.position.set(-4.55, 0.85, 0.16);
-  heliBody.add(tailRotor);
-  part(tailRotor, darkMetal, 0, 0, 0, 0.09, 1.05, 0.03);
-  part(tailRotor, darkMetal, 0, 0, 0, 1.05, 0.09, 0.03);
-  part(tailRotor, darkMetal, 0, 0, 0, 0.10, 0.10, 0.06, sphere);
-  // Red tubular landing skids with curled fronts + slanted cross struts
+  part(heliStaticRaw, metroWhite, -4.5, 1.25, 0, 0.32, 0.06, 0.08);
   for (const sz of [-0.78, 0.78]) {
-    const skid = part(heliBody, heliRed, 0.05, -1.22, sz, 0.05, 2.7, 0.05, cyl12);
+    const skid = part(heliStaticRaw, heliRed, 0.05, -1.22, sz, 0.05, 2.7, 0.05, cyl12);
     skid.rotation.z = Math.PI / 2;
-    const curl = part(heliBody, heliRed, 1.48, -1.12, sz, 0.05, 0.32, 0.05, cyl12);
+    const curl = part(heliStaticRaw, heliRed, 1.48, -1.12, sz, 0.05, 0.32, 0.05, cyl12);
     curl.rotation.z = -0.9;
     for (const sx of [0.62, -0.58]) {
-      const strut = part(heliBody, heliRed, sx, -0.98, sz * 0.86, 0.045, 0.56, 0.045, cyl12);
+      const strut = part(heliStaticRaw, heliRed, sx, -0.98, sz * 0.86, 0.045, 0.56, 0.045, cyl12);
       strut.rotation.x = -Math.sign(sz) * 0.32;
     }
   }
-  for (const sx of [0.62, -0.58]) part(heliBody, heliRedDark, sx, -0.74, 0, 0.06, 1.25, 0.06, cyl12).rotation.x = Math.PI / 2;
-  // 3-blade dark main rotor with high-speed motion blur disc (Exact Reference Image!)
-  const heliRotor = new Group();
-  heliRotor.position.set(-0.15 * 1.25, 1.36 * 1.25, 0);
-  helicopter.add(heliRotor);
+  for (const sx of [0.62, -0.58]) part(heliStaticRaw, heliRedDark, sx, -0.74, 0, 0.06, 1.25, 0.06, cyl12).rotation.x = Math.PI / 2;
+  heliBody.add(bakeGroup(heliStaticRaw));
+
+  const tailRotorRaw = new Group();
+  part(tailRotorRaw, darkMetal, 0, 0, 0, 0.09, 1.05, 0.03);
+  part(tailRotorRaw, darkMetal, 0, 0, 0, 1.05, 0.09, 0.03);
+  part(tailRotorRaw, darkMetal, 0, 0, 0, 0.10, 0.10, 0.06, sphere);
+  const tailRotor = bakeGroup(tailRotorRaw);
+  tailRotor.position.set(-4.55, 0.85, 0.16);
+  heliBody.add(tailRotor);
+
+  const heliRotorRaw = new Group();
   for (let k = 0; k < 3; k++) {
     const blade = new Group();
     blade.rotation.y = (k * Math.PI * 2) / 3;
-    heliRotor.add(blade);
+    heliRotorRaw.add(blade);
     part(blade, darkMetal, 3.0, 0, 0, 6.0, 0.04, 0.28);
   }
+  const heliRotor = bakeGroup(heliRotorRaw);
+  heliRotor.position.set(-0.15 * 1.25, 1.36 * 1.25, 0);
+  helicopter.add(heliRotor);
   const rotorBlurMat = new MeshBasicMaterial({
     color: 0x1e293b, transparent: true, opacity: 0.30, side: DoubleSide, depthWrite: false
   });
@@ -2030,14 +2010,11 @@ export function createRoadEventsScene(scene) {
   tailRotorBlur.scale.set(1.4, 1.4, 1);
   tailRotor.add(tailRotorBlur);
 
-  // Dynamic Glass Floor Reflection of Red Helicopter (Exact Reference Image 1 & 6!)
+  // Dynamic Glass Floor Reflection of Red Helicopter (baked!)
   const heliFloorReflection = new Group();
   heliFloorReflection.visible = false;
   scene.add(heliFloorReflection);
-  const heliReflectBody = new Group();
-  heliReflectBody.scale.set(1.18, -0.25, 1.18);
-  heliFloorReflection.add(heliReflectBody);
-
+  const heliReflectRaw = new Group();
   const heliReflectMat = new MeshBasicMaterial({
     color: 0xef4444, transparent: true, opacity: 0.40, depthWrite: false
   });
@@ -2047,20 +2024,22 @@ export function createRoadEventsScene(scene) {
   const heliReflectGlass = new MeshBasicMaterial({
     color: 0x93c5fd, transparent: true, opacity: 0.30, depthWrite: false
   });
-
-  part(heliReflectBody, heliReflectMat, 0.05, 0, 0, 1.75, 0.86, 0.84, sphere);
-  part(heliReflectBody, heliReflectMat, 1.25, -0.30, 0, 0.78, 0.42, 0.66, sphere);
-  part(heliReflectBody, heliReflectGlass, 1.20, 0.12, 0, 0.98, 0.70, 0.76, sphere);
+  part(heliReflectRaw, heliReflectMat, 0.05, 0, 0, 1.75, 0.86, 0.84, sphere);
+  part(heliReflectRaw, heliReflectMat, 1.25, -0.30, 0, 0.78, 0.42, 0.66, sphere);
+  part(heliReflectRaw, heliReflectGlass, 1.20, 0.12, 0, 0.98, 0.70, 0.76, sphere);
   const reflBoom = new Mesh(boomGeo, heliReflectMat);
   reflBoom.rotation.z = Math.PI / 2;
   reflBoom.position.set(-2.75, 0.30, 0);
   reflBoom.scale.set(1, 3.3, 1);
-  heliReflectBody.add(reflBoom);
-  part(heliReflectBody, heliReflectMat, -4.42, 0.82, 0, 0.55, 1.15, 0.07);
+  heliReflectRaw.add(reflBoom);
+  part(heliReflectRaw, heliReflectMat, -4.42, 0.82, 0, 0.55, 1.15, 0.07);
   for (const sz of [-0.78, 0.78]) {
-    const rskid = part(heliReflectBody, heliReflectDark, 0.05, -1.22, sz, 0.08, 2.7, 0.08, cyl12);
+    const rskid = part(heliReflectRaw, heliReflectDark, 0.05, -1.22, sz, 0.08, 2.7, 0.08, cyl12);
     rskid.rotation.z = Math.PI / 2;
   }
+  const heliReflectBody = bakeGroup(heliReflectRaw);
+  heliReflectBody.scale.set(1.18, -0.25, 1.18);
+  heliFloorReflection.add(heliReflectBody);
   const heliReflectRotor = new Mesh(ringGeo, new MeshBasicMaterial({
     color: 0xef4444, transparent: true, opacity: 0.25, side: DoubleSide, depthWrite: false
   }));
@@ -2069,23 +2048,19 @@ export function createRoadEventsScene(scene) {
   heliReflectRotor.scale.set(6.8, 6.8, 1);
   heliFloorReflection.add(heliReflectRotor);
 
-  // Iconic White & Blue "SKYLINE" Zeppelin Blimp (Exact Reference Image!)
+  // Iconic White & Blue "SKYLINE" Zeppelin Blimp (baked!)
   function createBlimpTexture() {
     if (typeof document === 'undefined') return metroWhite;
     const cv = document.createElement('canvas');
     cv.width = 512; cv.height = 256;
     const ctx = cv.getContext('2d');
     if (!ctx) return metroWhite;
-    // Pure white hull
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, 512, 256);
-    // Rich royal blue lower hull stripe
     ctx.fillStyle = '#0369a1';
     ctx.fillRect(0, 185, 512, 71);
-    // Vibrant cyan accent pinstripe
     ctx.fillStyle = '#00e5ff';
     ctx.fillRect(0, 178, 512, 7);
-    // Bold, crisp blue "SKYLINE" lettering with subtle shadow
     ctx.font = '900 68px "Arial Black", "Impact", "Segoe UI", sans-serif';
     ctx.fillStyle = 'rgba(2, 132, 199, 0.25)';
     ctx.textAlign = 'center';
@@ -2103,41 +2078,34 @@ export function createRoadEventsScene(scene) {
   }
 
   const blimpMat = createBlimpTexture();
-  const blimp = new Group();
-  scene.add(blimp);
-  // Main aerodynamic hull
-  part(blimp, metroWhite, 0, 0, 0, 8.2, 3.1, 3.1, sphere);
-  // Blue lower belly
-  part(blimp, metroBlue, 0, -0.35, 0, 7.8, 1.2, 3.05, sphere);
-  // Side "SKYLINE" branding decals on both flanks
+  const blimpRaw = new Group();
+  part(blimpRaw, metroWhite, 0, 0, 0, 8.2, 3.1, 3.1, sphere);
+  part(blimpRaw, metroBlue, 0, -0.35, 0, 7.8, 1.2, 3.05, sphere);
   for (const sz of [-1, 1]) {
-    const decal = part(blimp, blimpMat, 0.2, 0.3, sz * 2.85, 6.2, 2.0, 0.06);
+    const decal = part(blimpRaw, blimpMat, 0.2, 0.3, sz * 2.85, 6.2, 2.0, 0.06);
     if (sz < 0) decal.rotation.y = Math.PI;
   }
-  // Cyan LED navigation lights
-  part(blimp, cyanLed, 4.0, 0, 0, 0.25, 0.25, 0.25, sphere);
-  part(blimp, cyanLed, 0.2, -0.85, 2.95, 0.18, 0.18, 0.18, sphere);
-  part(blimp, cyanLed, 0.2, -0.85, -2.95, 0.18, 0.18, 0.18, sphere);
-  // Tail fins (cruciform stabilizers in royal blue)
-  part(blimp, metroBlue, -6.6, 0, 0, 2.6, 3.8, 0.18);
-  part(blimp, metroBlue, -6.6, 0, 0, 2.6, 0.18, 3.8);
-  // Lower gondola control cabin
-  part(blimp, darkMetal, 0.3, -3.1, 0, 3.2, 0.95, 1.05);
-  part(blimp, warmLamp, 0.3, -3.1, 0.54, 2.6, 0.35, 0.08);
-  part(blimp, warmLamp, 0.3, -3.1, -0.54, 2.6, 0.35, 0.08);
+  part(blimpRaw, cyanLed, 4.0, 0, 0, 0.25, 0.25, 0.25, sphere);
+  part(blimpRaw, cyanLed, 0.2, -0.85, 2.95, 0.18, 0.18, 0.18, sphere);
+  part(blimpRaw, cyanLed, 0.2, -0.85, -2.95, 0.18, 0.18, 0.18, sphere);
+  part(blimpRaw, metroBlue, -6.6, 0, 0, 2.6, 3.8, 0.18);
+  part(blimpRaw, metroBlue, -6.6, 0, 0, 2.6, 0.18, 3.8);
+  part(blimpRaw, darkMetal, 0.3, -3.1, 0, 3.2, 0.95, 1.05);
+  part(blimpRaw, warmLamp, 0.3, -3.1, 0.54, 2.6, 0.35, 0.08);
+  part(blimpRaw, warmLamp, 0.3, -3.1, -0.54, 2.6, 0.35, 0.08);
+  const blimp = bakeGroup(blimpRaw);
+  scene.add(blimp);
 
   // ---------------------------------------------------------------------------
-  // 6. FLOATING LEAVES (for sunny park/college runs, smooth performance)
+  // 6. FLOATING LEAVES (18 meshes -> 1 InstancedMesh!)
   // ---------------------------------------------------------------------------
   const leafMat = new MeshStandardMaterial({ color: 0x4ade80, roughness: 0.7, side: DoubleSide });
-  const leaves = [];
-  for (let i = 0; i < 18; i++) {
-    const lf = new Mesh(planeGeo, leafMat);
-    lf.scale.set(0.22, 0.14, 1);
-    lf.visible = false;
-    scene.add(lf);
-    leaves.push({ mesh: lf, seed: i * 1.73 + 0.5 });
-  }
+  const leafInst = new InstancedMesh(planeGeo, leafMat, 18);
+  leafInst.visible = false;
+  leafInst.frustumCulled = false;
+  leafInst.instanceMatrix.setUsage(DynamicDrawUsage);
+  scene.add(leafInst);
+  const leaves = Array.from({ length: 18 }, (_, i) => ({ seed: i * 1.73 + 0.5 }));
 
   // Exact Reference Image 1 & 2 Branching Electric Sky Lightning Flashes
   const lightningTex = typeof document === 'undefined'
@@ -2166,7 +2134,7 @@ export function createRoadEventsScene(scene) {
   bolt2.rotation.y = 0.3;
   lightningBolts.add(bolt1, bolt2);
 
-  return (state, weather) => {
+  const updateRoadEvents = (state, weather) => {
     const running = state.mode === 'running' || state.mode === 'countdown' || state.mode === 'starting';
     const isPark = state.map === 'itpark';
     const night = weather?.night || 0;
@@ -2188,7 +2156,7 @@ export function createRoadEventsScene(scene) {
       heliFloorReflection.visible = false;
       for (const p of bridgePylons) p.visible = false;
       for (const mb of metroBridges) mb.bridge.visible = false;
-      for (const lf of leaves) lf.mesh.visible = false;
+      leafInst.visible = false;
       lightningBolts.visible = false;
       tunnelCosmicPortal.visible = false;
       return;
@@ -2224,27 +2192,37 @@ export function createRoadEventsScene(scene) {
       portalPreview.rotation.y = -Math.atan(roadCurveSlope(plan.start, state.map));
     }
 
-    // Continuous 1,000m Full-Width 3-Lane Curved Glass Bridge Loop + Extra-Realistic Ocean Sea View!
+    // Continuous 1,000m Full-Width 3-Lane Curved Glass Bridge Loop (Instanced!) + Realistic Ocean Sea View!
     const onSky = isBridgePreview || ((running || ['paused','falling','captured','crashed'].includes(state.mode)) && chosen === 'skybridge' && state.distance >= plan.start - 1 && state.distance <= plan.end + 4);
     skyLoop.visible = onSky;
     if (onSky) {
+      let deckCount = 0, pierCount = 0, quayCount = 0, foamCount = 0;
+      const tNow = state.time || 0;
       if (isBridgePreview) {
-        // Lay out Glass Bridge bays starting directly under runner stretching into ocean horizon
-        for (let offset = 0; offset < skyBays.length; offset++) {
-          const bay = skyBays[offset];
+        for (let offset = 0; offset < skyBayCount; offset++) {
           const bayZ = 8 - offset * BAY_LEN;
-          bay.position.set(0, 0, bayZ);
-          bay.rotation.y = 0;
-          bay.scale.z = 1;
-          bay.visible = bayZ > -340;
-          if (bay.userData.quay) bay.userData.quay.visible = false;
-          if (bay.userData.surfs) {
-            for (const surf of bay.userData.surfs) {
-              surf.position.y = SEA_Y + 0.22;
+          const marker = skyBayMarkers[offset];
+          marker.visible = bayZ > -340;
+          if (!marker.visible) continue;
+          marker.position.set(0, 0, bayZ);
+          marker.rotation.set(0, 0, 0);
+          marker.scale.set(1, 1, 1);
+          marker.updateMatrix();
+          for (const inst of skyDeckInsts) inst.setMatrixAt(deckCount, marker.matrix);
+          deckCount++;
+          if (offset % 2 === 0 && pierCount < skyPierInsts[0].instanceMatrix.count) {
+            for (const inst of skyPierInsts) inst.setMatrixAt(pierCount, marker.matrix);
+            pierCount++;
+            for (const side of [-1, 1]) {
+              if (foamCount >= skyBayCount) break;
+              foamDummy.position.set(side * 3.45, SEA_Y + 0.22, bayZ);
+              foamDummy.rotation.set(Math.PI / 2, 0, 0);
+              foamDummy.scale.set(2.45, 2.75, 0.35);
+              foamDummy.updateMatrix();
+              pierFoamInst.setMatrixAt(foamCount++, foamDummy.matrix);
             }
           }
         }
-        // Position iconic Cable-Stayed Pylon Tower directly in view behind runner at Z = -56
         bridgePylons[0].visible = true;
         bridgePylons[0].position.set(0, 0, -56);
         bridgePylons[0].rotation.y = 0;
@@ -2255,27 +2233,44 @@ export function createRoadEventsScene(scene) {
         departHeadland.visible = false;
         returnHeadland.visible = false;
       } else {
-        const firstBay = Math.max(0,Math.floor((state.distance-plan.start-40)/BAY_LEN));
-        for (let offset=0; offset<skyBays.length; offset++) {
+        const firstBay = Math.max(0, Math.floor((state.distance - plan.start - 40) / BAY_LEN));
+        for (let offset = 0; offset < skyBayCount; offset++) {
           const n = firstBay + offset;
-          const bay = skyBays[n % skyBays.length];
-          const start = plan.start + n*BAY_LEN;
-          const length = Math.min(BAY_LEN,plan.end-start);
-          bay.visible = length > 0;
-          if (bay.visible) {
-            const bayCenter = start + length / 2;
+          const marker = skyBayMarkers[n % skyBayCount];
+          const start = plan.start + n * BAY_LEN;
+          const length = Math.min(BAY_LEN, plan.end - start);
+          marker.visible = length > 0;
+          if (!marker.visible) continue;
+          const bayCenter = start + length / 2;
+          const relZ = bayCenter - state.distance;
+          const bx = curveRelX(bayCenter, state);
+          const by = curveRelY(bayCenter, state);
+          const rotY = -Math.atan(curveSlopeAt(bayCenter, state));
+          marker.position.set(bx, by, -relZ);
+          marker.rotation.set(0, rotY, 0);
+          marker.scale.set(1, 1, length / BAY_LEN);
+          marker.updateMatrix();
+          if (relZ > 335 || relZ < -42) continue;
+          for (const inst of skyDeckInsts) inst.setMatrixAt(deckCount, marker.matrix);
+          deckCount++;
+          if ((bayCenter <= plan.start + COAST_SHORE_LEN) || (bayCenter >= plan.end - COAST_SHORE_LEN)) {
+            for (const inst of skyQuayInsts) inst.setMatrixAt(quayCount, marker.matrix);
+            quayCount++;
+          }
+          if (n % 2 === 0 && pierCount < skyPierInsts[0].instanceMatrix.count) {
+            for (const inst of skyPierInsts) inst.setMatrixAt(pierCount, marker.matrix);
+            pierCount++;
             const bayWorldY = branchCurveY(bayCenter, state);
-            bay.position.set(curveRelX(bayCenter, state), curveRelY(bayCenter, state), state.distance - bayCenter);
-            bay.rotation.y = -Math.atan(curveSlopeAt(bayCenter, state));
-            bay.scale.z = length / BAY_LEN;
-            // Show solid coastal peninsula land deck under buildings for the first ~5s & last ~5s (ZERO floating buildings!)
-            if (bay.userData.quay) {
-              bay.userData.quay.visible = (bayCenter <= plan.start + COAST_SHORE_LEN) || (bayCenter >= plan.end - COAST_SHORE_LEN);
-            }
-            if (bay.userData.surfs) {
-              for (const surf of bay.userData.surfs) {
-                surf.position.y = SEA_Y + 0.22 - bayWorldY;
-              }
+            const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
+            for (const side of [-1, 1]) {
+              if (foamCount >= skyBayCount) break;
+              const pulse = 1 + Math.sin(tNow * 2.4 + foamCount * 0.9) * 0.14;
+              const sx = side * 3.45;
+              foamDummy.position.set(bx + sx * cosR, by + SEA_Y + 0.22 - bayWorldY, -relZ - sx * sinR);
+              foamDummy.rotation.set(Math.PI / 2, rotY, 0);
+              foamDummy.scale.set(2.45 * pulse, 2.75 * pulse, 0.35);
+              foamDummy.updateMatrix();
+              pierFoamInst.setMatrixAt(foamCount++, foamDummy.matrix);
             }
           }
         }
@@ -2293,14 +2288,9 @@ export function createRoadEventsScene(scene) {
             }
           }
         }
-        // Gently pulse waterline sea-foam rings around ocean bridge piers
-        for (let i = 0; i < pierFoams.length; i++) {
-          const pulse = 1 + Math.sin(state.time * 2.4 + i * 0.9) * 0.14;
-          pierFoams[i].scale.set(2.45 * pulse, 2.75 * pulse, 0.35);
-        }
-        // Position 3 cable-stayed sea-bridge pylon towers along the curved 1,000m Glass Bridge
+        // Position cable-stayed sea-bridge pylon towers along the curved 1,000m Glass Bridge
         const origin = plan.start + 56;
-        const firstPylon = origin + Math.max(0,Math.ceil((state.distance-48-origin)/PYLON_STRIDE))*PYLON_STRIDE;
+        const firstPylon = origin + Math.max(0, Math.ceil((state.distance - 48 - origin) / PYLON_STRIDE)) * PYLON_STRIDE;
         for (let pi = 0; pi < bridgePylons.length; pi++) {
           const pWorld = firstPylon + pi * PYLON_STRIDE;
           const pRel = pWorld - state.distance;
@@ -2312,6 +2302,12 @@ export function createRoadEventsScene(scene) {
           }
         }
       }
+      for (const inst of skyDeckInsts) { inst.count = deckCount; inst.visible = deckCount > 0; inst.instanceMatrix.needsUpdate = true; }
+      for (const inst of skyPierInsts) { inst.count = pierCount; inst.visible = pierCount > 0; inst.instanceMatrix.needsUpdate = true; }
+      for (const inst of skyQuayInsts) { inst.count = quayCount; inst.visible = quayCount > 0; inst.instanceMatrix.needsUpdate = true; }
+      pierFoamInst.count = foamCount;
+      pierFoamInst.visible = foamCount > 0;
+      pierFoamInst.instanceMatrix.needsUpdate = true;
     } else {
       for (const p of bridgePylons) p.visible = false;
       departHeadland.visible = false;
@@ -2347,20 +2343,33 @@ export function createRoadEventsScene(scene) {
       seaWorld.position.y = onSky && !isBridgePreview ? -branchCurveY(state.distance, state) : 0;
       seaWorld.position.z = isBridgePreview ? 0 : (onSky ? 0 : Math.min(0, -(startRelZ - 14)));
 
-      // Dancing sun/moon reflection glints across the ocean
-      for (const g of sunGlints) {
-        g.mesh.position.x = g.baseX + Math.sin(t * 1.4 + g.seed) * 2.2;
-        g.mesh.scale.x = (10 + g.seed * 3.8) * (0.88 + 0.18 * Math.sin(t * 2.8 + g.seed));
+      // Dancing sun/moon reflection glints across the ocean (1 InstancedMesh!)
+      for (let i = 0; i < sunGlints.length; i++) {
+        const g = sunGlints[i];
+        skyDummy.position.set(g.baseX + Math.sin(t * 1.4 + g.seed) * 2.2, SEA_Y + 0.25, g.z);
+        skyDummy.rotation.set(-Math.PI / 2, 0, 0);
+        skyDummy.scale.set((10 + g.seed * 3.8) * (0.88 + 0.18 * Math.sin(t * 2.8 + g.seed)), g.gd, 1);
+        skyDummy.updateMatrix();
+        sunGlintInst.setMatrixAt(i, skyDummy.matrix);
       }
-      // Rolling whitecap foam wave crests gliding across the sea
-      for (const wc of waveCrests) {
+      sunGlintInst.instanceMatrix.needsUpdate = true;
+
+      // Rolling whitecap foam wave crests gliding across the sea (1 InstancedMesh!)
+      for (let i = 0; i < waveCrests.length; i++) {
+        const wc = waveCrests[i];
         const relZ = ((wc.zOff - (state.distance % 280)) + 280) % 280;
-        wc.mesh.position.set(
+        skyDummy.position.set(
           wc.side * (wc.xOff + Math.sin(t * 0.9 + wc.seed) * 2.5),
           SEA_Y + 0.22 + Math.sin(t * 2.2 + wc.seed) * 0.04,
           10 - relZ
         );
+        skyDummy.rotation.set(-Math.PI / 2, 0, 0);
+        skyDummy.scale.set(wc.wLen, wc.wDep, 1);
+        skyDummy.updateMatrix();
+        waveCrestInst.setMatrixAt(i, skyDummy.matrix);
       }
+      waveCrestInst.instanceMatrix.needsUpdate = true;
+
       // Cruising Luxury Yachts & Sailboats bobbing naturally on ocean swells
       for (let bi = 0; bi < seaBoats.length; bi++) {
         const bt = seaBoats[bi];
@@ -2381,11 +2390,19 @@ export function createRoadEventsScene(scene) {
       islandLeft.position.z = -195 + bayProg * 28;
       lighthouseBeacon.rotation.y = t * 0.85;
 
-      // Real wind sway animation for all island trees (School map realism!)
-      for (const st of islandSwayingTrees) {
-        const wind = Math.sin(t * 2.2 + st.seed) * 0.045 + Math.cos(t * 1.5 + st.seed * 1.8) * 0.022;
-        st.group.rotation.z = wind;
-        st.group.rotation.x = Math.sin(t * 1.8 + st.seed * 1.2) * 0.028;
+      // Real wind sway animation for all instanced island trees (4 draw calls total vs 44!)
+      for (const batch of islandTreeBatches) {
+        const { inst, specs } = batch;
+        for (let idx = 0; idx < specs.length; idx++) {
+          const sp = specs[idx];
+          const wind = Math.sin(t * 2.2 + sp.seed) * 0.045 + Math.cos(t * 1.5 + sp.seed * 1.8) * 0.022;
+          skyDummy.position.set(sp.x, sp.y, sp.z);
+          skyDummy.rotation.set(Math.sin(t * 1.8 + sp.seed * 1.2) * 0.028, 0, wind);
+          skyDummy.scale.set(sp.width, sp.height, sp.width);
+          skyDummy.updateMatrix();
+          inst.setMatrixAt(idx, skyDummy.matrix);
+        }
+        inst.instanceMatrix.needsUpdate = true;
       }
       // Breathing foam surf along island shorelines
       const foamPulse = 1 + Math.sin(t * 1.8) * 0.06;
@@ -2413,24 +2430,7 @@ export function createRoadEventsScene(scene) {
     // Continuous 1,000m Full-Width 3-Lane Curved Cave Railway Tunnel Loop (world-aligned to plan.end -> zero gap!)
     const onTun = (running || ['paused','falling','captured','crashed'].includes(state.mode)) && chosen === 'underpass' && state.distance >= plan.start - 1 && state.distance <= plan.end + 4;
     tunLoop.visible = onTun;
-    if (onTun) {
-      const firstTunBay = Math.max(0, Math.floor((state.distance - plan.start - 32) / BAY_LEN));
-      for (let i = 0; i < BAY_COUNT; i++) {
-        const n = firstTunBay + i;
-        const start = plan.start + n * BAY_LEN;
-        const length = Math.min(BAY_LEN, plan.end - start);
-        const bay = tunBays[n % BAY_COUNT];
-        const rails = railBays[n % BAY_COUNT];
-        bay.visible = length > 0;
-        if (bay.visible) {
-          const bayCenter = start + length / 2;
-          rails.visible = true;
-          bay.position.set(curveRelX(bayCenter, state), curveRelY(bayCenter, state), state.distance - bayCenter);
-          bay.rotation.y = -Math.atan(curveSlopeAt(bayCenter, state));
-          bay.scale.z = length / BAY_LEN;
-        }
-      }
-    }
+    if (onTun) positionTunnel(state, plan);
     tunExitPortal.visible = onTun && endRelZ > -14 && endRelZ < 350;
     if (tunExitPortal.visible) {
       tunExitPortal.position.set(curveRelX(plan.end, state), curveRelY(plan.end, state), -endRelZ);
@@ -2505,22 +2505,23 @@ export function createRoadEventsScene(scene) {
       heliReflectMat.opacity = (0.36 + Math.sin(t * 3.5) * 0.06) * fade;
     }
 
-    // 5. Floating Leaves on College & School sunny runs (skip inside Underpass!)
+    // 5. Floating Leaves (1 InstancedMesh!)
     const showLeaves = running && !isPark && !onTun && rain < 0.4;
-    if (!showLeaves) {
-      if (leaves[0]?.mesh.visible) {
-        for (const lf of leaves) lf.mesh.visible = false;
+    leafInst.visible = showLeaves;
+    if (showLeaves) {
+      for (let i = 0; i < leaves.length; i++) {
+        const lt = state.time * 1.6 + leaves[i].seed;
+        skyDummy.position.set(
+          Math.sin(lt * 1.3) * 5.8,
+          ((6.5 - (lt * 1.1) % 6.2) + 6.2) % 6.2 + 0.35,
+          -(((leaves[i].seed * 19 + state.time * 12) % 42) + 2)
+        );
+        skyDummy.rotation.set(lt * 2.1, lt * 1.7, Math.sin(lt) * 0.8);
+        skyDummy.scale.set(0.22, 0.14, 1);
+        skyDummy.updateMatrix();
+        leafInst.setMatrixAt(i, skyDummy.matrix);
       }
-    } else {
-      for (const lf of leaves) {
-        lf.mesh.visible = true;
-        const t = state.time * 1.6 + lf.seed;
-        const lx = Math.sin(t * 1.3) * 5.8;
-        const ly = ((6.5 - (t * 1.1) % 6.2) + 6.2) % 6.2 + 0.35;
-        const lz = -(((lf.seed * 19 + state.time * 12) % 42) + 2);
-        lf.mesh.position.set(lx, ly, lz);
-        lf.mesh.rotation.set(t * 2.1, t * 1.7, Math.sin(t) * 0.8);
-      }
+      leafInst.instanceMatrix.needsUpdate = true;
     }
 
     const t = state.time || 0;
@@ -2550,4 +2551,7 @@ export function createRoadEventsScene(scene) {
       tunnelCosmicPortal.rotation.y = -Math.atan(curveSlopeAt(state.distance + 220, state));
     }
   };
+  // Start completely hidden until IT Park is active so background pre-warming never leaks meshes onto other maps.
+  updateRoadEvents({ map: '__none__', distance: 0, time: 0 }, {});
+  return updateRoadEvents;
 }

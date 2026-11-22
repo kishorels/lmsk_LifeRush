@@ -1,4 +1,5 @@
 import {Group,Shape,ExtrudeGeometry,MeshStandardMaterial,RingGeometry,AdditiveBlending,DoubleSide} from './vendor/three.module.js';
+import {bakeGroup} from './bake-static-meshes.js';
 import {flightPhase} from './airliner.js';
 import {sceneWeather,hasCollegeRain,cloudX} from './weather.js';
 import {createCollegeShower,stormSkyMaterial} from './college-rain3d.js';
@@ -99,28 +100,32 @@ export function createSky(scene,sun,ambient){
  domeGeometry.setAttribute('color',new Float32BufferAttribute(new Float32Array(positions.count*3),3));
  let lastDomeR=-1,lastDomeG=-1,lastDomeB=-1,lastTopR=-1,lastTopG=-1,lastTopB=-1;
  const dome=new Mesh(domeGeometry,new MeshBasicMaterial({side:BackSide,depthWrite:false,vertexColors:true,fog:false}));dome.renderOrder=-10;scene.add(dome);
- const jet=new Group();scene.add(jet);
+ const jetRaw=new Group();
  const paint=color=>new MeshStandardMaterial({color,roughness:.48});
  const ivory=paint(0xf3f3ef),blue=paint(0x15509a),glass=paint(0x193647);
- const sphere=new SphereGeometry(1,24,16);
- function pod(material,x,y,z,w,h,d){
-  const mesh=new Mesh(sphere,material);mesh.scale.set(w,h,d);mesh.position.set(x,y,z);jet.add(mesh);return mesh;
+ const sphere=new SphereGeometry(1,12,8),winSphere=new SphereGeometry(1,6,4);
+ function pod(material,x,y,z,w,h,d,geo=sphere){
+  const mesh=new Mesh(geo,material);mesh.scale.set(w,h,d);mesh.position.set(x,y,z);jetRaw.add(mesh);return mesh;
  }
  pod(ivory,0,0,0,.66,.72,4.9);
  pod(glass,0,.30,3.56,.47,.35,.95);
  function foil(points,y,material){
   const shape=new Shape();points.forEach(([x,z],i)=>i?shape.lineTo(x,-z):shape.moveTo(x,-z));
   const mesh=new Mesh(new ExtrudeGeometry(shape,{depth:.10,bevelEnabled:false}),material);
-  mesh.rotation.x=-Math.PI/2;mesh.position.y=y;jet.add(mesh);
+  mesh.rotation.x=-Math.PI/2;mesh.position.y=y;jetRaw.add(mesh);
  }
  for(const side of [-1,1]){
   foil([[0,1.5],[side*5.6,-1.25],[side*5.5,-1.78],[0,-.65]],-.12,ivory);
   foil([[0,-3],[side*2.22,-4.3],[side*2.12,-4.66],[0,-4.05]],.15,blue);
   pod(blue,side*2.15,-.49,.04,.35,.38,1.15);
-  pod(glass,side*2.15,-.49,.89,.30,.31,.29);
-  for(let j=0;j<10;j++)pod(glass,side*.63,.13,2.5-j*.48,.045,.085,.105);
+  pod(glass,side*2.15,-.49,.89,.30,.31,.29,winSphere);
+  for(let j=0;j<10;j++)pod(glass,side*.63,.13,2.5-j*.48,.045,.085,.105,winSphere);
  }
  const fin=pod(blue,0,.62,-3.65,.10,.97,.62);fin.rotation.x=-.38;
+ // Bake the 26-part airliner into 3 draw calls!
+ const jet=bakeGroup(jetRaw);
+ for(const m of jet.children){m.castShadow=false;m.receiveShadow=false;}
+ scene.add(jet);
  const gradient=new Color(), destination=new Color(), moonlight=new Color('#a9c5ed'), cloudShadow=new Color('#707c88');
 
  const disc=new Mesh(new SphereGeometry(2.6,24,16),new MeshBasicMaterial({color:0xfff7d7,fog:false}));scene.add(disc);
@@ -138,7 +143,13 @@ export function createSky(scene,sun,ambient){
  const flashHorCol=new Color('#d2e3f8'),flashCloudCol=new Color('#d8e6f8');
  const baseTop=new Color(),baseHor=new Color();
  const clearDome=dome.material,stormClock={value:0};
- let stormDome,updateCollegeShower;
+ const stormDome=stormSkyMaterial(stormClock);
+ let updateCollegeShower=null;
+ // Tiny off-screen proxy lets renderer.compile() pre-compile stormDome GLSL before College/IT Park rain hits!
+ const stormPrecompile=new Mesh(new SphereGeometry(0.1,4,4),stormDome);
+ stormPrecompile.position.set(0,-500,0);
+ stormPrecompile.frustumCulled=false;
+ scene.add(stormPrecompile);
  return s=>{const weather=sceneWeather(s),{phase,night}=weather;
   const isCollege=s?.map==='college';
   const isPark=s?.map==='itpark';
@@ -151,13 +162,12 @@ export function createSky(scene,sun,ambient){
   const rainActive=collegeRainActive||parkRainActive;
 
   if(isCollegeRunning || isParkRunning || (isCollege && s?.previewRain)){
+   if(!updateCollegeShower)updateCollegeShower=createCollegeShower(scene);
    stormClock.value=s.time || 0;
-   stormDome ??= stormSkyMaterial(stormClock);
-   updateCollegeShower ??= createCollegeShower(scene);
   }
   const showStorm=isCollege&&(isCollegeRunning||s?.previewRain)&&weather.rain>.35;
   dome.material=showStorm?stormDome:clearDome;
-  updateCollegeShower?.(s,rainActive);
+  if(updateCollegeShower)updateCollegeShower(s,rainActive);
 
   const rainbowActive=isCollege&&(weather.rainbow||0)>.01;
   rainbow.visible=rainbowActive;
@@ -165,7 +175,7 @@ export function createSky(scene,sun,ambient){
    rainbow.material.opacity=Math.min(0.96,weather.rainbow*.96);
   }
 
-  const flight=flightPhase(s.time);jet.visible=flight<1;jet.position.set(16-24*flight,14+3*flight,-240+265*flight);jet.rotation.set(.02,-.07,.13*Math.sin(Math.PI*flight));
+  const flight=flightPhase(s.time);jet.visible=s.map!=='grandfather'&&flight<1;jet.position.set(16-24*flight,14+3*flight,-240+265*flight);jet.rotation.set(.02,-.07,.13*Math.sin(Math.PI*flight));
   const effNight=isPark?0:night;
   baseTop.set(weather.a.top).lerp(destination.set(weather.b.top),weather.mix);
   baseHor.set(weather.a.horizon).lerp(destination.set(weather.b.horizon),weather.mix);

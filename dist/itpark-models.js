@@ -205,7 +205,7 @@ function normalizeGeo(raw, matrix) {
   return g;
 }
 
-function batchStatic(group, key) {
+function batchStatic(group, key, castShadow = true) {
   if (!batchCache.has(key)) {
     const buckets = new Map();
     for (const child of group.children.filter(c => c.isMesh)) {
@@ -219,7 +219,8 @@ function batchStatic(group, key) {
       const comb = list.length === 1 ? list[0] : mergeGeometries(list, false);
       if (!comb) { for (const g of list) g.dispose(); continue; }
       const m = new Mesh(comb, mat);
-      m.castShadow = m.receiveShadow = true;
+      m.castShadow = castShadow;
+      m.receiveShadow = true;
       merged.push(m);
       if (list.length > 1) for (const g of list) g.dispose();
     }
@@ -237,39 +238,42 @@ function addCarWheel(g, x, y, z, rimMat, radius = 0.36, aeroDisc = false, calipe
   hub.position.set(x + side * 0.145, y, z);
   g.add(hub);
   g.userData.wheels.push(hub);
-  if (aeroDisc) {
-    // GT3 RS Manthey rear carbon aero disc with gold outer rim lip!
-    const outer = new Mesh(cyl16, rimMat);
-    outer.scale.set(radius * 0.72, 0.03, radius * 0.72);
-    outer.rotation.z = Math.PI / 2;
-    hub.add(outer);
-    const disc = new Mesh(cyl16, MAT.carbon());
-    disc.scale.set(radius * 0.55, 0.04, radius * 0.55);
-    disc.rotation.z = Math.PI / 2;
-    hub.add(disc);
-  } else {
-    const rim = new Mesh(cyl16, rimMat);
-    rim.scale.set(radius * 0.72, 0.025, radius * 0.72);
-    rim.rotation.z = Math.PI / 2;
-    hub.add(rim);
-    const inner = new Mesh(cyl12, MAT.carbon());
-    inner.scale.set(radius * 0.56, 0.03, radius * 0.56);
-    inner.rotation.z = Math.PI / 2;
-    hub.add(inner);
-    for (let i = 0; i < 5; i++) {
-      const sp = new Mesh(cube, rimMat);
-      const a = (i / 5) * Math.PI * 2;
-      sp.scale.set(0.036, 0.04, radius * 1.28);
-      sp.rotation.x = a;
-      hub.add(sp);
-    }
-    if (caliperMat) {
-      const cal = new Mesh(cube, caliperMat);
-      cal.scale.set(0.045, 0.14, 0.09);
-      cal.position.set(-side * 0.02, 0.04, 0.14);
-      hub.add(cal);
+  const hubKey = `carHub:${rimMat.uuid}:${radius.toFixed(2)}:${aeroDisc ? 1 : 0}:${caliperMat ? caliperMat.uuid : '0'}:${side}`;
+  if (!batchCache.has(hubKey)) {
+    if (aeroDisc) {
+      const outer = new Mesh(cyl16, rimMat);
+      outer.scale.set(radius * 0.72, 0.03, radius * 0.72);
+      outer.rotation.z = Math.PI / 2;
+      hub.add(outer);
+      const disc = new Mesh(cyl16, MAT.carbon());
+      disc.scale.set(radius * 0.55, 0.04, radius * 0.55);
+      disc.rotation.z = Math.PI / 2;
+      hub.add(disc);
+    } else {
+      const rim = new Mesh(cyl16, rimMat);
+      rim.scale.set(radius * 0.72, 0.025, radius * 0.72);
+      rim.rotation.z = Math.PI / 2;
+      hub.add(rim);
+      const inner = new Mesh(cyl12, MAT.carbon());
+      inner.scale.set(radius * 0.56, 0.03, radius * 0.56);
+      inner.rotation.z = Math.PI / 2;
+      hub.add(inner);
+      for (let i = 0; i < 5; i++) {
+        const sp = new Mesh(cube, rimMat);
+        const a = (i / 5) * Math.PI * 2;
+        sp.scale.set(0.036, 0.04, radius * 1.28);
+        sp.rotation.x = a;
+        hub.add(sp);
+      }
+      if (caliperMat) {
+        const cal = new Mesh(cube, caliperMat);
+        cal.scale.set(0.045, 0.14, 0.09);
+        cal.position.set(-side * 0.02, 0.04, 0.14);
+        hub.add(cal);
+      }
     }
   }
+  batchStatic(hub, hubKey, false);
 }
 
 // =============================================================================
@@ -700,21 +704,24 @@ export function buildFreightSemiTruck(length = 22, roof = 2.8, variantIndex = 0)
       hub.position.set(side * 1.09, 0.42, az);
       g.add(hub);
       g.userData.wheels.push(hub);
-      const disc = new Mesh(cyl12, chrome);
-      disc.scale.set(0.24, 0.03, 0.24);
-      disc.rotation.z = Math.PI / 2;
-      hub.add(disc);
-      const cap = new Mesh(cyl12, dark);
-      cap.scale.set(0.11, 0.045, 0.11);
-      cap.rotation.z = Math.PI / 2;
-      hub.add(cap);
-      for (let i = 0; i < 5; i++) {
-        const lug = new Mesh(cube, dark);
-        const a = (i / 5) * Math.PI * 2;
-        lug.scale.set(0.035, 0.04, 0.04);
-        lug.position.set(0, Math.cos(a) * 0.17, Math.sin(a) * 0.17);
-        hub.add(lug);
+      if (!batchCache.has('semiWheelHub')) {
+        const disc = new Mesh(cyl12, chrome);
+        disc.scale.set(0.24, 0.03, 0.24);
+        disc.rotation.z = Math.PI / 2;
+        hub.add(disc);
+        const cap = new Mesh(cyl12, dark);
+        cap.scale.set(0.11, 0.045, 0.11);
+        cap.rotation.z = Math.PI / 2;
+        hub.add(cap);
+        for (let i = 0; i < 5; i++) {
+          const lug = new Mesh(cube, dark);
+          const a = (i / 5) * Math.PI * 2;
+          lug.scale.set(0.035, 0.04, 0.04);
+          lug.position.set(0, Math.cos(a) * 0.17, Math.sin(a) * 0.17);
+          hub.add(lug);
+        }
       }
+      batchStatic(hub, 'semiWheelHub', false);
     }
   }
   return g;

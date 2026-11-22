@@ -81,7 +81,7 @@ export function streetSurfaces(scene, box) {
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
     collegeGroup.add(mesh);
-    collegeRibbons.push({ geom, pos, base });
+    collegeRibbons.push({ geom, pos, base, segsZ, cols: segsX + 1 });
     return mesh;
   }
   const turfMat = new MeshStandardMaterial({ color: 0x77966c, map: texture('turf'), roughness: .98 });
@@ -139,14 +139,17 @@ export function streetSurfaces(scene, box) {
       ctx.fillStyle = roadGrad;
       ctx.fillRect(0, 0, 512, 1024);
 
-      // Fine aggregate stone chips and polymer bitumen texture flecks
-      for (let i = 0; i < 4800; i++) {
-        const ax = (Math.sin(i * 12.9898) * 43758.5453 % 1 + 1) * 256;
-        const ay = (Math.cos(i * 78.233) * 43758.5453 % 1 + 1) * 512;
+      // Fine aggregate stone chips and polymer bitumen texture flecks (fast integer hash)
+      let chipSeed = 1337;
+      for (let i = 0; i < 1600; i++) {
+        chipSeed = (Math.imul(chipSeed, 1664525) + 1013904223) | 0;
+        const ax = (chipSeed >>> 23) & 511;
+        chipSeed = (Math.imul(chipSeed, 1664525) + 1013904223) | 0;
+        const ay = (chipSeed >>> 22) & 1023;
         const shade = (i % 3 === 0) ? '#11141a' : (i % 3 === 1) ? '#2d3442' : '#3d4657';
         ctx.fillStyle = shade;
-        ctx.globalAlpha = 0.28;
-        ctx.fillRect(Math.floor(ax), Math.floor(ay), (i % 5 === 0) ? 2 : 1, (i % 7 === 0) ? 2 : 1);
+        ctx.globalAlpha = 0.30;
+        ctx.fillRect(ax, ay, 2, 2);
       }
       ctx.globalAlpha = 1.0;
 
@@ -319,6 +322,11 @@ export function streetSurfaces(scene, box) {
   itParkGroup.add(pulseInst);
   const pulseXform = new Object3D();
 
+  const rowCurveX54 = new Float32Array(55);
+  const rowCurveY54 = new Float32Array(55);
+  const rowCurveX36 = new Float32Array(37);
+  const rowCurveY36 = new Float32Array(37);
+
   return (distance, weather, map = 'school', activeBranch = null, branchState = null) => {
     const isCollege = map === 'college';
     const isPark = map === 'itpark';
@@ -335,7 +343,7 @@ export function streetSurfaces(scene, box) {
     const exitY = showAheadExit ? curveRelY(bEnd, branchState) : 0;
     const exitZShift = showAheadExit ? -(endRelZ + 35) : 0;
 
-    schoolGroup.visible = !isFinalRun && !isCollege && !isPark && (!onBranch || showAheadExit);
+    schoolGroup.visible = map !== 'grandfather' && !isFinalRun && !isCollege && !isPark && (!onBranch || showAheadExit);
     finalRunGround.visible = isFinalRun;
     road.color.copy(dry).lerp(wet, weather.rain);
     collegeGroup.visible = isCollege && (!onBranch || showAheadExit);
@@ -371,13 +379,14 @@ export function streetSurfaces(scene, box) {
       const cWeather = branchState ? sceneWeather(branchState) : null;
       wetStrength.value = cWeather ? (cWeather.wet ?? (hasCollegeRain(branchState) ? 1 : 0)) : (branchState && hasCollegeRain(branchState) ? 1 : 0);
       rainbowStrength.value = cWeather ? (cWeather.rainbow || 0) : 0;
-      const originX = roadCurveX(refDist, 'college');
-      const originY = roadCurveY(refDist, 'college');
+      const fin = Boolean(branchState?.isFinalRun);
+      const originX = roadCurveX(refDist, 'college', fin);
+      const originY = roadCurveY(refDist, 'college', fin);
       const first = Math.floor((refDist - (showAheadExit ? 0 : 32)) / 7) * 7;
       for(let n=0;n<42;n++){
-        const worldDist=first+n*7,curveX=roadCurveX(worldDist,'college')-originX;
-        const curveY=roadCurveY(worldDist,'college')-originY;
-        dashTransform.rotation.y=-Math.atan(roadCurveSlope(worldDist,'college'));
+        const worldDist=first+n*7,curveX=roadCurveX(worldDist,'college',fin)-originX;
+        const curveY=roadCurveY(worldDist,'college',fin)-originY;
+        dashTransform.rotation.y=-Math.atan(roadCurveSlope(worldDist,'college',fin));
         const localZ = showAheadExit ? 35 - (worldDist - bEnd) : distance - worldDist;
         for(let lane=0;lane<2;lane++){
           dashTransform.position.set(curveX+(lane?1.1:-1.1),curveY+.116,localZ);
@@ -385,13 +394,32 @@ export function streetSurfaces(scene, box) {
         }
       }
       dashes.instanceMatrix.needsUpdate=true;
-      for (const { geom, pos, base } of collegeRibbons) {
+      // Precompute curve offsets once per Z-row (55 + 37 samples instead of ~2,600 per frame!).
+      for (let r = 0; r <= 54; r++) {
+        const zScene = -265 + (r / 54) * 300;
+        const worldDist = showAheadExit ? bEnd + (35 - zScene) : distance - zScene;
+        rowCurveX54[r] = roadCurveX(worldDist, 'college', fin) - originX;
+        rowCurveY54[r] = roadCurveY(worldDist, 'college', fin) - originY;
+      }
+      for (let r = 0; r <= 36; r++) {
+        const zScene = -265 + (r / 36) * 300;
+        const worldDist = showAheadExit ? bEnd + (35 - zScene) : distance - zScene;
+        rowCurveX36[r] = roadCurveX(worldDist, 'college', fin) - originX;
+        rowCurveY36[r] = roadCurveY(worldDist, 'college', fin) - originY;
+      }
+      for (const { pos, base, segsZ, cols } of collegeRibbons) {
         const arr = pos.array;
-        for (let i = 0; i < arr.length; i += 3) {
-          const zScene = base[i + 2];
-          const worldDist = showAheadExit ? bEnd + (35 - zScene) : distance - zScene;
-          arr[i] = base[i] + (roadCurveX(worldDist, 'college') - originX);
-          arr[i + 1] = base[i + 1] + (roadCurveY(worldDist, 'college') - originY);
+        const rx = segsZ === 54 ? rowCurveX54 : rowCurveX36;
+        const ry = segsZ === 54 ? rowCurveY54 : rowCurveY36;
+        const rows = segsZ + 1;
+        let ptr = 0;
+        for (let r = 0; r < rows; r++) {
+          const dx = rx[r], dy = ry[r];
+          for (let c = 0; c < cols; c++) {
+            arr[ptr] = base[ptr] + dx;
+            arr[ptr + 1] = base[ptr + 1] + dy;
+            ptr += 3;
+          }
         }
         pos.needsUpdate = true;
       }
@@ -440,7 +468,8 @@ export function roadsideTree(parent, x, z, height, palm = false, angle = 0) {
   tree.scale.set(width, height, 1);
   tree.position.set(x, height/2 + .12, z);
   tree.rotation.y = angle;
-  tree.castShadow = tree.receiveShadow = true;
+  tree.castShadow = false;
+  tree.receiveShadow = true;
   parent.add(tree);
   return tree;
 }

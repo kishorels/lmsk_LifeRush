@@ -1,9 +1,10 @@
 import {makeCoin,spinCoin} from './coin.js';
 import {campusMaterial, roadsideTree, curveRelX, curveRelY} from './street-materials.js';
 import {buildBus, buildCollegeVehicle} from './bus-model.js';
-import {buildRedShuttleCart} from './itpark-models.js?v=3.0.3';
+import {buildRedShuttleCart} from './itpark-models.js?v=3.8.0';
+import {bakeGroup} from './bake-static-meshes.js';
 import { BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SRGBColorSpace } from './vendor/three.module.js';
-import { SCHOOL_GATE, FINALRUN_GATE, SCHOOL_VAN, ROOF_COINS } from './engine.js?v=3.2.5';
+import { SCHOOL_GATE, FINALRUN_GATE, SCHOOL_VAN, ROOF_COINS } from './engine.js?v=3.6.8';
 
 export function createSchoolEntrance(scene) {
   const campus = new Group();
@@ -15,7 +16,7 @@ export function createSchoolEntrance(scene) {
     const mesh = new Mesh(geometry, materials.get(color));
     mesh.position.set(x,y,z);
     mesh.scale.set(width,height,length);
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     parent.add(mesh);
     return mesh;
@@ -33,34 +34,34 @@ export function createSchoolEntrance(scene) {
     }
     if (typeof document === 'undefined') return;
     const canvas = document.createElement('canvas');
-    canvas.width=1024;
-    canvas.height=256;
+    canvas.width=512;
+    canvas.height=128;
     const draw=canvas.getContext('2d');
     if (!draw) return;
-    const grad = draw.createLinearGradient(0,0,0,256);
+    const grad = draw.createLinearGradient(0,0,0,128);
     grad.addColorStop(0,'#0f2d3f');
     grad.addColorStop(.5,'#154150');
     grad.addColorStop(1,'#0b2230');
     draw.fillStyle=grad;
-    draw.fillRect(0,0,1024,256);
+    draw.fillRect(0,0,512,128);
     draw.strokeStyle='#fbbf24';
-    draw.lineWidth=10;
-    draw.strokeRect(14,14,996,228);
+    draw.lineWidth=5;
+    draw.strokeRect(7,7,498,114);
     draw.strokeStyle='#91dbc0';
-    draw.lineWidth=4;
-    draw.strokeRect(26,26,972,204);
-    for (const [rx,ry] of [[42,42],[982,42],[42,214],[982,214]]) {
-      draw.fillStyle='#cbd5e1'; draw.beginPath(); draw.arc(rx,ry,7,0,Math.PI*2); draw.fill();
+    draw.lineWidth=2;
+    draw.strokeRect(13,13,486,102);
+    for (const [rx,ry] of [[21,21],[491,21],[21,107],[491,107]]) {
+      draw.fillStyle='#cbd5e1'; draw.beginPath(); draw.arc(rx,ry,3.5,0,Math.PI*2); draw.fill();
     }
     draw.textAlign='center';
-    draw.shadowColor='rgba(0,0,0,0.55)'; draw.shadowBlur=10; draw.shadowOffsetY=4;
+    draw.shadowColor='rgba(0,0,0,0.55)'; draw.shadowBlur=5; draw.shadowOffsetY=2;
     draw.fillStyle='#fff9e2';
-    draw.font='900 88px system-ui';
-    draw.fillText(headline,512,118,920);
+    draw.font='900 44px system-ui';
+    draw.fillText(headline,256,59,460);
     draw.shadowBlur=0; draw.shadowOffsetY=0;
     draw.fillStyle='#8ef0c8';
-    draw.font='700 44px system-ui';
-    draw.fillText(subline,512,192,920);
+    draw.font='700 22px system-ui';
+    draw.fillText(subline,256,96,460);
     const texture = new CanvasTexture(canvas);
     texture.colorSpace=SRGBColorSpace;
     const ink = new MeshStandardMaterial({map:texture, emissiveMap:texture, emissive:0xffffff,emissiveIntensity:.24,roughness:.42,metalness:.08});
@@ -158,6 +159,18 @@ export function createSchoolEntrance(scene) {
       part(parkWings,0x3ea64f,side*4.40,.54,pz,.72,.28,1.46);
     }
   }
+  // Bake the ~160 static entrance arch & wing meshes into minimal draw calls for instant mobile start!
+  const bakedClassic = bakeGroup(classicWings);
+  classicWings.clear();
+  classicWings.add(bakedClassic);
+  const bakedPark = bakeGroup(parkWings);
+  parkWings.clear();
+  parkWings.add(bakedPark);
+  for (const sg of [schoolSigns, collegeSigns, parkSigns]) {
+    const baked = bakeGroup(sg);
+    sg.clear();
+    sg.add(baked);
+  }
   parkWings.visible=false;
   sign(campus,'PICKUP ZONE','FIND THE ROOF RAMP',4.54,2.72,-33,2.36,.74);
   part(campus,0x315763,4.54,1.29,-33,.10,2.58,.10);
@@ -186,20 +199,27 @@ export function createSchoolEntrance(scene) {
   }
   const coins=ROOF_COINS.map(distance=>makeCoin(vehicle,x,roof+.58,-distance));
   return state=>{
+    if (state.map === 'grandfather') { campus.visible = false; return; }
     const isCollege=state.map==='college';
     const isPark=state.map==='itpark';
-    const mapGate=state.map==='finalrun'?gateDistance:SCHOOL_GATE;
-    campus.position.set(curveRelX(0,state),curveRelY(0,state),state.distance-(mapGate-SCHOOL_GATE));
-    parkSigns.visible=isPark;parkWings.visible=isPark;
-    classicWings.visible=!isPark;
-    schoolSigns.visible=!isCollege&&!isPark;collegeSigns.visible=isCollege;
-    body.visible=!isCollege&&!isPark;collegeBody.visible=isCollege;parkBody.visible=isPark;
+    const isFinalVillage=state.map==='finalrun';
+    // At the end of The Final One's College stage (>150m), display the LMSK IT PARK entrance arch & glass reception towers 26m before FINALRUN_GATE so the runner sprints deep inside IT Park!
+    const isFinalCollegeToItPark=isCollege&&Boolean(state.isFinalRun)&&state.distance>150;
+    const mapGate=isFinalCollegeToItPark?(FINALRUN_GATE-26):isFinalVillage?(FINALRUN_GATE-18):SCHOOL_GATE;
+    campus.position.set(curveRelX(mapGate,state),curveRelY(mapGate,state),state.distance-(mapGate-SCHOOL_GATE));
+    const showParkEntrance=isPark||isFinalCollegeToItPark;
+    parkSigns.visible=showParkEntrance;parkWings.visible=showParkEntrance;
+    classicWings.visible=!showParkEntrance;
+    schoolSigns.visible=!isCollege&&!showParkEntrance;collegeSigns.visible=isCollege&&!showParkEntrance;
+    body.visible=!isCollege&&!showParkEntrance;collegeBody.visible=isCollege&&!showParkEntrance;parkBody.visible=showParkEntrance;
     const entry=state.entryVan??SCHOOL_VAN;
+    const hideEndVehicle=(isFinalVillage||isFinalCollegeToItPark)&&state.distance>120;
+    vehicle.visible=!hideEndVehicle;
     vehicle.position.set((entry.lane-SCHOOL_VAN.lane)*2.2,0,SCHOOL_VAN.rear-entry.rear+(mapGate>SCHOOL_GATE?mapGate-SCHOOL_GATE:0));
     const onPodium=state.mode==='ready'||state.mode==='select';
     campus.visible=state.distance<entry.front+28+(mapGate-SCHOOL_GATE) && !(isPark && onPodium);
     coins.forEach((coin,i)=>{
-      coin.visible=!(state.roofCoins & (1<<i));
+      coin.visible=!hideEndVehicle && !(state.roofCoins & (1<<i));
       spinCoin(coin,state.time,i,roof+.58);
     });
   };

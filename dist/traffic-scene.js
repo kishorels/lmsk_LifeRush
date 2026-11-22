@@ -1,13 +1,15 @@
 import {makeCoin,spinCoin} from './coin.js';
 import {buildBus,buildCollegeVehicle} from './bus-model.js';
-import {buildPorscheGT3RS,buildBugattiChiron,buildRedShuttleCart,buildFreightSemiTruck,buildDucatiStreetfighter} from './itpark-models.js?v=3.0.3';
-import {buildWDP4DTrain,buildRailRampWagon} from './wdp4d-train.js?v=3.1.9';
+import {buildPorscheGT3RS,buildBugattiChiron,buildRedShuttleCart,buildFreightSemiTruck,buildDucatiStreetfighter} from './itpark-models.js?v=3.8.0';
+import {buildWDP4DTrain,buildRailRampWagon} from './wdp4d-train.js?v=3.8.0';
 import {BoxGeometry,Group,Mesh,MeshStandardMaterial} from './vendor/three.module.js';
 import {repeatedVans} from './traffic-rules.js';
+import {FINALRUN_GATE} from './engine.js';
 import {curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
 export function createTraffic(scene) {
  let lastSeed,lastMap;
  const cube=new BoxGeometry(),mats=new Map(),parked=new Map(),moving=new Map(),vanPool=new Map(),movingPool=new Map();
+ const parkVariants=new WeakMap();
  function takePool(poolMap,key,factory){
   const list=poolMap.get(key);
   if(list&&list.length){const g=list.pop();scene.add(g);return g;}
@@ -59,8 +61,9 @@ export function createTraffic(scene) {
   const onCave=s.activeBranch==='underpass';
   if(s.runSeed!==lastSeed||lastMap!==map){for(const g of parked.values())scene.remove(g);for(const g of moving.values())scene.remove(g);parked.clear();moving.clear();vanPool.clear();movingPool.clear();lastSeed=s.runSeed;lastMap=map;}
   const visible=new Set();
-  for(const v of repeatedVans(s.distance,s.runSeed)) {
-   if(v.ramp>s.distance+345||v.front<s.distance-15)continue;
+  for(const v of (map==='grandfather' ? [] : repeatedVans(s.distance,s.runSeed))) {
+   if(v.ramp>s.distance+295||v.front<s.distance-15)continue;
+   if((s.map==='finalrun'||s.isFinalRun)&&v.ramp>=FINALRUN_GATE-85)continue;
    const vanInCave=onCave&&v.rear>=s.branchStart-4&&v.rear<s.branchEnd;
    const vanKey=`${map}:${vanInCave}:${v.front-v.rear}:${v.roof}:${v.rear-v.ramp}`;
    visible.add(v.id);
@@ -82,9 +85,15 @@ export function createTraffic(scene) {
    if(o.cleared||o.type!=='bus')continue;
    // Pending encounter buses/trains smoothly drive in from 345m horizon instead of popping in at trigger!
    const visZ=(o.encounter&&!o.started)?(o.trigger+(runSpd+(o.velocity||0))*1.45+(o.velocity||0)*Math.max(0,(o.trigger-s.distance)/runSpd)):o.z;
-   if(visZ-s.distance>345||visZ+(o.length||12)<s.distance-12)continue;
+   if(visZ-s.distance>295||visZ+(o.length||12)<s.distance-12)continue;
    live.add(o);
-   const vIdx=Math.abs(Math.floor(o.z)+(o.lane||0))%3;
+   // Pick the paint/model once. Travel changes z every frame, while a fork can
+   // legitimately change the same vehicle into a different-sized train.
+   let vIdx=0;
+   if(map==='itpark'&&!o.metro){
+    if(!parkVariants.has(o))parkVariants.set(o,Math.abs(Math.floor(o.z)+(o.lane||0))%3);
+    vIdx=parkVariants.get(o);
+   }
    const movKey=`${map}:${Boolean(o.metro)}:${Boolean(o.roofRide)}:${o.collegeKind||'car'}:${o.length}:${o.roof}:${vIdx}`;
    if(moving.has(o)&&moving.get(o).userData.poolKey!==movKey){releasePool(movingPool,moving.get(o));moving.delete(o);}
    if(!moving.has(o)){
@@ -101,4 +110,27 @@ export function createTraffic(scene) {
    }const g=moving.get(o);g.position.set(o.lane*2.2+curveRelX(visZ,s),.09+curveRelY(visZ,s),s.distance-visZ);g.rotation.y=-Math.atan(curveSlopeAt(visZ,s));g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);spinCoin(c,s.time,i,o.roof+.6);});}
   for(const [o,g]of moving)if(!live.has(o)){releasePool(movingPool,g);moving.delete(o);}
  };
+}
+export function prewarmTrafficTemplates(map, targetGroup) {
+ if (map === 'itpark') {
+  targetGroup.add(
+   buildPorscheGT3RS(4.6, false),
+   buildBugattiChiron(4.6, false),
+   buildDucatiStreetfighter(false, true),
+   buildFreightSemiTruck(10.5, 2.8, 0),
+   buildFreightSemiTruck(22, 2.8, 0),
+   buildRedShuttleCart(20, 1.72),
+   buildWDP4DTrain({ length: 12, roof: 2.8, lane: 0 }),
+   buildWDP4DTrain({ length: 22, roof: 2.8, lane: 0, roofRide: true }),
+   buildRailRampWagon(20, 1.72)
+  );
+ } else if (map === 'college') {
+  targetGroup.add(
+   buildCollegeVehicle('car', 4.5, 1.45, true),
+   buildCollegeVehicle('scooty', 2.4, 1.45, true),
+   buildCollegeVehicle('van', 10, 1.72, false)
+  );
+ } else {
+  targetGroup.add(buildBus(10, 2.8, true), buildBus(22, 2.8, false));
+ }
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.1.7">
+  <link rel="stylesheet" href="style.css?v=3.8.1">
 </head>
 <body>
 <header>
@@ -47,6 +47,15 @@
     <div id="speed-lines" class="speed-lines" hidden aria-hidden="true"></div>
     <div id="fever-veil" class="fever-veil" hidden aria-hidden="true"></div>
     <div id="close-call-pop" class="close-call-pop" hidden aria-live="polite"></div>
+
+    <!-- SINGLE-MAP LAZY LAUNCH LOADING OVERLAY -->
+    <div id="run-loading-veil" class="run-loading-veil" hidden aria-live="polite">
+      <div class="run-loading-card">
+        <div class="char-loading-ring"></div>
+        <strong id="run-loading-title">PREPARING CAMPUS...</strong>
+        <small id="run-loading-sub">Loading selected hero &amp; track</small>
+      </div>
+    </div>
 
     <!-- IN-GAME TOP BAR (Visible only during running / gameplay) -->
     <div class="hud-top-bar" id="hud-top-bar">
@@ -104,6 +113,31 @@
       </div>
     </div>
 
+    <!-- FINAL ONE MAP INTRO VIDEO & 3-2-1-START CUTSCENE OVERLAY -->
+    <div id="finalrun-intro-overlay" class="finalrun-intro-overlay" hidden>
+      <video id="finalrun-intro-video" class="intro-video" src="assets/videos/final_one_intro.mp4" playsinline preload="auto" disablepictureinpicture disableremoteplayback></video>
+      <div id="finalrun-countdown-stage" class="finalrun-countdown-stage" hidden aria-live="assertive">
+        <div class="finalrun-countdown-halo" aria-hidden="true"></div>
+        <div class="finalrun-countdown-ring" aria-hidden="true"></div>
+        <div class="finalrun-countdown-shockwave" aria-hidden="true"></div>
+        <div id="finalrun-countdown-text" class="finalrun-countdown-text" data-step="3">3</div>
+      </div>
+    </div>
+
+    <!-- FINAL ONE 10,000m COMPLETION: SCREEN TURN OFF, COLLEGE / IT PARK INTRO VIDEO & 3-2-1-START OVERLAY -->
+    <div id="college-intro-overlay" class="college-intro-overlay" hidden>
+      <div id="college-screen-off-flash" class="college-screen-off-flash" aria-hidden="true"></div>
+      <video id="college-intro-video" class="intro-video college-intro-video" src="assets/videos/college_intro.mp4" playsinline preload="auto" disablepictureinpicture disableremoteplayback></video>
+      <video id="itrun-intro-video" class="intro-video college-intro-video" src="assets/videos/it_run.mp4?v=3.6.9" playsinline preload="auto" disablepictureinpicture disableremoteplayback hidden></video>
+      <video id="grandfather-intro-video" class="intro-video college-intro-video" src="assets/videos/granfather_intro.mp4?v=3.7.0" playsinline preload="auto" disablepictureinpicture disableremoteplayback hidden></video>
+      <div id="college-countdown-stage" class="finalrun-countdown-stage" hidden aria-live="assertive">
+        <div class="finalrun-countdown-halo" aria-hidden="true"></div>
+        <div class="finalrun-countdown-ring" aria-hidden="true"></div>
+        <div class="finalrun-countdown-shockwave" aria-hidden="true"></div>
+        <div id="college-countdown-text" class="finalrun-countdown-text" data-step="3">3</div>
+      </div>
+    </div>
+
     <!-- SCREEN 1.5: NAME REGISTRATION MODAL (First Time / Edit Name) -->
     <div id="name-modal" class="name-modal-overlay" hidden>
       <div class="name-modal-card">
@@ -126,6 +160,16 @@
 
     <!-- SCREEN 2: CHARACTER SELECTION SCREEN (Properly Aligned, No Overlap) -->
     <div id="select-screen" class="select-screen" hidden>
+      <!-- Zero-Lag 2D Scenic Map & Character Showcase Backdrop (Zero WebGL in Menus) -->
+      <div id="menu-preview-stage" class="menu-preview-stage" aria-hidden="true">
+        <img id="menu-map-bg" class="menu-map-bg" src="assets/maps/school.jpg" alt="" decoding="async">
+        <div class="menu-map-vignette"></div>
+        <div id="menu-hero-stage" class="menu-hero-stage">
+          <div class="menu-hero-podium"></div>
+          <img id="menu-hero-img" class="menu-hero-img" src="assets/portraits/male.png" alt="" decoding="async">
+        </div>
+      </div>
+
       <!-- Top Navigation Bar -->
       <div class="select-top-bar">
         <div class="select-brand">
@@ -167,13 +211,14 @@
 
       <section class="hub-page hub-page-characters" aria-label="Choose character">
         <div class="char-carousel-head">
-          <span class="char-step-badge" id="char-step-badge">CHARACTER 1 / 5</span>
+          <span class="char-step-badge" id="char-step-badge">CHARACTER 1 / 6</span>
           <div class="char-carousel-dots" id="char-carousel-dots" role="tablist" aria-label="Characters">
             <button type="button" class="char-dot active" data-char-index="0" aria-label="School Boy"></button>
             <button type="button" class="char-dot" data-char-index="1" aria-label="School Girl"></button>
             <button type="button" class="char-dot" data-char-index="2" aria-label="College Boy"></button>
             <button type="button" class="char-dot" data-char-index="3" aria-label="College Woman"></button>
             <button type="button" class="char-dot" data-char-index="4" aria-label="College Man"></button>
+            <button type="button" class="char-dot" data-char-index="5" aria-label="Grandfather"></button>
           </div>
           <span class="char-lock-pill" id="char-lock-pill"><svg class="ui-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> UNLOCKED</span>
         </div>
@@ -368,6 +413,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.6.1"></script>
+<script type="module" src="boot.js?v=3.8.1"></script>
 </body>
 </html>

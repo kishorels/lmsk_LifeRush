@@ -12,7 +12,7 @@ import {
   SRGBColorSpace,
   TextureLoader
 } from './vendor/three.module.js';
-import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
+import { bakeGroup } from './bake-static-meshes.js';
 import { roadsideTree } from './street-materials.js';
 import { campusAnchor, campusKind, CAMPUS_SLOTS, curveRelX, curveRelY, curveSlopeAt } from './campus-layout.js';
 import { branchForkClearance } from './road-events.js';
@@ -52,22 +52,23 @@ export function createItParkCampus(scene) {
         emissiveIntensity: 0.08
       });
     }
+    const S = 256;
     const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 512;
+    cv.width = S; cv.height = S;
     const ctx = cv.getContext('2d');
     const emCv = document.createElement('canvas');
-    emCv.width = 512; emCv.height = 512;
+    emCv.width = S; emCv.height = S;
     const emCtx = emCv.getContext('2d');
 
     if (ctx && emCtx) {
       ctx.fillStyle = baseColor;
-      ctx.fillRect(0, 0, 512, 512);
+      ctx.fillRect(0, 0, S, S);
       emCtx.fillStyle = '#000000';
-      emCtx.fillRect(0, 0, 512, 512);
+      emCtx.fillRect(0, 0, S, S);
 
       const cols = 8, rows = 16;
-      const cw = 512 / cols;
-      const ch = 512 / rows;
+      const cw = S / cols;
+      const ch = S / rows;
 
       for (let r = 0; r < rows; r++) {
         const isSpandrel = (r % 4 === 0);
@@ -85,37 +86,37 @@ export function createItParkCampus(scene) {
           if (rnd < 0.38) {
             const glow = warmLights ? '#fef08a' : '#e0f2fe';
             ctx.fillStyle = glow;
-            ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2);
             emCtx.fillStyle = warmLights ? '#f59e0b' : '#38bdf8';
-            emCtx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            emCtx.fillRect(x + 1, y + 1, cw - 2, ch - 2);
             ctx.fillStyle = 'rgba(71, 85, 105, 0.35)';
-            ctx.fillRect(x + 2, y + Math.floor(ch * 0.42), cw - 4, 2);
+            ctx.fillRect(x + 1, y + Math.floor(ch * 0.42), cw - 2, 1.5);
           } else if (rnd < 0.65) {
             ctx.fillStyle = '#7dd3fc';
-            ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2);
             emCtx.fillStyle = '#0284c7';
-            emCtx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            emCtx.fillRect(x + 1, y + 1, cw - 2, ch - 2);
           } else if (rnd < 0.82) {
             ctx.fillStyle = '#1e293b';
-            ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2);
           } else {
             ctx.fillStyle = '#94a3b8';
-            ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+            ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2);
             ctx.fillStyle = 'rgba(51, 65, 85, 0.45)';
-            for (let by = y + 4; by < y + ch - 4; by += 4) {
-              ctx.fillRect(x + 3, by, cw - 6, 1.5);
+            for (let by = y + 3; by < y + ch - 2; by += 3) {
+              ctx.fillRect(x + 2, by, cw - 4, 1);
             }
           }
         }
       }
 
       ctx.strokeStyle = mullionColor;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
       for (let c = 0; c <= cols; c++) {
-        ctx.beginPath(); ctx.moveTo(c * cw, 0); ctx.lineTo(c * cw, 512); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(c * cw, 0); ctx.lineTo(c * cw, S); ctx.stroke();
       }
       for (let r = 0; r <= rows; r++) {
-        ctx.beginPath(); ctx.moveTo(0, r * ch); ctx.lineTo(512, r * ch); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, r * ch); ctx.lineTo(S, r * ch); ctx.stroke();
       }
 
       const map = new CanvasTexture(cv);
@@ -1004,22 +1005,9 @@ export function createItParkCampus(scene) {
 
     // Lush emerald ornamental roadside trees in the open plaza bays between buildings
     const treeZ = (kind % 2 === 0 ? 14.6 : -14.6) * side;
-    const th = 5.2 + (kind % 3) * 0.45;
-    roadsideTree(root, side * 7.6, treeZ, th, kind % 3 === 1, 0);
-    roadsideTree(root, side * 7.6, treeZ, th, kind % 3 === 1, Math.PI / 2);
-  }
-
-  // Normalize geometry attributes so mixed Box/Cylinder/Extrude meshes batch cleanly in mergeGeometries
-  function normalizeGeometry(rawGeo, matrixWorld) {
-    const geo = (rawGeo.index ? rawGeo.toNonIndexed() : rawGeo.clone());
-    geo.applyMatrix4(matrixWorld);
-    for (const key of Object.keys(geo.attributes)) {
-      if (key !== 'position' && key !== 'normal' && key !== 'uv') {
-        geo.deleteAttribute(key);
-      }
-    }
-    if (!geo.attributes.normal) geo.computeVertexNormals();
-    return geo;
+    const th = 5.2 + (kind % 2) * 0.65;
+    roadsideTree(root, side * 7.6, treeZ, th, kind % 2 === 1, 0);
+    roadsideTree(root, side * 7.6, treeZ, th, kind % 2 === 1, Math.PI / 2);
   }
 
   // 6 curated pairs across the 5 reference landmarks so every block showcases iconic architecture
@@ -1032,30 +1020,23 @@ export function createItParkCampus(scene) {
     [1, 0]  // Corporate Exoskeleton Complex (Ref 2) + Classic Neoclassical Stone Tower (Ref 1)
   ];
 
+  const bakedSideCache = new Map();
   function bakeSide(side, style, kind) {
-    const root = new Group();
-    placeBuilding(root, side, style);
-    addSideStreetscape(root, side, kind);
-    root.updateMatrixWorld(true);
-    const batches = new Map();
-    root.traverse(obj => {
-      if (!obj.isMesh) return;
-      const geo = normalizeGeometry(obj.geometry, obj.matrixWorld);
-      if (!batches.has(obj.material)) batches.set(obj.material, []);
-      batches.get(obj.material).push(geo);
-    });
-    const isTouch = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
-    const merged = new Group();
-    for (const [mat, list] of batches) {
-      const combined = list.length === 1 ? list[0] : mergeGeometries(list, false);
-      if (!combined) { for (const geo of list) geo.dispose(); continue; }
-      const mesh = new Mesh(combined, mat);
-      mesh.receiveShadow = true;
-      mesh.castShadow = !isTouch && mat !== M.lawnGreen && mat !== M.plazaGray && mat !== M.plazaDark;
-      merged.add(mesh);
-      if (list.length > 1) for (const geo of list) geo.dispose();
+    const key = `${side}:${style}:${kind % 2}`;
+    if (!bakedSideCache.has(key)) {
+      const root = new Group();
+      placeBuilding(root, side, style);
+      addSideStreetscape(root, side, kind % 2);
+      const merged = bakeGroup(root);
+      // Skyscrapers sit along roadside flanks outside the runner lane; skipping shadow-pass rendering
+      // cuts GPU shadow draw calls by ~80% while runner, chaser, vehicles & obstacles stay shadowed.
+      for (const mesh of merged.children) {
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+      }
+      bakedSideCache.set(key, merged);
     }
-    return merged;
+    return bakedSideCache.get(key).clone();
   }
 
   function buildTemplate(kind) {

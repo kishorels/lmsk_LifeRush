@@ -98,8 +98,9 @@ export function createCollegeShower(scene) {
   const group = new Group();
   group.name = 'college-shower';
   scene.add(group);
+  const isTouch = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
   const layers = [0,1].map(layer => {
-    const count = layer ? 265 : 650, depth = layer ? 13 : 54;
+    const count = layer ? (isTouch ? 130 : 265) : (isTouch ? 300 : 650), depth = layer ? 13 : 54;
     const lines = segments(group,count,layer ? 0xdaeaff : 0xc3d5ec,layer ? .53 : .36);
     const samples = Array.from({length:count}, (_,i) => ({
       x:(rainSample(i,layer*5)-.5)*(layer ? 23 : 54),

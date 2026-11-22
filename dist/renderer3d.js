@@ -1,24 +1,24 @@
 import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
-import {createPickupModels,makeCoin} from './pickup-models.js?v=3.4.8';
+import {createPickupModels,makeCoin} from './pickup-models.js?v=3.8.0';
 import {createGuardEffect} from './guard-effect.js?v=3.4.8';
-import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.2.9';
-import {createSideTraffic} from './side-vehicles.js?v=3.2.0';
+import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.8.0';
+import {createSideTraffic,buildSideVehicle} from './side-vehicles.js?v=3.8.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.4.3';
-import {createCampus} from './campus-scene.js?v=3.2.8';
-import {createVillageRoute} from './village-scene.js?v=2.2.1';
-import {createCollegeCampus} from './college-scene.js?v=3.2.6';
-import {createItParkCampus} from './itpark-scene.js?v=3.2.6';
-import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.4.2';
-import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.1.1';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.4.2';
-import {createTraffic} from './traffic-scene.js?v=3.4.2';
+import {createSky} from './sky-scene.js?v=3.8.0';
+import {createCampus} from './campus-scene.js?v=3.8.0';
+import {createVillageRoute} from './village-scene.js?v=3.8.1';
+import {createCollegeCampus} from './college-scene.js?v=3.8.0';
+import {createItParkCampus} from './itpark-scene.js?v=3.8.0';
+import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.8.0';
+import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.8.0';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.8.1';
+import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.8.0';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=3.0.5';
+import {createSchoolEntrance} from './school-scene.js?v=3.8.0';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
-import {loadChaserModel} from './chaser-model.js?v=3.0.0';
-import {loadRunnerModel} from './runner-model.js?v=3.3.0';
-import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.2.8';
+import {loadChaserModel} from './chaser-model.js?v=3.8.0';
+import {loadRunnerModel} from './runner-model.js?v=3.8.0';
+import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.6.8';
 export function createRenderer(canvas, callbacks = {}){
  let renderer;
  try{
@@ -40,7 +40,7 @@ export function createRenderer(canvas, callbacks = {}){
  // High-DPI balanced pixel ratio: 1.5 on mobile touch screens, 2.0 on desktop
  // DPR 1.5 renders at ~618x1372 (over 850k pixels) on modern phones with WebGL MSAA (antialias: true).
  // This delivers tack-sharp 1080p Retina clarity with 0 blur, while slashing fragment shading load by 44% compared to DPR 2.0!
- const maxDpr = isTouchDevice ? 1.5 : 2.0;
+ const maxDpr = isTouchDevice ? 1.5 : 1.75;
  renderer.setPixelRatio(Math.min(dpr, maxDpr));
  renderer.shadowMap.enabled=true;
  renderer.shadowMap.type=T.PCFShadowMap;
@@ -51,7 +51,9 @@ export function createRenderer(canvas, callbacks = {}){
  const camera=new T.PerspectiveCamera(57,1,.1,375);camera.position.set(0,1.52,3.65);camera.lookAt(0,.98,0);
  const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);
  const sun=new T.DirectionalLight(0xfff4d6,3.65);sun.position.set(-15,26,15);sun.castShadow=true;
- sun.shadow.mapSize.set(1024, 1024);
+ // 512x512 on mobile cuts shadow depth fill-rate by 75% while staying sharp across the tight 24m frustum.
+ const smSize = isTouchDevice ? 512 : 1024;
+ sun.shadow.mapSize.set(smSize, smSize);
  Object.assign(sun.shadow.camera,{left:-12,right:12,top:14,bottom:-18,near:4,far:52});
  sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
  const mats=new Map();function mat(c){if(!mats.has(c))mats.set(c,new T.MeshStandardMaterial({color:c,roughness:.78}));return mats.get(c);}
@@ -81,12 +83,54 @@ export function createRenderer(canvas, callbacks = {}){
  const podiumInnerGlow=new T.Mesh(new T.TorusGeometry(.72,.015,8,40),cyanGlowMat);podiumInnerGlow.rotation.x=Math.PI/2;podiumInnerGlow.position.y=.056;podium.add(podiumInnerGlow);
  const podiumAura=new T.Mesh(new T.CylinderGeometry(.80,.88,.22,32,1,true),cyanRingMat);podiumAura.position.y=.16;podium.add(podiumAura);
  const updateGuard=createGuardEffect(runner);
- let pickups=null;
- const ensurePickups=()=>{if(!pickups)pickups=createPickupModels();return pickups;};
+ // Pre-build shared pickup models once at startup so Frame 1 of a run has zero ExtrudeGeometry/shader hitches.
+ const pickups=createPickupModels();
+ const ensurePickups=()=>pickups;
+ const uploadedTextures = new WeakSet();
+ const initObjectTextures = (obj) => {
+   if (!obj || !renderer.initTexture) return;
+   obj.traverse?.(node => {
+     const mList = Array.isArray(node.material) ? node.material : (node.material ? [node.material] : []);
+     for (const m of mList) {
+       if (!m) continue;
+       for (const k of ['map', 'emissiveMap', 'bumpMap', 'normalMap', 'roughnessMap', 'metalnessMap']) {
+         const tex = m[k];
+         if (!tex || uploadedTextures.has(tex)) continue;
+         const img = tex.image;
+         const ready = tex.isCanvasTexture || tex.isDataTexture || (img && img.complete !== false && (img.width > 0 || img.naturalWidth > 0));
+         if (ready) {
+           uploadedTextures.add(tex);
+           try { renderer.initTexture(tex); } catch {}
+         }
+       }
+     }
+   });
+ };
+ let lastMode='ready',lastStateMap='school';
+ const compileLoadedModel = (model) => {
+   if (!model) return;
+   // Never trigger synchronous GPU shader compilation during active gameplay frames!
+   if (lastMode === 'running' || lastMode === 'starting' || lastMode === 'intro') return;
+   if (renderer.compile) {
+     try { renderer.compile(model, camera, scene); } catch {}
+   }
+   initObjectTextures(model);
+ };
  const activeKey=callbacks?.initialModelKey||'male';
- const heroModels={male:loadRunnerModel(runner,'male',activeKey==='male'?callbacks?.onBoyProgress:null,activeKey==='male'),female:loadRunnerModel(runner,'female',activeKey==='female'?callbacks?.onBoyProgress:null,activeKey==='female'),'college-male':loadRunnerModel(runner,'college-male',activeKey==='college-male'?callbacks?.onBoyProgress:null,activeKey==='college-male'),'college-woman':loadRunnerModel(runner,'college-woman',activeKey==='college-woman'?callbacks?.onBoyProgress:null,activeKey==='college-woman'),'college-man':loadRunnerModel(runner,'college-man',activeKey==='college-man'?callbacks?.onBoyProgress:null,activeKey==='college-man'),'aged-elder':loadRunnerModel(runner,'aged-elder',activeKey==='aged-elder'?callbacks?.onBoyProgress:null,activeKey==='aged-elder')};
- const updateChaserModel=loadChaserModel(scene, callbacks?.onChaserProgress, true);
- let compiled = false;
+ const heroModels={
+   male:loadRunnerModel(runner,'male',activeKey==='male'?callbacks?.onBoyProgress:null,activeKey==='male',compileLoadedModel),
+   female:loadRunnerModel(runner,'female',activeKey==='female'?callbacks?.onBoyProgress:null,activeKey==='female',compileLoadedModel),
+   'college-male':loadRunnerModel(runner,'college-male',activeKey==='college-male'?callbacks?.onBoyProgress:null,activeKey==='college-male',compileLoadedModel),
+   'college-woman':loadRunnerModel(runner,'college-woman',activeKey==='college-woman'?callbacks?.onBoyProgress:null,activeKey==='college-woman',compileLoadedModel),
+   'college-man':loadRunnerModel(runner,'college-man',activeKey==='college-man'?callbacks?.onBoyProgress:null,activeKey==='college-man',compileLoadedModel),
+   'aged-elder':loadRunnerModel(runner,'aged-elder',activeKey==='aged-elder'?callbacks?.onBoyProgress:null,activeKey==='aged-elder',compileLoadedModel)
+ };
+ const updateChaserModel=loadChaserModel(scene, callbacks?.onChaserProgress, true, compileLoadedModel);
+ const warmedSteps = new Set();
+ const warmupGroup = new T.Group();
+ warmupGroup.position.set(0, -500, 0);
+ warmupGroup.visible = false;
+ scene.add(warmupGroup);
  const capture=createCaptureScene(scene);
  const updateSchool=createSchoolEntrance(scene);
  // Lazy-load IT Park Glass Bridge, Sea World, Cave & Metro Viaducts ONLY on IT Park (zero overhead on School/College!)
@@ -332,14 +376,15 @@ export function createRenderer(canvas, callbacks = {}){
  function obstacle(g,o,map='school',blockKind=0){clear(g);g.userData.waveArm=null;g.userData.rotors=null;g.userData.crate=null;g.userData.spinBadge=null;g.userData.serverScan=null;g.userData.papers=null;g.userData.swivel=null;g.userData.holoPanel=null;if(PICKUP_TYPES.has(o.type)){ensurePickups().add(g,o.type);return;}if(ROAD_EVENT_TYPES.has(o.type)){const ev=buildRoadEventMesh(o.type,o);g.add(ev);g.userData.rotors=ev.userData.rotors||null;g.userData.crate=ev.userData.crate||null;g.userData.spinBadge=ev.userData.spinBadge||null;return;}if(map==='itpark'){itParkObstacle(g,o,blockKind);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
 
  // Use the actual 3D Dark Gold & Crimson-Red coin model (makeCoin / mantis-flip-coin.glb) for collected-coin burst particles
- const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=makeCoin(scene,0,0,0);m.scale.setScalar(.55);m.visible=false;particles.push({m,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(11+i%5*1.8),tilt:(i%3-1)*.16});}let trackCameraY=0,total=0,lastTime=0,lastMode='ready',burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
+ const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=makeCoin(scene,0,0,0);m.scale.setScalar(.55);m.visible=false;particles.push({m,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(11+i%5*1.8),tilt:(i%3-1)*.16});}let trackCameraY=0,total=0,lastTime=0,burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
  function resize(){const r=canvas.getBoundingClientRect();const rw=Math.round(r.width),rh=Math.round(r.height);if(!rw||!rh||(rw===lastCanvasW&&rh===lastCanvasH))return;lastCanvasW=rw;lastCanvasH=rh;renderer.setSize(rw,rh,false);camera.aspect=rw/rh;baseFov=rw/rh<.8?64:58;camera.fov=baseFov;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
  const renderFn=function render(s,character,frameDt){if(contextLost||renderer.getContext?.()?.isContextLost?.())return 'context-lost';stage.restore();capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
  const onPodium=s.mode==='ready'||s.mode==='select';
  const podiumChanged=onPodium!==lastOnPodium;
  if(podiumChanged){
    lastOnPodium=onPodium;
-   sun.castShadow=!onPodium;
+   // Keep sun.castShadow permanently enabled so pressing LET'S RUN NEVER triggers a scene-wide USE_SHADOWMAP shader recompile!
+   sun.castShadow=true;
    camera.far=375;
    camera.updateProjectionMatrix();
    if(onPodium){
@@ -380,13 +425,14 @@ export function createRenderer(canvas, callbacks = {}){
  visItems.length=0;activeItemSet.clear();
  if(!onPodium){
   const pk=ensurePickups();
-  const coinFar=isTouchDevice?155:230;
+  const coinFar=isTouchDevice?110:175;
+  const glintFar=isTouchDevice?28:48;
   // Render solid obstacles & pads FIRST (priority over coins) so pool limits NEVER hide a slide/jump/block barrier!
   // Keep solid obstacles visible even after `o.done` until completely behind the camera (`z < -10`) — ZERO disappearing in front of you!
   for(const o of s.items){
    if(o.type==='bus'||o.type==='sideVehicle'||o.type==='coin')continue;
    const z=o.z-s.distance;
-   if(o.cleared||o.smashed||o.isForkDivider||z<-10||z>340)continue;
+   if(o.cleared||o.smashed||o.isForkDivider||z<-10||z>280)continue;
    const isCollectible=PICKUP_TYPES.has(o.type)||o.type==='mysteryCrate'||o.type==='letter';
    if(o.done&&isCollectible)continue;
    visItems.push(o);activeItemSet.add(o);
@@ -437,7 +483,7 @@ export function createRenderer(canvas, callbacks = {}){
     pk.animate(g,o.type,s.time,o.z);
     if(o.type==='coin'){
      const glints=g.userData.pickupVisual?.userData?.glints;
-     if(glints){const showGlint=z<52;for(let gi=0;gi<glints.length;gi++)glints[gi].visible=showGlint;}
+     if(glints){const showGlint=z<glintFar;for(let gi=0;gi<glints.length;gi++)glints[gi].visible=showGlint;}
     }
    }else if(g.userData.waveArm){g.userData.waveArm.rotation.z=Math.sin(s.time*6.5+o.z)*.24;}
    if(g.userData.rotors){for(const r of g.userData.rotors)r.rotation.y=s.time*26;if(g.userData.crate)g.userData.crate.position.y=1.05+Math.sin(s.time*4+o.z)*.12;}
@@ -508,7 +554,100 @@ export function createRenderer(canvas, callbacks = {}){
    capture.frame(camera,s,runner,body.visible?null:selectedModel.model,body,updateChaserModel.root,updateChaserModel.model,selectedModel.signatureClip);
    stage.show([runner,updateChaserModel.root],camera);
  }
- renderer.render(scene,camera);lastMode=s.mode;return selectedModel.failed?'error':selectedVisible?'ready':'loading';};
+ renderer.render(scene,camera);lastMode=s.mode;lastStateMap=s.map;return selectedModel.failed?'error':selectedVisible?'ready':'loading';};
+ function compileWarmupProps(map) {
+   warmupGroup.clear();
+   warmupGroup.visible = true;
+   if (map === 'itpark') {
+     for (let k = 0; k < 7; k++) { const g = new T.Group(); obstacle(g, { type: 'block', z: k }, 'itpark', k); warmupGroup.add(g); }
+     for (let k = 0; k < 5; k++) { const g = new T.Group(); obstacle(g, { type: 'jump', z: k }, 'itpark', k); warmupGroup.add(g); }
+     for (let k = 0; k < 2; k++) { const g = new T.Group(); obstacle(g, { type: 'slide', z: k }, 'itpark', k); warmupGroup.add(g); }
+     for (const t of ['turboPad', 'jumpPad', 'mysteryCrate', 'letter']) { const g = new T.Group(); obstacle(g, { type: t, letter: 'L' }, 'itpark', 0); warmupGroup.add(g); }
+     prewarmTrafficTemplates('itpark', warmupGroup);
+   } else if (map === 'college') {
+     for (const [type, variant] of [['jump','bench'],['jump','hurdle'],['jump',''],['slide','scaffold'],['slide','']]) {
+       const g = new T.Group(); obstacle(g, { type, variant }, 'college', 0); warmupGroup.add(g);
+     }
+     for (let k = 0; k < 4; k++) { const g = new T.Group(); obstacle(g, { type: 'block' }, 'college', k); warmupGroup.add(g); }
+     prewarmTrafficTemplates('college', warmupGroup);
+     for (const v of ['car', 'scooty', 'bike']) warmupGroup.add(buildSideVehicle(v));
+   } else {
+     for (const [type, variant] of [['jump','bench'],['jump','hurdle'],['jump',''],['slide','scaffold'],['slide',''],['block','']]) {
+       const g = new T.Group(); obstacle(g, { type, variant }, 'school', 0); warmupGroup.add(g);
+     }
+     prewarmTrafficTemplates('school', warmupGroup);
+     warmupGroup.add(buildSideVehicle('car'), buildSideVehicle('cycle'));
+   }
+   try { renderer.compile?.(warmupGroup, camera, scene); } catch {}
+   initObjectTextures(warmupGroup);
+   warmupGroup.clear();
+   warmupGroup.visible = false;
+ }
+ function runWarmStep(id) {
+   if (warmedSteps.has(id)) return false;
+   warmedSteps.add(id);
+   const dummyWeather = { night: 0, rain: 0, stormDark: 0 };
+   if (id === 'base') {
+     updateChaserModel.preload?.();
+     try { renderer.compile?.(scene, camera); } catch {}
+     initObjectTextures(scene);
+   } else if (id === 'itpark:campus') {
+     if (!updateItPark) updateItPark = createItParkCampus(scene);
+     updateItPark({ map: 'itpark', distance: 0, time: 0, activeBranch: null }, dummyWeather);
+     try { renderer.compile?.(scene, camera); } catch {}
+     initObjectTextures(scene);
+     if (lastStateMap !== 'itpark') updateItPark({ map: '__none__', distance: 0, time: 0 }, dummyWeather);
+   } else if (id === 'itpark:events') {
+     if (!updateRoadEvents) updateRoadEvents = createRoadEventsScene(scene);
+     try { renderer.compile?.(scene, camera); } catch {}
+     initObjectTextures(scene);
+     if (lastStateMap !== 'itpark') updateRoadEvents({ map: '__none__', distance: 0, time: 0 }, dummyWeather);
+   } else if (id === 'itpark:props') {
+     compileWarmupProps('itpark');
+   } else if (id === 'college:campus') {
+     if (!updateCollege) updateCollege = createCollegeCampus(scene);
+     updateCollege({ map: 'college', distance: 0, time: 0, activeBranch: null });
+     try { renderer.compile?.(scene, camera); } catch {}
+     initObjectTextures(scene);
+     if (lastStateMap !== 'college') updateCollege({ map: '__none__', distance: 0, time: 0 });
+   } else if (id === 'college:props') {
+     compileWarmupProps('college');
+   } else if (id === 'school:campus') {
+     if (!updateCampus) updateCampus = createCampus(scene);
+     updateCampus({ map: 'school', distance: 0, time: 0, activeBranch: null }, dummyWeather);
+     try { renderer.compile?.(scene, camera); } catch {}
+     initObjectTextures(scene);
+     if (lastStateMap !== 'school') updateCampus({ map: '__none__', distance: 0, time: 0 }, dummyWeather);
+   } else if (id === 'school:props') {
+     compileWarmupProps('school');
+   } else if (id === 'finalrun:village') {
+     if (!updateVillage) updateVillage = createVillageRoute(scene);
+     updateVillage({ map: 'finalrun', distance: 0, time: 0 });
+     try { renderer.compile?.(scene, camera); } catch {}
+     initObjectTextures(scene);
+     if (lastStateMap !== 'finalrun') updateVillage({ map: '__none__', distance: 0, time: 0 });
+   }
+   return true;
+ }
+ function stepsForMap(map) {
+   if (map === 'itpark') return ['base', 'itpark:campus', 'itpark:events', 'itpark:props'];
+   if (map === 'college') return ['base', 'college:campus', 'college:props'];
+   if (map === 'finalrun') return ['base', 'finalrun:village', 'school:props'];
+   return ['base', 'school:campus', 'school:props'];
+ }
+ renderFn.warmStep = (preferredMap = 'school') => {
+   const order = [preferredMap, 'itpark', 'college', 'school', 'finalrun'];
+   for (const m of order) {
+     for (const stepId of stepsForMap(m)) {
+       if (!warmedSteps.has(stepId)) return runWarmStep(stepId);
+     }
+   }
+   return false;
+ };
+ renderFn.warmMapNow = (map = 'school') => {
+   for (const stepId of stepsForMap(map)) runWarmStep(stepId);
+ };
+ renderFn.isMapWarm = (map = 'school') => stepsForMap(map).every(id => warmedSteps.has(id));
  renderFn.isLoaded=key=>Boolean(heroModels[key]?.model);
  renderFn.preload=key=>heroModels[key]?.preload?.();
  return renderFn;

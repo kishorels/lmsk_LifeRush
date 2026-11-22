@@ -3,7 +3,7 @@ import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { chasePose, isCapture, SCHOOL_VAN } from './engine.js';
 import {saveGestureBindPose} from './signature-gesture.js';
 
-export function loadChaserModel(scene, onProgress, defer = false) {
+export function loadChaserModel(scene, onProgress, defer = false, onLoaded = null) {
   const chaser = new Group();
   chaser.position.y = .09;
   chaser.scale.setScalar(1.18);
@@ -32,6 +32,7 @@ export function loadChaserModel(scene, onProgress, defer = false) {
       mixer = new AnimationMixer(model);
       run = mixer.clipAction(clip).play();
       idle = mixer.clipAction(rest).play();
+      if (onLoaded) onLoaded(model);
       if (onProgress) onProgress(1.0);
     }, xhr => {
       if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
@@ -69,5 +70,6 @@ export function loadChaserModel(scene, onProgress, defer = false) {
     mixer.update(0);
   }
   render.root = chaser;
+  render.preload = ensureLoaded;
   return render;
 }

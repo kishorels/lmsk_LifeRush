@@ -71,7 +71,8 @@ export function preloadCoinModel() {
           material.emissiveIntensity=.16;
           material.normalScale.set(.7,.7);
           material.needsUpdate=true;
-          object.castShadow = true;
+          // Skipping shadow-map rendering on 60+ floating coins eliminates ~60-100 shadow draw calls/frame on mobile!
+          object.castShadow = false;
           object.receiveShadow = false;
         });
         return scene;

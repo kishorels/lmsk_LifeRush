@@ -122,7 +122,9 @@ export function buildBus(length=10,roof=2.8,oncoming=true){
   const key='arch:'+length;let geometry=geometries.get(key);if(!geometry){geometry=new ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false,curveSegments:12});geometries.set(key,geometry);}
   const panel=add(yellow,side*.94+.06,0,0,1,1,1,geometry);panel.rotation.y=-Math.PI/2;
   for(const z of wheelZ){const wheel=add(dark,side*.9,.4,z,1,1,1,tyre);wheel.rotation.z=Math.PI/2;const rim=add(silver,side*1.015,.4,z,1,1,1,hub);rim.rotation.z=Math.PI/2;
-   const spokes=new Group();spokes.position.set(side*1.035,.4,z);g.add(spokes);g.userData.wheels.push(spokes);for(let i=0;i<6;i++){const m=new Mesh(cube,paint(dark));m.scale.set(.018,.06,.04);m.position.set(0,Math.cos(i*Math.PI/3)*.15,Math.sin(i*Math.PI/3)*.15);spokes.add(m);}
+   const spokes=new Group();spokes.position.set(side*1.035,.4,z);g.add(spokes);g.userData.wheels.push(spokes);
+   if(!bodyBatches.has('busSpokes')){for(let i=0;i<6;i++){const m=new Mesh(cube,paint(dark));m.scale.set(.018,.06,.04);m.position.set(0,Math.cos(i*Math.PI/3)*.15,Math.sin(i*Math.PI/3)*.15);spokes.add(m);}}
+   batchBody(spokes,'busSpokes');for(const c of spokes.children)c.castShadow=false;
    const arch=add(cream,side*.958,.4,z,1,1,1,archGeo);arch.rotation.y=Math.PI/2;
   }
   for(let z=-1.45;z>-length+.75;z-=1.35){shell(glass,side*.958,roof*.72,z,.035,roof*.30,1.10,.015);add(silver,side*.983,roof*.72,z,.012,.025,1.05);}
@@ -280,14 +282,18 @@ export function buildCollegeVehicle(kind='car',length=4.5,roof=1.45,oncoming=tru
   const w=add(dark,wx,.36*wScale,wz,1,wScale,wScale,tyre);w.rotation.z=Math.PI/2;
   const r=add(silver,wx+(wx>=0?.09:-.09),.36*wScale,wz,1,wScale*.88,wScale*.88,hub);r.rotation.z=Math.PI/2;
   const spokes=new Group();spokes.position.set(wx+(wx>=0?.11:-.11),.36*wScale,wz);g.add(spokes);g.userData.wheels.push(spokes);
-  for(let i=0;i<5;i++){
-   const sp=new Mesh(cube,paint(dark));
-   sp.scale.set(.02,.045*wScale,.16*wScale);
-   const a=i*Math.PI*2/5;
-   sp.position.set(0,Math.cos(a)*.11*wScale,Math.sin(a)*.11*wScale);
-   sp.rotation.x=a;
-   spokes.add(sp);
+  const spKey='colSpokes:'+wScale.toFixed(2);
+  if(!bodyBatches.has(spKey)){
+   for(let i=0;i<5;i++){
+    const sp=new Mesh(cube,paint(dark));
+    sp.scale.set(.02,.045*wScale,.16*wScale);
+    const a=i*Math.PI*2/5;
+    sp.position.set(0,Math.cos(a)*.11*wScale,Math.sin(a)*.11*wScale);
+    sp.rotation.x=a;
+    spokes.add(sp);
+   }
   }
+  batchBody(spokes,spKey);for(const c of spokes.children)c.castShadow=false;
  }
  return g;
 }

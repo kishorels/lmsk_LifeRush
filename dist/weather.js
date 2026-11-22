@@ -117,6 +117,7 @@ export function hasCollegeRain(state) {
 }
 
 export function sceneWeather(state) {
+ if (state?.map === 'grandfather') return collegeWeatherAt(10);
  if (state?.map === 'college') {
   if (state.previewRain) {
    return collegeWeatherAt(48);

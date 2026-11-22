@@ -2,6 +2,7 @@ import {
   Group, Mesh, InstancedMesh, Object3D, PlaneGeometry, MeshBasicMaterial, ShadowMaterial,
   BufferGeometry, Float32BufferAttribute, Color, TextureLoader, SRGBColorSpace, RepeatWrapping, DoubleSide
 } from './vendor/three.module.js';
+import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 
 import {SECTION_LENGTH as LENGTH,villageLayout,houseTypes,cowPose} from './village-layout.js';
 import {createVillageHouses} from './village-house.js';
@@ -11,6 +12,7 @@ const VISIBLE_SECTIONS = 7;
 
 export function createVillageRoute(scene) {
   const root = new Group();
+  root.visible = false;
   scene.add(root);
   const clock = {value: 0};
   const loader = typeof document === 'undefined' ? null : new TextureLoader();
@@ -78,14 +80,30 @@ export function createVillageRoute(scene) {
   const earth = new MeshBasicMaterial({color: 0x879047});
   const timber=new MeshBasicMaterial({color:0xa7794c});
   const unit = new PlaneGeometry(1, 1);
-  const upright = new PlaneGeometry(1, 1, 8, 7).translate(0, .5, 0);
+  // 4x4 sprite grid gives identical smooth wind sway & goat animation with 3.5x fewer vertices than 8x7.
+  const upright = new PlaneGeometry(1, 1, 4, 4).translate(0, .5, 0);
+  // Merge all 18 canal footbridge timber planks into 1 single shared geometry (1 draw call vs 18).
+  const bridgePlanksGeo = (() => {
+    const planks = [];
+    for (let plank = 0; plank < 18; plank++) {
+      const p = new PlaneGeometry(.314, 1.72);
+      p.rotateX(-Math.PI / 2);
+      p.translate(-12.02 + plank * .335, .235, 0);
+      planks.push(p);
+    }
+    const merged = mergeGeometries(planks, false);
+    for (const p of planks) p.dispose();
+    return merged;
+  })();
+  const sharedGeos = new Set([unit, upright, bridgePlanksGeo]);
   const transform = new Object3D();
-  function floor(parent, mat, x, y, z, w, d) {
+  function floor(parent, mat, x, y, z, w, d, tessellate = false) {
     const mesh = new Mesh(unit, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(x,y,z);
     mesh.scale.set(w,d,1);
     mesh.receiveShadow = true;
+    mesh.userData.tessellate = tessellate;
     parent.add(mesh);return mesh;
   }
   function plants(parent, mat, entries) {
@@ -111,23 +129,28 @@ export function createVillageRoute(scene) {
   function section(index) {
     const group=new Group();
     const {items,random}=villageLayout(index);
-    floor(group,asphalt,0,.115,-32,7.1,LENGTH);
-    floor(group,groundShadow,0,.123,-32,7.1,LENGTH);
-    floor(group,grassFloor,-5.0,.185,-32,2.9,LENGTH);
-    floor(group,water,-9.2,.07,-32,5.5,LENGTH);
-    floor(group,grassFloor,-49.0,.185,-32,74.1,LENGTH);
-    floor(group,grassFloor,96,-.2,-32,48,LENGTH);
-    floor(group,grassFloor,5.6,.185,-32,4.1,LENGTH);
-    floor(group,rice,40,.07,-32,65,LENGTH);
+    const at=z=>roadCurveX(index*LENGTH-z,'finalrun');
+    // Only the 8 long 64m strips need curved Z-tessellation (12 segments matches the gentle bend seamlessly).
+    floor(group,asphalt,0,.115,-32,7.1,LENGTH,true);
+    floor(group,groundShadow,0,.123,-32,7.1,LENGTH,true);
+    floor(group,grassFloor,-5.0,.185,-32,2.9,LENGTH,true);
+    floor(group,water,-9.2,.07,-32,5.5,LENGTH,true);
+    floor(group,grassFloor,-49.0,.185,-32,74.1,LENGTH,true);
+    floor(group,grassFloor,96,-.2,-32,48,LENGTH,true);
+    floor(group,grassFloor,5.6,.185,-32,4.1,LENGTH,true);
+    floor(group,rice,40,.07,-32,65,LENGTH,true);
     for(const z of [-7-random()*14,-39-random()*17])floor(group,earth,40,.085,z,65,.38);
     const houseEntry=items.find(item=>houseTypes.includes(item.type));
     if(houseEntry){
       const width=Math.abs(houseEntry.x)-3.45;
       const path=floor(group,pathMaterial,-3.5-width/2,.195,houseEntry.z+1,width,1.6);
       path.rotation.z=.09;
-      // Timber crossing carries the house footpath over the irrigation channel.
-      for(let plank=0;plank<18;plank++)floor(group,timber,-12.02+plank*.335,.235,houseEntry.z+1,.314,1.72);
-
+      // Single merged timber crossing carries the house footpath over the irrigation channel.
+      const bridge=new Mesh(bridgePlanksGeo,timber);
+      bridge.position.set(at(houseEntry.z+1),0,houseEntry.z+1);
+      bridge.receiveShadow=true;
+      bridge.userData.staticPositioned=true;
+      group.add(bridge);
     }
     const batches=new Map();
     for(const o of items){
@@ -158,35 +181,50 @@ export function createVillageRoute(scene) {
       }
     }
     for(const [key,entries] of batches)plants(group,art[key],entries);
-    const positions=[],colors=[];
+
+    // Tapered 3-vertex grass blades written directly into typed arrays (17x fewer vertices & zero array GC churn!).
+    const MAX_TUFTS = 38 * 6 + 6 * 24;
+    const BLADES_PER_TUFT = 3;
+    const posBuf = new Float32Array(MAX_TUFTS * BLADES_PER_TUFT * 9);
+    const colBuf = new Float32Array(MAX_TUFTS * BLADES_PER_TUFT * 9);
+    let ptr = 0;
     function tuft(x,z,h,width,green){
-      for(let j=0;j<6;j++){
-        const a=random()*6.28,dx=Math.cos(a),dz=Math.sin(a),height=h*(.55+random()*.6);
-        const bx=x+(random()-.5)*.19,bz=z+(random()-.5)*.19,wx=-dz*width,wz=dx*width;
-        const y=.19,mx=bx+dx*height*.15,mz=bz+dz*height*.15;
-        positions.push(bx-wx,y,bz-wz,bx+wx,y,bz+wz,mx+wx*.45,y+height*.65,mz+wz*.45,
-          bx-wx,y,bz-wz,mx+wx*.45,y+height*.65,mz+wz*.45,bx+dx*height*.56,y+height,bz+dz*height*.56);
-        for(const shade of [.46,.51,.94,.46,.94,1.12])colors.push(.115*shade,green*shade,.032*shade);
+      const cx = at(z);
+      const w = width * 1.48;
+      for(let j=0;j<BLADES_PER_TUFT;j++){
+        const a=random()*6.28,dx=Math.cos(a),dz=Math.sin(a),height=h*(.62+random()*.55);
+        const bx=x+cx+(random()-.5)*.22,bz=z+(random()-.5)*.22,wx=-dz*w,wz=dx*w;
+        const y=.19;
+        posBuf[ptr]=bx-wx;   posBuf[ptr+1]=y;        posBuf[ptr+2]=bz-wz;
+        posBuf[ptr+3]=bx+wx; posBuf[ptr+4]=y;        posBuf[ptr+5]=bz+wz;
+        posBuf[ptr+6]=bx+dx*height*.46; posBuf[ptr+7]=y+height; posBuf[ptr+8]=bz+dz*height*.46;
+        colBuf[ptr]=.115*.48;   colBuf[ptr+1]=green*.48;   colBuf[ptr+2]=.032*.48;
+        colBuf[ptr+3]=.115*.54; colBuf[ptr+4]=green*.54;   colBuf[ptr+5]=.032*.54;
+        colBuf[ptr+6]=.115*1.12;colBuf[ptr+7]=green*1.12;  colBuf[ptr+8]=.032*1.12;
+        ptr += 9;
       }
     }
-    for(let patch=0;patch<70;patch++){
+    for(let patch=0;patch<38;patch++){
       const left=patch%2===0,x=left?-4-random()*10:4+random()*3.1,z=-random()*64;
-      for(let n=0;n<15;n++){
-        const tx=x+(random()-.5)*1.4,tz=z+(random()-.5)*2;
+      for(let n=0;n<6;n++){
+        const tx=x+(random()-.5)*1.6,tz=z+(random()-.5)*2.2;
         if((tx< -6.42 && tx> -11.98)||Math.abs(tx)<3.57||tz>0||tz< -64)continue;
         if(houseEntry&&left&&Math.abs(tz-houseEntry.z-1)<1.6&&tx>houseEntry.x)continue;
-        tuft(tx,tz,.18+random()*.43,.014+random()*.018,.23+random()*.13);
+        tuft(tx,tz,.20+random()*.45,.016+random()*.018,.23+random()*.13);
       }
     }
-    for(let row=0;row<9;row++)for(let col=0;col<50;col++){
-      tuft(8.4+row*.69+random()*.15,-(col+random()*.4)*1.28,.23+random()*.22,.019,.43);
+    for(let row=0;row<6;row++)for(let col=0;col<24;col++){
+      tuft(8.4+row*1.04+random()*.18,-(col+random()*.45)*2.66,.25+random()*.24,.021,.43);
     }
     const geom=new BufferGeometry();
-    geom.setAttribute('position',new Float32BufferAttribute(positions,3));
-    geom.setAttribute('color',new Float32BufferAttribute(colors,3));
-    group.add(new Mesh(geom,blades));
-    const at=z=>roadCurveX(index*LENGTH-z,'finalrun');
+    geom.setAttribute('position',new Float32BufferAttribute(posBuf.subarray(0, ptr),3));
+    geom.setAttribute('color',new Float32BufferAttribute(colBuf.subarray(0, ptr),3));
+    const grassMesh = new Mesh(geom,blades);
+    grassMesh.userData.staticPositioned = true;
+    group.add(grassMesh);
+
     for(const child of group.children){
+      if(child.userData.staticPositioned)continue;
       if(child.userData.villageHouse){child.position.x+=at(child.position.z);continue;}
       if(child.userData.tracksCow)continue;
       if(child.userData.cow){child.userData.baseCurve=at(child.position.z);continue;}
@@ -199,11 +237,14 @@ export function createVillageRoute(scene) {
         }
         child.instanceMatrix.needsUpdate=true;
         child.computeBoundingSphere();
+      }else if(child.geometry===unit && !child.userData.tessellate){
+        // Small decals/bunds/paths keep shared unit PlaneGeometry with 0 geometry allocation!
+        child.position.x+=at(child.position.z);
       }else{
-        // Tessellate the ground along the route so consecutive bends join seamlessly.
+        // Tessellate only the 64m road/canal/field strips (12 Z-segments) so bends join seamlessly.
         if(child.geometry===unit){
           child.updateMatrix();
-          child.geometry=new PlaneGeometry(1,1,1,24).applyMatrix4(child.matrix);
+          child.geometry=new PlaneGeometry(1,1,1,12).applyMatrix4(child.matrix);
           child.position.set(0,0,0);child.rotation.set(0,0,0);child.scale.set(1,1,1);
         }
         const pos=child.geometry.attributes.position;
@@ -231,7 +272,7 @@ export function createVillageRoute(scene) {
           root.remove(group);
           for(const child of group.children){
             if(child.isInstancedMesh)child.dispose();
-            if(child.geometry && child.geometry!==upright && child.geometry!==unit)child.geometry.dispose();
+            if(child.geometry && !sharedGeos.has(child.geometry))child.geometry.dispose();
           }
         }
         group=sections[slot]=section(index);

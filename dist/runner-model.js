@@ -217,7 +217,7 @@ function loadFemaleCollegeAnims() {
   return sharedFemaleCollegeAnimsPromise;
 }
 
-export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = false) {
+export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = false, onLoaded = null) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   let skirtMeshes = [], clothL = 0.06, clothR = 0.06, clothVelL = 0, clothVelR = 0, stridePhase = 0, scarfMeshes = [];
   function load() {
@@ -280,7 +280,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     model.visible = false;
     model.traverse(object => {
       if (object.isMesh) {
-        object.castShadow = !(isTouchDevice && selected === 'female');
+        const skipMobileShadow = isTouchDevice && /eye|brow|mouth|teeth|tongue|lash|glass|hair|tie|pocket|badge|button|shoe_lace/i.test(object.name + ' ' + (object.material?.name || ''));
+        object.castShadow = !(isTouchDevice && selected === 'female') && !skipMobileShadow;
         object.frustumCulled = false;
         // Hide awkward collar cardboard flaps
         if (/collar/i.test(object.name)) {
@@ -349,7 +350,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
         const hairGroup = new Group();
         hairGroup.name = 'SchoolgirlFrontHair';
         // Smoothly contoured swept curtain bangs emerging seamlessly from inside the crown hairline
-        const cols = 48, rows = 14;
+        const cols = 20, rows = 8;
         const pos = [], uvs = [], idx = [];
         const cx = 0, cy = 1.664, cz = -0.006;
         for (let r = 0; r <= rows; r++) {
@@ -446,6 +447,9 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
         trimR.position.set(0.13, -0.42, 0.34);
         scarfGroup.add(trimR);
 
+        model.updateMatrixWorld(true);
+        neckBone.getWorldPosition(scarfGroup.position);
+        model.worldToLocal(scarfGroup.position);
         model.add(scarfGroup);
         model.updateMatrixWorld(true);
         neckBone.attach(scarfGroup);
@@ -479,7 +483,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
 
       const backBadge = new Mesh(badgeGeo, badgeMat);
       backBadge.name = 'DressBackEmbroiderBadge';
-      backBadge.castShadow = true;
+      backBadge.castShadow = false;
       backBadge.renderOrder = 16;
 
       const spineOffsets = {
@@ -533,6 +537,7 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     parent.add(model);
     render.model = model;
     render.signatureClip = clips.get('ShoulderSweep');
+    if (onLoaded) onLoaded(model, selected);
     if (onProgress) onProgress(1.0);
   }).catch(error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 

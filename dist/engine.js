@@ -1,13 +1,14 @@
 import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase,routeSegment} from './traffic-rules.js';
 import {pickupTypes as PICKUP_TYPES, powerById, runPickup} from './progression.js';
 import {ROAD_EVENT_TYPES,updateRoadEvents,triggerRoadEvent,forkPlanAt,branchElevationAt,branchOffsetXAt,roadHillY,LMSK_LETTERS} from './road-events.js';
+import {populateGrandfatherPath} from './grandfather-route.js';
 export {trafficPattern, PICKUP_TYPES, ROAD_EVENT_TYPES, LMSK_LETTERS, powerById, forkPlanAt, branchElevationAt, branchOffsetXAt, roadHillY};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95, INJURED_DURATION = 10;
 export const MAGNET_RADIUS = 18, CAPTURE_GESTURE_START = 2.55;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
-export const SCHOOL_GATE = 11, FINALRUN_GATE = 10000;
+export const SCHOOL_GATE = 11, FINALRUN_GATE = 1000;
 export const SCHOOL_VAN = Object.freeze({ lane: 1, ramp: 22, rear: 32, front: 54, roof: 1.72, width: 1.94 });
 export function routeVans(distance,seed=0) { return [entryVan(seed),...repeatedVans(distance,seed)]; }
 export const ROOF_COINS = Object.freeze([35, 41, 47, 53]);
@@ -39,8 +40,9 @@ export function fresh(seed=newRunSeed()) {
 
 export function action(s, input) {
   if (s.mode !== 'running') return;
-  if (input === 'left') s.lane = clamp(s.lane - 1, -1, 1);
-  if (input === 'right') s.lane = clamp(s.lane + 1, -1, 1);
+  const stride = s.map === 'grandfather' ? .55 : 1;
+  if (input === 'left') s.lane = clamp(s.lane - stride, -1, 1);
+  if (input === 'right') s.lane = clamp(s.lane + stride, -1, 1);
   if (s.hit) return;
   if (input === 'jump') {
     if (s.jump && s.doubleJump > 0 && !s.airJumpUsed) {
@@ -98,8 +100,9 @@ function pullCoin(s,lane,z,y) {
 function collectMagnetCoins(s) {
   if(s.magnet<=0)return;
   for(const item of s.items)if(item.type==='coin'&&!item.done&&inMagnetRange(s,item.lane,item.z)){
-    item.done=true;pullCoin(s,item.lane,item.z,1.1);
+    item.done=true;pullCoin(s,item.lane,item.z,1.1+(item.lift||0));
   }
+  if(s.map==='grandfather')return;
   s.entryCoins.forEach((z,i)=>{
     if(!(s.roofCoins&(1<<i))&&inMagnetRange(s,s.entryVan.lane,z)){
       s.roofCoins|=1<<i;pullCoin(s,s.entryVan.lane,z,s.entryVan.roof+.67);
@@ -159,7 +162,7 @@ function updateElevation(s, dt) {
   const dropped = s.drop !== null;
   s.jump = Math.max(0, s.jump-dt);
   if (dropped) s.drop.remaining = Math.max(0, s.drop.remaining-dt);
-  const surface = Math.max(vanSurface(s.distance, s.x,s.runSeed),busSurface(s));
+  const surface = s.map === 'grandfather' ? 0 : Math.max(vanSurface(s.distance, s.x,s.runSeed),busSurface(s));
   const wasFalling = s.fallSpeed > 0;
   if (wasFalling) {
     s.fallSpeed += 18*dt;
@@ -187,6 +190,7 @@ function updateElevation(s, dt) {
 
   s.roofGrace = surface>0 && Math.abs(height(s)-surface)<.02 && !s.jump && !s.drop && !s.fallSpeed
     ? .12 : Math.max(0,s.roofGrace-dt);
+  if(s.map==='grandfather')return;
   for(const van of routeVans(s.distance,s.runSeed)) {
     if(van.id==='entry')continue;
     for(let n=0;n<4;n++) {
@@ -237,6 +241,7 @@ export function chaseRemaining(s) {
 }
 
 export function chasePose(s) {
+  if (s.map === 'grandfather' && s.firstHitAt == null) return null;
   const remaining = chaseRemaining(s);
   if (!remaining) return null;
   const caught = s.mode === 'falling' || s.mode === 'crashed';
@@ -263,8 +268,9 @@ export function pattern(z, random = Math.random) {
 export function hits(s, obstacle) {
   if (s.ghost > 0) return false;
   const lane=obstacle.type==='sideVehicle'?sideVehicleX(obstacle,s.time)/2.2:obstacle.lane;
-  if (Math.abs(s.x - lane) > .48) return false;
-  if (obstacle.type === 'jump') return height(s) < 1.05;
+  const reach = s.map === 'grandfather' ? ((obstacle.halfWidth ?? .82) + .22) / 2.2 : .48;
+  if (Math.abs(s.x - lane) > reach) return false;
+  if (obstacle.type === 'jump') return height(s) < (obstacle.clearance ?? 1.05);
   if (obstacle.type === 'slide') return !(s.slide || s.roll);
   if(obstacle.type==='bus') {
     const isTwoWheeler = obstacle.collegeKind === 'scooty' || obstacle.collegeKind === 'ducati';
@@ -571,7 +577,8 @@ export function step(s, dt, random = Math.random) {
   for (const timer of ['doubleCoins','doubleJump','slow','ghost']) s[timer] = Math.max(0,s[timer]-dt);
   const trafficRate = s.slow > 0 ? .5 : 1;
   const d = s.distance;
-  if (d <= 180) s.speed = 28;
+  if (s.map === 'grandfather') s.speed = 15 + Math.min(5, d / 200);
+  else if (d <= 180) s.speed = 28;
   else if (d <= 1000) s.speed = 28 + ((d - 180) / 820) * 6;
   else if (d <= 2000) s.speed = 34 + ((d - 1000) / 1000) * 7;
   else if (d <= 5000) s.speed = 41 + ((d - 2000) / 3000) * 7;
@@ -582,7 +589,8 @@ export function step(s, dt, random = Math.random) {
   if (s.turboBoost > 0) s.speed = Math.max(s.speed + 13, 46);
   s.speed *= trafficRate;
   s.distance += s.speed * dt;
-  updateRoadEvents(s, dt, vanSurface);
+  const villageFinale = s.map === 'grandfather';
+  if (!villageFinale) updateRoadEvents(s, dt, vanSurface);
   s.x += (s.lane - s.x) * (1-Math.exp(-18*dt));
   s.chaserX += (s.x - s.chaserX) * (1-Math.exp(-5*dt));
   s.slide = Math.max(0, s.slide - dt);
@@ -597,7 +605,8 @@ export function step(s, dt, random = Math.random) {
     if (s.comboTimer === 0) s.combo = 1;
   }
   let spawnedFar = false;
-  while (s.distance + 340 > s.next) {
+  if (villageFinale) populateGrandfatherPath(s);
+  while (!villageFinale && s.distance + 340 > s.next) {
     spawnedFar = true;
     const index=s.trafficIndex++;
     const newItems=trafficPattern(s.next,index,s.runSeed,s.map);
@@ -769,13 +778,26 @@ export function step(s, dt, random = Math.random) {
   }
   const farCheckDue = spawnedFar || !s.lastFarEscape || (s.time - s.lastFarEscape) >= 0.25;
   if (farCheckDue) s.lastFarEscape = s.time;
-  enforceOpenEscapeLane(s, farCheckDue);
+  if (!villageFinale) enforceOpenEscapeLane(s, farCheckDue);
+
+  if (!villageFinale && (s.map === 'finalrun' || s.isFinalRun)) {
+    for (const o of s.items) {
+      if (!o.done && !PICKUP_TYPES.has(o.type) && o.z >= FINALRUN_GATE - 65) {
+        o.done = true;
+        o.cleared = true;
+      }
+    }
+    if ((s.map === 'finalrun' || (s.isFinalRun && s.map === 'college')) && s.distance >= FINALRUN_GATE - 30) {
+      s.lane = 0;
+    }
+  }
 
   collectMagnetCoins(s);
   updateElevation(s, dt);
   if(s.jumpBuffer>0 && !s.jump && !s.drop && !s.fallSpeed && !s.hit)action(s,'jump');
-  for(const van of routeVans(s.distance,s.runSeed)) {
+  for(const van of villageFinale ? [] : routeVans(s.distance,s.runSeed)) {
     if(s.ghost > 0) continue;
+    if((s.map === 'finalrun' || s.isFinalRun) && van.ramp >= FINALRUN_GATE - 85) continue;
     if(s.distance>=van.rear && s.distance<van.front && Math.abs(s.x-van.lane)*2.2<=van.width/2 && height(s)<van.roof-.18) {
       if (s.nitro > 0) {
         s.floor = van.roof;

@@ -76,7 +76,7 @@ function drawIndianFlag(ctx, cx, cy, fw, fh) {
 function frontNoseMat() {
   const key = 'wdp4dFrontNose';
   if (matCache.has(key)) return matCache.get(key);
-  const tex = makeCanvasTex(key, 512, 256, (ctx, w, h) => {
+  const tex = makeCanvasTex(key, 256, 128, (ctx, w, h) => {
     // Upper off-white nose below windshields
     ctx.fillStyle = '#e5e9ee';
     ctx.fillRect(0, 0, w, h * 0.20);
@@ -96,24 +96,22 @@ function frontNoseMat() {
     ctx.fillStyle = bg;
     ctx.fillRect(0, h * 0.74, w, h * 0.26);
 
-    // Subtle panel seam lines
     ctx.strokeStyle = 'rgba(30, 41, 59, 0.26)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(0, h * 0.20); ctx.lineTo(w, h * 0.20);
     ctx.moveTo(0, h * 0.44); ctx.lineTo(w, h * 0.44);
     ctx.moveTo(0, h * 0.74); ctx.lineTo(w, h * 0.74);
     ctx.stroke();
 
-    // Left text: WDP4 D | Center: Indian Tricolor Flag | Right text: 45420 (exact photo!)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#1e293b';
-    ctx.font = '900 34px system-ui, Arial, sans-serif';
+    ctx.font = '900 17px system-ui, Arial, sans-serif';
     ctx.fillText('WDP4 D', w * 0.21, h * 0.59);
-    drawIndianFlag(ctx, w * 0.50, h * 0.59, 64, 42);
+    drawIndianFlag(ctx, w * 0.50, h * 0.59, 32, 21);
     ctx.fillStyle = '#b91c1c';
-    ctx.font = '900 38px system-ui, Arial, sans-serif';
+    ctx.font = '900 19px system-ui, Arial, sans-serif';
     ctx.fillText('45420', w * 0.79, h * 0.59);
 
     drawWeathering(ctx, w, h, 3);
@@ -189,52 +187,46 @@ function windshieldGrilleMat() {
 function cabSideMat(cabLabel, flipped) {
   const key = `wdp4dCabSide_${cabLabel}_${flipped ? 'L' : 'R'}`;
   if (matCache.has(key)) return matCache.get(key);
-  const tex = makeCanvasTex(key, 512, 256, (ctx, w, h) => {
-    // Upper white cab flank
+  const tex = makeCanvasTex(key, 256, 128, (ctx, w, h) => {
     ctx.fillStyle = '#e5e9ee';
     ctx.fillRect(0, 0, w, h * 0.864);
-    // Golden-saffron belt stripe wrapping cleanly from nose edge
     ctx.fillStyle = '#f2a61e';
     if (flipped) {
       ctx.fillRect(w * 0.56, h * 0.608, w * 0.44, h * 0.114);
     } else {
       ctx.fillRect(0, h * 0.608, w * 0.44, h * 0.114);
     }
-    // Lower streamlined crimson red skirt aligned with front chin & long hood
     ctx.fillStyle = '#dc2626';
     ctx.fillRect(0, h * 0.864, w, h * 0.136);
 
-    // Side metallic louver vent block near nose corner
     const vx = flipped ? w * 0.74 : w * 0.08;
     ctx.fillStyle = '#cbd5e1';
     ctx.fillRect(vx, h * 0.63, w * 0.18, h * 0.21);
     ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(vx, h * 0.63, w * 0.18, h * 0.21);
-    for (let ly = h * 0.66; ly < h * 0.82; ly += 6) {
-      ctx.beginPath(); ctx.moveTo(vx + 3, ly); ctx.lineTo(vx + w * 0.18 - 3, ly); ctx.stroke();
+    for (let ly = h * 0.66; ly < h * 0.82; ly += 4) {
+      ctx.beginPath(); ctx.moveTo(vx + 2, ly); ctx.lineTo(vx + w * 0.18 - 2, ly); ctx.stroke();
     }
 
-    // Crisp "45420", "WDP4 D", and "CAB-1"/"CAB-2" text!
     const tx = flipped ? w * 0.40 : w * 0.60;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#c62828';
-    ctx.font = '900 44px system-ui, Arial, sans-serif';
+    ctx.font = '900 22px system-ui, Arial, sans-serif';
     ctx.fillText('45420', tx, h * 0.60);
     ctx.fillStyle = '#1e293b';
-    ctx.font = '800 26px system-ui, Arial, sans-serif';
+    ctx.font = '800 13px system-ui, Arial, sans-serif';
     ctx.fillText('WDP4 D', tx, h * 0.75);
 
     ctx.fillStyle = '#f8fafc';
-    ctx.font = '800 17px system-ui, Arial, sans-serif';
+    ctx.font = '800 9px system-ui, Arial, sans-serif';
     ctx.fillText(cabLabel, flipped ? w * 0.18 : w * 0.82, h * 0.93);
 
-    // Vertical cab door seam
     const dx = flipped ? w * 0.14 : w * 0.86;
     ctx.strokeStyle = 'rgba(15, 23, 42, 0.45)';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(dx, 14); ctx.lineTo(dx, h - 8); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(dx, 7); ctx.lineTo(dx, h - 4); ctx.stroke();
 
     drawWeathering(ctx, w, h, flipped ? 7 : 5);
   });
@@ -248,13 +240,10 @@ function cabSideMat(cabLabel, flipped) {
   return m;
 }
 
-// 4. Long Engine Hood Side Texture: Deep Cobalt Blue + White/Yellow Center Band + Bold "INDIAN RAILWAYS" + Engine Louver Doors
-// Aligned cleanly with cab white/yellow bands (Y(1.66)..Y(1.29) => v=0.52..0.74 on Y(2.57)..Y(0.83))!
 function longHoodSideMat() {
   const key = 'wdp4dLongHoodSide';
   if (matCache.has(key)) return matCache.get(key);
-  const tex = makeCanvasTex(key, 1024, 256, (ctx, w, h) => {
-    // Streamlined Crimson Red upper & lower hood (Panel 3 reference livery)
+  const tex = makeCanvasTex(key, 512, 128, (ctx, w, h) => {
     const bg = ctx.createLinearGradient(0, 0, 0, h);
     bg.addColorStop(0, '#dc2626');
     bg.addColorStop(0.5, '#b91c1c');
@@ -262,7 +251,6 @@ function longHoodSideMat() {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
 
-    // Crisp White upper center band + Golden-Yellow lower center band aligned to front cab stripe!
     ctx.fillStyle = '#eef2f6';
     ctx.fillRect(0, h * 0.46, w, h * 0.15);
     const yg = ctx.createLinearGradient(0, h * 0.61, 0, h * 0.74);
@@ -271,41 +259,37 @@ function longHoodSideMat() {
     ctx.fillStyle = yg;
     ctx.fillRect(0, h * 0.61, w, h * 0.13);
 
-    // Vertical engine room access door panels & dark ventilation louver slots
     ctx.strokeStyle = 'rgba(10, 22, 48, 0.55)';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     const doorCount = 12;
     const dw = w / doorCount;
     for (let i = 0; i < doorCount; i++) {
       const x0 = i * dw;
-      ctx.strokeRect(x0 + 2, 6, dw - 4, h - 12);
-      // Small dark recessed engine compartment vents near upper hood
+      ctx.strokeRect(x0 + 1, 3, dw - 2, h - 6);
       ctx.fillStyle = 'rgba(12, 24, 46, 0.55)';
       ctx.fillRect(x0 + dw * 0.24, h * 0.12, dw * 0.22, h * 0.14);
       ctx.fillRect(x0 + dw * 0.56, h * 0.12, dw * 0.22, h * 0.14);
     }
 
-    // Two wide metallic vertical intake grille bays (front-mid and rear-mid like photo!)
     for (const [gx, gw] of [[w * 0.10, w * 0.08], [w * 0.78, w * 0.15]]) {
       ctx.fillStyle = '#334155';
       ctx.fillRect(gx, h * 0.24, gw, h * 0.58);
       ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
       ctx.strokeRect(gx, h * 0.24, gw, h * 0.58);
       ctx.strokeStyle = 'rgba(203, 213, 225, 0.45)';
-      ctx.lineWidth = 2;
-      for (let ly = h * 0.28; ly < h * 0.80; ly += 7) {
-        ctx.beginPath(); ctx.moveTo(gx + 3, ly); ctx.lineTo(gx + gw - 3, ly); ctx.stroke();
+      ctx.lineWidth = 1.5;
+      for (let ly = h * 0.28; ly < h * 0.80; ly += 4) {
+        ctx.beginPath(); ctx.moveTo(gx + 2, ly); ctx.lineTo(gx + gw - 2, ly); ctx.stroke();
       }
     }
 
-    // Bold Crimson-Red "INDIAN RAILWAYS" spanning the white + yellow band!
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 58px system-ui, Arial, sans-serif';
+    ctx.font = '900 29px system-ui, Arial, sans-serif';
     ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
-    ctx.fillText('INDIAN RAILWAYS', w * 0.49 + 2, h * 0.57 + 2, w * 0.54);
+    ctx.fillText('INDIAN RAILWAYS', w * 0.49 + 1, h * 0.57 + 1, w * 0.54);
     ctx.fillStyle = '#b91c1c';
     ctx.fillText('INDIAN RAILWAYS', w * 0.49, h * 0.57, w * 0.54);
     ctx.restore();
@@ -661,39 +645,43 @@ function buildWDP4DUnitTemplate(unitLen, h) {
   return template;
 }
 
+const axleCache = new Map();
 function createAxleWheelset(ys) {
-  const steelWheel = getMat('wdpWheel', { color: 0x4b5563, roughness: 0.38, metalness: 0.72 });
-  const rimSteel = getMat('wdpRim', { color: 0x9ca3af, roughness: 0.28, metalness: 0.82 });
-  const ironDark = getMat('wdpIron', { color: 0x1f242a, roughness: 0.55, metalness: 0.58 });
+  const key = ys.toFixed(3);
+  if (!axleCache.has(key)) {
+    const steelWheel = getMat('wdpWheel', { color: 0x4b5563, roughness: 0.38, metalness: 0.72 });
+    const rimSteel = getMat('wdpRim', { color: 0x9ca3af, roughness: 0.28, metalness: 0.82 });
+    const ironDark = getMat('wdpIron', { color: 0x1f242a, roughness: 0.55, metalness: 0.58 });
 
-  const axle = new Group();
-  const shaft = new Mesh(cyl12, ironDark);
-  shaft.rotation.z = Math.PI / 2;
-  shaft.scale.set(0.11 * ys, 1.32, 0.11 * ys);
-  axle.add(shaft);
+    const raw = new Group();
+    const shaft = new Mesh(cyl12, ironDark);
+    shaft.rotation.z = Math.PI / 2;
+    shaft.scale.set(0.11 * ys, 1.32, 0.11 * ys);
+    raw.add(shaft);
 
-  for (const side of [-1, 1]) {
-    // Heavy flanged steel railway wheel riding dead-center on cave track rails (x = ±0.60)
-    const wheel = new Mesh(cyl16, steelWheel);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.x = side * 0.60;
-    wheel.scale.set(0.56 * ys, 0.11, 0.56 * ys);
-    axle.add(wheel);
+    for (const side of [-1, 1]) {
+      const wheel = new Mesh(cyl16, steelWheel);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.x = side * 0.60;
+      wheel.scale.set(0.56 * ys, 0.11, 0.56 * ys);
+      raw.add(wheel);
 
-    // Bright machined steel wheel tread & inner flange ring
-    const flange = new Mesh(cyl16, rimSteel);
-    flange.rotation.z = Math.PI / 2;
-    flange.position.x = side * 0.54;
-    flange.scale.set(0.62 * ys, 0.035, 0.62 * ys);
-    axle.add(flange);
+      const flange = new Mesh(cyl16, rimSteel);
+      flange.rotation.z = Math.PI / 2;
+      flange.position.x = side * 0.54;
+      flange.scale.set(0.62 * ys, 0.035, 0.62 * ys);
+      raw.add(flange);
 
-    // Spokes / bolt detail bar so rotation is visibly crisp!
-    const spoke = new Mesh(boxGeo, ironDark);
-    spoke.position.x = side * 0.66;
-    spoke.scale.set(0.02, 0.42 * ys, 0.07 * ys);
-    axle.add(spoke);
+      const spoke = new Mesh(boxGeo, ironDark);
+      spoke.position.x = side * 0.66;
+      spoke.scale.set(0.02, 0.42 * ys, 0.07 * ys);
+      raw.add(spoke);
+    }
+    const baked = bakeStatic(raw);
+    for (const m of baked.children) m.castShadow = false;
+    axleCache.set(key, baked);
   }
-  return axle;
+  return axleCache.get(key).clone();
 }
 
 /**
@@ -720,7 +708,7 @@ export function buildWDP4DTrain(o) {
     unitGroup.add(tpl.bakedBody.clone());
     for (const az of tpl.axlePositions) {
       const axle = createAxleWheelset(tpl.ys);
-      axle.position.set(0, 0.31 * tpl.ys, az);
+      axle.position.set(0, 0.312 * tpl.ys, az);
       unitGroup.add(axle);
       g.userData.wheels.push(axle);
     }
@@ -739,49 +727,56 @@ export function buildWDP4DTrain(o) {
  * Matching Indian Railways Blue/Yellow Maintenance Rail Ramp Wagon for parked ramps inside the railway cave
  * (preserves exact v.roof = 1.72m collision height & walkable roof so player climbs onto the WDP4D train roof!).
  */
+const wagonCache = new Map();
 export function buildRailRampWagon(length, roof) {
   const g = new Group();
   g.userData.wheels = [];
   g.userData.captureObstacle = true;
-  const irBlue = getMat('wdpIrBlue', { color: 0x1d56b8, roughness: 0.36, metalness: 0.24 });
-  const irYellow = getMat('wdpIrYel', { color: 0xf2a61e, roughness: 0.36, metalness: 0.14 });
-  const cabWhite = getMat('wdpCabW', { color: 0xe6eaef, roughness: 0.42, metalness: 0.16 });
-  const chassisDark = getMat('wdpChas', { color: 0x2b3138, roughness: 0.62, metalness: 0.46 });
-  const ironDark = getMat('wdpIron', { color: 0x1f242a, roughness: 0.55, metalness: 0.58 });
-  const deckSteel = getMat('wdpDeckS', { color: 0x475569, roughness: 0.58, metalness: 0.48 });
-
-  const staticRoot = new Group();
-  function part(mat, x, y, z, w, ht, d, geo = boxGeo) {
-    const m = new Mesh(geo, mat);
-    m.position.set(x, y, z);
-    m.scale.set(w, ht, d);
-    staticRoot.add(m);
-    return m;
-  }
-
+  const cacheKey = `${length.toFixed(1)}:${roof.toFixed(2)}`;
   const midZ = -length * 0.5;
-  // Heavy rail underframe & twin steel buffers at both ends
-  part(chassisDark, 0, 0.58, midZ, 1.92, 0.24, length - 0.4);
-  for (const ez of [-0.14, -(length - 0.14)]) {
-    part(ironDark, 0, 0.54, ez, 1.88, 0.28, 0.18);
-    for (const side of [-1, 1]) {
-      const buf = part(ironDark, side * 0.56, 0.54, ez + (ez > midZ ? 0.10 : -0.10), 0.26, 0.16, 0.26, cyl12);
-      buf.rotation.x = Math.PI / 2;
-    }
-  }
-  // Indian Railways blue/white/yellow low utility rail car body with flat non-slip deck at `roof`
-  const bodyH = Math.max(0.6, roof - 0.72);
-  part(irBlue, 0, 0.70 + bodyH * 0.5, midZ, 1.88, bodyH, length - 0.5);
-  part(cabWhite, 0, 0.70 + bodyH * 0.64, midZ, 1.90, bodyH * 0.18, length - 0.46);
-  part(irYellow, 0, 0.70 + bodyH * 0.44, midZ, 1.90, bodyH * 0.18, length - 0.46);
-  part(deckSteel, 0, roof - 0.04, midZ, 1.92, 0.08, length - 0.36);
-
-  // Bogie side frames + flanged railway wheels on the tracks
   const bogieOff = Math.max(2.2, length * 0.34);
-  for (const bz of [midZ + bogieOff, midZ - bogieOff]) {
-    for (const side of [-1, 1]) {
-      part(ironDark, side * 0.74, 0.36, bz, 0.14, 0.22, 2.2);
+
+  if (!wagonCache.has(cacheKey)) {
+    const irBlue = getMat('wdpIrBlue', { color: 0x1d56b8, roughness: 0.36, metalness: 0.24 });
+    const irYellow = getMat('wdpIrYel', { color: 0xf2a61e, roughness: 0.36, metalness: 0.14 });
+    const cabWhite = getMat('wdpCabW', { color: 0xe6eaef, roughness: 0.42, metalness: 0.16 });
+    const chassisDark = getMat('wdpChas', { color: 0x2b3138, roughness: 0.62, metalness: 0.46 });
+    const ironDark = getMat('wdpIron', { color: 0x1f242a, roughness: 0.55, metalness: 0.58 });
+    const deckSteel = getMat('wdpDeckS', { color: 0x475569, roughness: 0.58, metalness: 0.48 });
+
+    const staticRoot = new Group();
+    function part(mat, x, y, z, w, ht, d, geo = boxGeo) {
+      const m = new Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.scale.set(w, ht, d);
+      staticRoot.add(m);
+      return m;
     }
+
+    part(chassisDark, 0, 0.58, midZ, 1.92, 0.24, length - 0.4);
+    for (const ez of [-0.14, -(length - 0.14)]) {
+      part(ironDark, 0, 0.54, ez, 1.88, 0.28, 0.18);
+      for (const side of [-1, 1]) {
+        const buf = part(ironDark, side * 0.56, 0.54, ez + (ez > midZ ? 0.10 : -0.10), 0.26, 0.16, 0.26, cyl12);
+        buf.rotation.x = Math.PI / 2;
+      }
+    }
+    const bodyH = Math.max(0.6, roof - 0.72);
+    part(irBlue, 0, 0.70 + bodyH * 0.5, midZ, 1.88, bodyH, length - 0.5);
+    part(cabWhite, 0, 0.70 + bodyH * 0.64, midZ, 1.90, bodyH * 0.18, length - 0.46);
+    part(irYellow, 0, 0.70 + bodyH * 0.44, midZ, 1.90, bodyH * 0.18, length - 0.46);
+    part(deckSteel, 0, roof - 0.04, midZ, 1.92, 0.08, length - 0.36);
+
+    for (const bz of [midZ + bogieOff, midZ - bogieOff]) {
+      for (const side of [-1, 1]) {
+        part(ironDark, side * 0.74, 0.36, bz, 0.14, 0.22, 2.2);
+      }
+    }
+    wagonCache.set(cacheKey, bakeStatic(staticRoot));
+  }
+
+  g.add(wagonCache.get(cacheKey).clone());
+  for (const bz of [midZ + bogieOff, midZ - bogieOff]) {
     for (const dz of [-0.75, 0.75]) {
       const axle = createAxleWheelset(0.85);
       axle.position.set(0, 0.27, bz + dz);
@@ -789,6 +784,5 @@ export function buildRailRampWagon(length, roof) {
       g.userData.wheels.push(axle);
     }
   }
-  g.add(bakeStatic(staticRoot));
   return g;
 }

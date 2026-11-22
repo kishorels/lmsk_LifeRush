@@ -2,6 +2,7 @@ import {BoxGeometry,CanvasTexture,Group,Mesh,MeshStandardMaterial,RepeatWrapping
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {roadsideTree} from './street-materials.js';
 import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
+import {FINALRUN_GATE} from './engine.js';
 import {branchForkClearance} from './road-events.js';
 import {hasCollegeRain, sceneWeather} from './weather.js';
 
@@ -22,14 +23,14 @@ export function createCollegeCampus(scene){
  function label(root,text,x,y,z){
   part(root,C.frame,x,y,z,.09,.74,4.06);
   if(typeof document==='undefined')return;
-  const canvas=document.createElement('canvas');canvas.width=640;canvas.height=120;
+  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
   const ctx=canvas.getContext('2d');if(!ctx)return;
-  const grad=ctx.createLinearGradient(0,0,640,120);grad.addColorStop(0,'#132a3a');grad.addColorStop(.5,'#1d4456');grad.addColorStop(1,'#112736');
-  ctx.fillStyle=grad;ctx.fillRect(0,0,640,120);
-  ctx.strokeStyle='#f59e0b';ctx.lineWidth=6;ctx.strokeRect(8,8,624,104);
-  ctx.strokeStyle='#7dd3fc';ctx.lineWidth=2;ctx.strokeRect(16,16,608,88);
-  ctx.fillStyle='#fff7e0';ctx.textAlign='center';ctx.font='900 42px system-ui, Arial';
-  ctx.fillText(text,320,74,568);
+  const grad=ctx.createLinearGradient(0,0,512,96);grad.addColorStop(0,'#132a3a');grad.addColorStop(.5,'#1d4456');grad.addColorStop(1,'#112736');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,512,96);
+  ctx.strokeStyle='#f59e0b';ctx.lineWidth=5;ctx.strokeRect(6,6,500,84);
+  ctx.strokeStyle='#7dd3fc';ctx.lineWidth=2;ctx.strokeRect(13,13,486,70);
+  ctx.fillStyle='#fff7e0';ctx.textAlign='center';ctx.font='900 34px system-ui, Arial';
+  ctx.fillText(text,256,60,456);
   const map=new CanvasTexture(canvas);map.colorSpace=SRGBColorSpace;
   const mesh=new Mesh(box,new MeshStandardMaterial({map,emissiveMap:map,emissive:0xffffff,emissiveIntensity:.18,roughness:.36,metalness:.14}));mesh.position.set(x+(x>0?-.05:.05),y,z);mesh.scale.set(.03,.66,3.94);root.add(mesh);
  }
@@ -121,8 +122,7 @@ export function createCollegeCampus(scene){
   // Bake small architectural details into a handful of meshes for mobile GPUs.
   root.updateMatrixWorld(true);const batches=new Map();
   root.traverse(object=>{if(!object.isMesh)return;const geo=(object.geometry.index?object.geometry.toNonIndexed():object.geometry.clone()).applyMatrix4(object.matrixWorld);if(!batches.has(object.material))batches.set(object.material,[]);batches.get(object.material).push(geo);});
-  const isTouch=typeof navigator!=='undefined'&&navigator.maxTouchPoints>0;
-  const merged=new Group();for(const [mat,list] of batches){const mesh=new Mesh(mergeGeometries(list),mat);mesh.receiveShadow=true;mesh.castShadow=!isTouch;merged.add(mesh);for(const geo of list)geo.dispose();}
+  const merged=new Group();for(const [mat,list] of batches){const mesh=new Mesh(mergeGeometries(list),mat);mesh.receiveShadow=true;mesh.castShadow=false;merged.add(mesh);for(const geo of list)geo.dispose();}
   return merged;
  }
  const templates=Array.from({length:6},(_,kind)=>build(kind));
@@ -140,7 +140,7 @@ export function createCollegeCampus(scene){
    const item=slots[slot];
    if(!college){item.root.visible=false;continue;}
    const anchor=campusAnchor(slot,state.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,state);
-   if(clr.hide){item.root.visible=false;continue;}
+   if(clr.hide||(state.isFinalRun&&anchor>=FINALRUN_GATE-55)){item.root.visible=false;continue;}
    item.root.visible=true;
    if(item.kind!==kind){item.root.clear();if(!cache[slot].has(kind))cache[slot].set(kind,templates[kind].clone());item.root.add(cache[slot].get(kind));item.kind=kind;}
    item.root.position.set(curveRelX(anchor,state),curveRelY(anchor,state)+clr.dropY,state.distance-anchor);

@@ -109,6 +109,9 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   display: block;
   background: #000000;
 }
+.intro-video[hidden] {
+  display: none !important;
+}
 .intro-video::-webkit-media-controls,
 .intro-video::-webkit-media-controls-enclosure,
 .intro-video::-webkit-media-controls-panel,
@@ -438,6 +441,121 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 }
 .select-screen > * {
   pointer-events: auto;
+}
+.select-screen > .menu-preview-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  background: #07142b;
+  pointer-events: none;
+}
+.menu-map-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.02);
+  transition: opacity 0.2s ease;
+}
+.menu-map-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(6, 18, 40, 0.56) 0%, rgba(6, 18, 40, 0.08) 28%, rgba(6, 18, 40, 0.14) 64%, rgba(5, 14, 32, 0.82) 100%);
+}
+.menu-hero-stage {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14%;
+  bottom: 24%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.game.hub-characters .menu-hero-stage {
+  top: 13%;
+  bottom: 27%;
+}
+.game.hub-maps .menu-hero-stage {
+  opacity: 0;
+  transform: scale(0.92);
+}
+.game.hub-settings .menu-hero-stage {
+  opacity: 0.36;
+}
+.menu-hero-podium {
+  position: absolute;
+  bottom: 6px;
+  width: min(214px, 56vw);
+  height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 229, 255, 0.55) 0%, rgba(14, 62, 128, 0.78) 54%, rgba(6, 18, 44, 0) 76%);
+  border: 2px solid rgba(0, 229, 255, 0.72);
+  box-shadow: 0 0 28px rgba(0, 229, 255, 0.58), inset 0 0 14px rgba(125, 211, 252, 0.58);
+}
+.menu-hero-img {
+  position: relative;
+  z-index: 2;
+  height: min(56vh, 385px);
+  max-height: 94%;
+  width: auto;
+  max-width: 72vw;
+  object-fit: contain;
+  object-position: bottom center;
+  margin-bottom: 14px;
+  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(0, 212, 255, 0.24));
+  animation: menuHeroFloat 3.4s ease-in-out infinite;
+  will-change: transform;
+}
+.menu-hero-stage.is-locked .menu-hero-img {
+  filter: blur(2.5px) brightness(0.6) saturate(0.65) drop-shadow(0 16px 24px rgba(0, 0, 0, 0.75));
+}
+@keyframes menuHeroFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+.run-loading-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 72;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 45%, rgba(10, 32, 68, 0.94) 0%, rgba(5, 14, 32, 0.98) 100%);
+  opacity: 1;
+  transition: opacity 0.22s ease;
+}
+.run-loading-veil[hidden] {
+  display: none !important;
+}
+.run-loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 28px;
+  border-radius: 22px;
+  background: linear-gradient(160deg, rgba(14, 42, 86, 0.95), rgba(7, 20, 46, 0.98));
+  border: 1.5px solid rgba(0, 212, 255, 0.65);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.7), 0 0 26px rgba(0, 212, 255, 0.22);
+  text-align: center;
+}
+.run-loading-card strong {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  color: #ffe268;
+}
+.run-loading-card small {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b8ddf8;
 }
 
 /* Top bar: Left Logo + Right Character Selector */
@@ -1935,3 +2053,226 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 
 /* v3.1.3 Settings: default 2-power selector */
 .power-settings{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:9px 11px;border:1px solid rgba(103,232,249,.55);border-radius:12px;background:linear-gradient(135deg,rgba(14,52,96,.88),rgba(18,36,66,.88))}.power-settings-text{display:grid;gap:2px;min-width:0}.power-settings-text strong{font-size:13px;color:#fff}.power-settings-text small{font-size:11px;font-weight:700;color:#7dd3fc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#btn-change-powers{flex:none;padding:8px 14px;border:1px solid #81efdb;border-radius:9px;background:#14695e;color:#fff;font:800 12px system-ui;cursor:pointer}#btn-change-powers:disabled{opacity:.45;cursor:default}
+
+/* FINAL ONE MAP INTRO CUTSCENE & REALISTIC 3D 3-2-1-START COUNTDOWN */
+.finalrun-intro-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 75;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.finalrun-intro-overlay[hidden] {
+  display: none !important;
+}
+.finalrun-intro-overlay.is-fading-out {
+  opacity: 0;
+  pointer-events: none;
+}
+.finalrun-countdown-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  perspective: 700px;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.52) 100%);
+}
+.finalrun-countdown-stage[hidden] {
+  display: none !important;
+}
+.finalrun-countdown-halo {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 196, 0, 0.48) 0%, rgba(220, 38, 38, 0.24) 48%, transparent 74%);
+}
+.finalrun-countdown-ring {
+  position: absolute;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  border: 3.5px solid rgba(255, 224, 102, 0.85);
+  box-shadow: 0 0 28px rgba(255, 183, 0, 0.75), inset 0 0 22px rgba(220, 38, 38, 0.55);
+  background: radial-gradient(circle at 35% 30%, rgba(30, 14, 6, 0.62), rgba(10, 5, 2, 0.84));
+}
+.finalrun-countdown-ring::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(255, 238, 170, 0.65);
+}
+.finalrun-countdown-shockwave {
+  position: absolute;
+  width: 164px;
+  height: 164px;
+  border-radius: 50%;
+  border: 3px solid #ffe066;
+  opacity: 0;
+}
+.finalrun-countdown-text {
+  position: relative;
+  z-index: 2;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-weight: 900;
+  font-size: clamp(86px, 23vw, 128px);
+  line-height: 1;
+  letter-spacing: -2px;
+  color: #fff6c2;
+  background: linear-gradient(180deg, #ffffff 0%, #fff3a8 26%, #f59e0b 58%, #9a3412 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 6px 0 #5c1906) drop-shadow(0 14px 26px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 22px rgba(255, 191, 0, 0.75));
+  transform-style: preserve-3d;
+}
+.finalrun-countdown-stage.is-start .finalrun-countdown-ring {
+  width: 280px;
+  height: 112px;
+  border-radius: 999px;
+  border-color: #fff3a8;
+  background: linear-gradient(135deg, rgba(153, 27, 27, 0.88) 0%, rgba(180, 83, 9, 0.92) 52%, rgba(120, 53, 15, 0.92) 100%);
+  box-shadow: 0 0 36px rgba(255, 204, 0, 0.9), inset 0 0 18px rgba(255, 238, 153, 0.5);
+}
+.finalrun-countdown-stage.is-start .finalrun-countdown-text {
+  font-size: clamp(50px, 13.5vw, 76px);
+  letter-spacing: 5px;
+  padding-left: 5px;
+  background: linear-gradient(180deg, #ffffff 0%, #fff7b8 35%, #ffd000 72%, #d97706 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 0 #69140e) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 26px rgba(255, 215, 0, 0.95));
+}
+.finalrun-countdown-stage.is-pop .finalrun-countdown-text {
+  animation: finalCountSlam 0.92s cubic-bezier(0.22, 1.35, 0.36, 1) forwards;
+}
+.finalrun-countdown-stage.is-pop .finalrun-countdown-ring {
+  animation: finalRingPulse 0.92s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.finalrun-countdown-stage.is-pop .finalrun-countdown-shockwave {
+  animation: finalShockRipple 0.82s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.finalrun-countdown-stage.is-start.is-pop .finalrun-countdown-text {
+  animation: finalStartBurst 0.62s cubic-bezier(0.18, 1.35, 0.32, 1) forwards;
+}
+@keyframes finalCountSlam {
+  0% {
+    opacity: 0;
+    transform: perspective(700px) translateZ(180px) scale(2.15) rotateX(22deg);
+  }
+  28% {
+    opacity: 1;
+    transform: perspective(700px) translateZ(0px) scale(0.92) rotateX(0deg);
+  }
+  46% {
+    opacity: 1;
+    transform: perspective(700px) translateZ(16px) scale(1.06) rotateX(-4deg);
+  }
+  78% {
+    opacity: 1;
+    transform: perspective(700px) translateZ(0px) scale(1.0) rotateX(0deg);
+  }
+  100% {
+    opacity: 0.18;
+    transform: perspective(700px) translateZ(-60px) scale(0.78) rotateX(0deg);
+  }
+}
+@keyframes finalStartBurst {
+  0% {
+    opacity: 0;
+    transform: perspective(700px) scale(0.35) rotateX(-18deg);
+  }
+  38% {
+    opacity: 1;
+    transform: perspective(700px) scale(1.12) rotateX(0deg);
+  }
+  70% {
+    opacity: 1;
+    transform: perspective(700px) scale(1.02) rotateX(0deg);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(700px) scale(1.18) rotateX(0deg);
+  }
+}
+@keyframes finalRingPulse {
+  0% { transform: scale(0.68) rotate(-25deg); opacity: 0; }
+  26% { transform: scale(1.06) rotate(4deg); opacity: 1; }
+  50% { transform: scale(0.98) rotate(0deg); opacity: 1; }
+  100% { transform: scale(1.02) rotate(12deg); opacity: 0.72; }
+}
+@keyframes finalShockRipple {
+  0% { transform: scale(0.88); opacity: 0.95; }
+  100% { transform: scale(2.15); opacity: 0; }
+}
+
+/* FINAL ONE 10,000m COMPLETION: SCREEN TURN OFF & COLLEGE INTRO VIDEO */
+.college-intro-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.college-intro-overlay[hidden] {
+  display: none !important;
+}
+.college-intro-overlay.is-fading-out {
+  opacity: 0;
+  pointer-events: none;
+}
+.college-intro-video {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.college-intro-overlay.is-playing-video .college-intro-video {
+  opacity: 1;
+}
+.college-screen-off-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: #000000;
+  opacity: 0;
+}
+.college-intro-overlay.is-screen-off .college-screen-off-flash {
+  animation: screenTurnOffEffect 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes screenTurnOffEffect {
+  0% {
+    opacity: 1;
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.85) 0%, rgba(12, 18, 28, 0.96) 55%, #000000 100%);
+    transform: scaleY(1);
+  }
+  28% {
+    opacity: 1;
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.2) 18%, #000000 36%);
+    transform: scaleY(0.035);
+  }
+  52% {
+    opacity: 1;
+    background: #000000;
+    transform: scaleY(1);
+  }
+  100% {
+    opacity: 1;
+    background: #000000;
+    transform: scaleY(1);
+  }
+}

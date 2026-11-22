@@ -1,4 +1,5 @@
 import {BoxGeometry, ExtrudeGeometry, Shape, Group, Mesh, MeshStandardMaterial, PlaneGeometry, SRGBColorSpace, TextureLoader} from './vendor/three.module.js';
+import {bakeGroup} from './bake-static-meshes.js';
 
 const styles={
   house:    {front:0,wall:0xf2e1c6,base:0x527e7b},
@@ -9,6 +10,9 @@ const styles={
   farmhouse:{front:5,wall:0xce9d74,base:0x875e45}
 };
 
+const REF_H = 5.1;
+const REF_W = REF_H * 1.48;
+
 export function createVillageHouses(){
   const box=new BoxGeometry(),panel=new PlaneGeometry();
   const end=new Shape();
@@ -16,6 +20,7 @@ export function createVillageHouses(){
   const gable=new ExtrudeGeometry(end,{depth:1,bevelEnabled:false}).translate(0,0,-.5).rotateY(Math.PI/2);
   const loader=typeof document==='undefined'?null:new TextureLoader();
   const materials=new Map();
+  const templates=new Map();
   function surface(name,color=0xffffff){
     const key=name+color;
     if(!materials.has(key)){
@@ -25,15 +30,16 @@ export function createVillageHouses(){
     }
     return materials.get(key);
   }
-  return (o)=>{
-    const style=styles[o.type],model=new Group();
-    const w=o.w*(style.wide?1.15:1),depth=o.h*.95,h=o.h*.59;
+  function getTemplate(type){
+    if(templates.has(type))return templates.get(type);
+    const style=styles[type],model=new Group();
+    const w=REF_W*(style.wide?1.15:1),depth=REF_H*.95,h=REF_H*.59;
     const plaster=surface('plaster',style.wall),base=surface('plaster',style.base);
-    const wood=surface('wood'),roof=surface(o.type==='thatched'?'thatch':'tile');
+    const wood=surface('wood'),roof=surface(type==='thatched'?'thatch':'tile');
     function part(mat,x,y,z,sx,sy,sz,geo=box){
       const mesh=new Mesh(geo,mat);
       mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);
-      mesh.castShadow=true;mesh.receiveShadow=true;model.add(mesh);return mesh;
+      model.add(mesh);return mesh;
     }
     // Local +Z is the entrance, facing diagonally toward the canal and the runner.
     part(base,0,.19,.35,w+.25,.38,depth+.9);
@@ -45,7 +51,7 @@ export function createVillageHouses(){
       for(const side of [-1,1])part(plaster,side*w/2,eave+.38,0,.14,.5,depth);
       part(base,0,eave+.29,depth/2,w,.18,.17);
     }else{
-      const pitch=o.type==='thatched'?.52:.31,rise=run*Math.tan(pitch);
+      const pitch=type==='thatched'?.52:.31,rise=run*Math.tan(pitch);
       for(const side of [-1,1]){
         const slope=part(roof,0,eave+rise*.5,side*run*.5,w+.7,.16,run/Math.cos(pitch));
         slope.rotation.x=side*pitch;
@@ -65,10 +71,20 @@ export function createVillageHouses(){
     part(roof,0,.45+postY,porchZ,w+.38,.13,porchDepth+.36).rotation.x=.13;
     // On approach the end wall remains visible beside the deeper entrance.
     for(const side of [-1,1]){
-      const frame=part(wood,side*(w/2+.035),.35+h*.55,-.2,.08,h*.44,depth*.35);
-      frame.castShadow=false;
+      part(wood,side*(w/2+.035),.35+h*.55,-.2,.08,h*.44,depth*.35);
       for(let slat=0;slat<5;slat++)part(base,side*(w/2+.087),.35+h*(.38+slat*.078),-.2,.055,.042,depth*.31);
     }
+    // Bake all ~25 house parts into ~5 draw calls; village houses sit outside the sun shadow frustum.
+    const baked=bakeGroup(model);
+    for(const mesh of baked.children){mesh.castShadow=false;mesh.receiveShadow=true;}
+    templates.set(type,baked);
+    return baked;
+  }
+  // Pre-build & pre-load all 6 house templates upfront so mid-run sections never stall on WebP load or bakeGroup.
+  for(const type of Object.keys(styles)) getTemplate(type);
+  return (o)=>{
+    const model=getTemplate(o.type).clone();
+    model.scale.set(o.w/REF_W,o.h/REF_H,o.h/REF_H);
     model.position.set(o.x,.19,o.z);
     model.rotation.y=1.03+o.angle*.5;
     return model;
