@@ -26,7 +26,7 @@ export function getSharedAudioContext() {
    sharedAudioContext = new AudioCtx();
   } catch {}
  }
- if (sharedAudioContext && sharedAudioContext.state === 'suspended') {
+ if (sharedAudioContext && ['suspended','interrupted'].includes(sharedAudioContext.state)) {
   sharedAudioContext.resume().catch(() => {});
  }
  return sharedAudioContext;
@@ -46,7 +46,7 @@ function getAudio(key) {
 }
 
 export function createSound() {
- let context, master, enabled = true, jetNoise, jetVoice, bgm = null, rainAudio = null, rainPlaying = false, audioUnlocked = false;
+ let context, master, enabled = true, jetNoise, jetVoice, rainAudio = null, rainPlaying = false, audioUnlocked = false;
  const volumes={music:1,coins:1,powerups:1,movement:1,damage:1,villain:1,ambience:1};
  let currentCategory='movement';
  const level=category=>volumes[category]??1;
@@ -59,24 +59,15 @@ export function createSound() {
  function loadSamples() {
   if (loadingSamples || !context?.decodeAudioData || typeof fetch === 'undefined') return;
   loadingSamples = true;
-  const entries = Object.entries(SAMPLES);
-  let i = 0;
-  const next = () => {
-   if (i >= entries.length) return;
-   const [key, path] = entries[i++];
-   if (!buffers.has(key)) {
+  async function decodeSamples() {
+   for (const [key,path] of Object.entries(SAMPLES)) {
     try {
-     const url = new URL(path, import.meta.url).href;
-     fetch(url)
-      .then(r => r.arrayBuffer())
-      .then(b => context.decodeAudioData(b))
-      .then(decoded => { buffers.set(key, decoded); })
-      .catch(() => {});
+     const response = await fetch(new URL(path, import.meta.url));
+     if (response.ok) buffers.set(key, await context.decodeAudioData(await response.arrayBuffer()));
     } catch {}
    }
-   setTimeout(next, 45);
-  };
-  setTimeout(next, 60);
+  }
+  setTimeout(decodeSamples, 60);
  }
 
  function playSample(key, volume = 0.8) {
@@ -127,31 +118,69 @@ export function createSound() {
   return false;
  }
 
- function initBgm() {
-  if (typeof Audio === 'undefined') return;
-  if (!bgm) {
-   try {
-    bgm = (typeof document !== 'undefined' && document.getElementById('bgm-player'))
-      || new Audio(new URL('./assets/bgm.mp3', import.meta.url).href);
-    bgm.loop = true;
-    bgm.volume = 0.45*level('music');
-   } catch (e) {
-    console.warn('Init BGM error:', e);
-   }
+ // Decode the bundled song once. Its loop then runs on the audio clock, independently of rendering.
+ let musicBuffer, musicLoading, musicSource, musicGain, mediaFallback;
+ let musicWanted = false, useMedia = false, musicOffset = 0, musicStartedAt = 0, duck = 1;
+
+ function updateMusicVolume() {
+  const volume = .45 * volumes.music * duck;
+  if (musicGain) musicGain.gain.setTargetAtTime(volume, context.currentTime, .05);
+  if (mediaFallback && mediaFallback.volume !== volume) mediaFallback.volume = volume;
+ }
+
+ function playMusic() {
+  if (!musicWanted || !enabled || musicSource) return;
+  if (musicBuffer) {
+   musicGain.gain.cancelScheduledValues(context.currentTime);
+   musicGain.gain.setValueAtTime(.45 * volumes.music * duck, context.currentTime);
+   const source = context.createBufferSource();
+   source.buffer = musicBuffer;
+   source.loop = true;
+   source.connect(musicGain);
+   source.start(0, musicOffset);
+   musicSource = source;
+   musicStartedAt = context.currentTime;
+  } else if (useMedia && typeof Audio !== 'undefined') {
+   mediaFallback ??= (typeof document !== 'undefined' && document.getElementById('bgm-player'))
+     || new Audio(new URL('./assets/bgm.mp3', import.meta.url).href);
+   mediaFallback.loop = true;
+   updateMusicVolume();
+   if (mediaFallback.paused) mediaFallback.play()?.catch(() => {});
   }
  }
 
  function startBgm() {
-  initBgm();
-  if (!bgm || !enabled) return;
-  if (bgm.paused) {
-   const p = bgm.play();
-   if (p !== undefined) p.catch(() => {});
+  if (!enabled) return;
+  musicWanted = true;
+  unlock();
+  if (musicBuffer || useMedia) { playMusic(); return; }
+  if (musicLoading) return;
+  if (!context?.decodeAudioData || typeof fetch === 'undefined') {
+   useMedia = true;
+   playMusic();
+   return;
   }
+  musicLoading = (async () => {
+   try {
+    const response = await fetch(new URL('./assets/bgm.mp3', import.meta.url));
+    if (!response.ok) throw new Error('Music unavailable');
+    musicBuffer = await context.decodeAudioData(await response.arrayBuffer());
+    musicGain = context.createGain();
+    musicGain.connect(context.destination);
+   } catch { useMedia = true; }
+   playMusic();
+  })();
  }
 
  function pauseBgm() {
-  if (bgm && !bgm.paused) bgm.pause();
+  musicWanted = false;
+  if (musicSource) {
+   musicOffset = (musicOffset + context.currentTime - musicStartedAt) % musicBuffer.duration;
+   musicSource.stop();
+   musicSource.disconnect();
+   musicSource = null;
+  }
+  mediaFallback?.pause();
  }
 
  function initRainAudio() {
@@ -222,7 +251,7 @@ export function createSound() {
   const phase = flightPhase(s.time);
   if (!enabled || !context?.createBuffer || context.state !== 'running' || s.mode !== 'running' || phase >= 1) {
    if (jetVoice) { jetVoice.source.stop(); jetVoice = null; }
-   if(bgm)bgm.volume=.45*level('music');
+   if (duck !== 1) { duck = 1; updateMusicVolume(); }
    return;
   }
   if (!jetVoice) {
@@ -240,15 +269,16 @@ export function createSound() {
    source.connect(filter).connect(gain).connect(master);
    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
    source.start();
-   jetVoice = { source, filter, gain };
+   jetVoice = { source, filter, gain, nextUpdate: 0 };
   }
+  if (context.currentTime < jetVoice.nextUpdate) return;
+  jetVoice.nextUpdate = context.currentTime + .08;
   const jetLevel = Math.exp(-Math.abs(phase - 0.83) * (phase < 0.83 ? 6 : 19)), now = context.currentTime;
   jetVoice.gain.gain.setTargetAtTime(1.35 * jetLevel * volumes.ambience, now, 0.05);
   jetVoice.filter.frequency.setTargetAtTime(320 + 2800 * jetLevel, now, 0.06);
   jetVoice.source.playbackRate.setTargetAtTime(phase < 0.83 ? 1.13 : 0.76, now, 0.18);
-  if (bgm && enabled) {
-   bgm.volume = 0.45 * volumes.music * (1 - 0.55 * jetLevel);
-  }
+  duck = 1 - .55 * jetLevel;
+  updateMusicVolume();
  }
 
  function play(name, cause, character = 'male') {
@@ -364,15 +394,14 @@ export function createSound() {
   pauseBgm,
   setVolumes(next){
    for(const key of Object.keys(volumes))if(Number.isFinite(Number(next?.[key])))volumes[key]=Math.max(0,Math.min(1,Number(next[key])));
-   if(bgm)bgm.volume=.45*volumes.music;
+   updateMusicVolume();
    if(rainAudio)rainAudio.volume=0.55*level('ambience');
   },
   getVolumes(){return {...volumes};},
   setEnabled(value) {
    enabled = value;
    if (master) master.gain.value = enabled ? 0.65 : 0;
-   if (value) { startBgm(); unlock(); }
-   else { pauseBgm(); stopRainAudio(); }
+   if (!value) { pauseBgm(); stopRainAudio(); }
   },
   update(s, character = 'male') {
    flyover(s);
