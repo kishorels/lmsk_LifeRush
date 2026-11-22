@@ -318,16 +318,18 @@ const saveDeferred=()=>{
     saveTimer = setTimeout(flushSave, 350);
   }
 };
+const PORTRAIT_VER = '3.8.3';
 let lastUserTapAt = 0;
 let menuImagesPreloaded = false;
 let lastMenuBgSrc = '';
 let lastMenuHeroSrc = '';
+let activeBgLayer = 0;
 function preloadMenuImages() {
   if (menuImagesPreloaded || typeof Image === 'undefined') return;
   menuImagesPreloaded = true;
   const urls = [
     'assets/maps/school.jpg', 'assets/maps/college.jpg', 'assets/maps/itpark.jpg', 'assets/maps/finalrun.jpg',
-    ...CHARACTER_ROSTER.map(c => `assets/portraits/${c.id}.png`)
+    ...CHARACTER_ROSTER.map(c => `assets/portraits/${c.id}.png?v=${PORTRAIT_VER}`)
   ];
   for (const url of urls) {
     const img = new Image();
@@ -335,23 +337,41 @@ function preloadMenuImages() {
     img.src = url;
   }
 }
-function updateMenuPreviewImages() {
-  const bgEl = $('menu-map-bg');
+function updateMenuPreviewImages(slideDir = 0) {
+  const bgA = $('menu-map-bg');
+  const bgB = $('menu-map-bg-next');
   const heroEl = $('menu-hero-img');
   const stageEl = $('menu-hero-stage');
   const mapKey = ['school', 'college', 'itpark', 'finalrun'].includes(selectedMap) ? selectedMap : 'school';
   const mapSrc = `assets/maps/${mapKey}.jpg`;
-  if (bgEl && lastMenuBgSrc !== mapSrc) {
+  if (bgA && lastMenuBgSrc !== mapSrc) {
+    const hadPrev = Boolean(lastMenuBgSrc);
     lastMenuBgSrc = mapSrc;
-    bgEl.src = mapSrc;
+    if (bgB && hadPrev) {
+      const incoming = activeBgLayer === 0 ? bgB : bgA;
+      const outgoing = activeBgLayer === 0 ? bgA : bgB;
+      activeBgLayer = activeBgLayer === 0 ? 1 : 0;
+      incoming.src = mapSrc;
+      incoming.classList.add('is-active');
+      outgoing.classList.remove('is-active');
+    } else {
+      bgA.src = mapSrc;
+      bgA.classList.add('is-active');
+      if (bgB) bgB.classList.remove('is-active');
+    }
   }
   const entry = currentHub === 'characters'
     ? (CHARACTER_ROSTER[carouselIndex] || CHARACTER_ROSTER[0])
     : (CHARACTER_ROSTER.find(c => c.id === equippedCharId) || CHARACTER_ROSTER[0]);
-  const heroSrc = `assets/portraits/${entry.id}.png`;
+  const heroSrc = `assets/portraits/${entry.id}.png?v=${PORTRAIT_VER}`;
   if (heroEl && lastMenuHeroSrc !== heroSrc) {
     lastMenuHeroSrc = heroSrc;
     heroEl.src = heroSrc;
+    if (slideDir !== 0) {
+      heroEl.classList.remove('is-slide-next', 'is-slide-prev');
+      void heroEl.offsetWidth;
+      heroEl.classList.add(slideDir > 0 ? 'is-slide-next' : 'is-slide-prev');
+    }
   }
   if (stageEl) {
     stageEl.classList.toggle('is-locked', currentHub === 'characters' && !isCharUnlocked(entry));
@@ -554,8 +574,8 @@ function updateCarouselUI() {
   const nextIdx = (carouselIndex + 1) % CHARACTER_ROSTER.length;
   const prevEntry = CHARACTER_ROSTER[prevIdx];
   const nextEntry = CHARACTER_ROSTER[nextIdx];
-  if ($('char-side-prev-img')) $('char-side-prev-img').src = `assets/portraits/${prevEntry.id}.png`;
-  if ($('char-side-next-img')) $('char-side-next-img').src = `assets/portraits/${nextEntry.id}.png`;
+  if ($('char-side-prev-img')) $('char-side-prev-img').src = `assets/portraits/${prevEntry.id}.png?v=${PORTRAIT_VER}`;
+  if ($('char-side-next-img')) $('char-side-next-img').src = `assets/portraits/${nextEntry.id}.png?v=${PORTRAIT_VER}`;
   if ($('char-side-prev')) $('char-side-prev').classList.toggle('is-locked', !isCharUnlocked(prevEntry));
   if ($('char-side-next')) $('char-side-next').classList.toggle('is-locked', !isCharUnlocked(nextEntry));
   if ($('char-side-prev-lock')) $('char-side-prev-lock').hidden = isCharUnlocked(prevEntry);
@@ -566,11 +586,11 @@ function updateCarouselUI() {
 }
 
 let activePreviewCharId = equippedCharId;
-function scheduleCarouselPreview() {
+function scheduleCarouselPreview(slideDir = 0) {
   lastUserTapAt = performance.now();
   const targetId = CHARACTER_ROSTER[carouselIndex]?.id || equippedCharId;
   activePreviewCharId = targetId;
-  updateMenuPreviewImages();
+  updateMenuPreviewImages(slideDir);
 }
 function startHeroPreloader() {
   // Zero-lag 2D image menu: no background 3D GLB downloads while browsing!
@@ -599,7 +619,7 @@ function selectUnlockedCharacter(id) {
 function moveCarousel(delta) {
   carouselIndex = (carouselIndex + delta + CHARACTER_ROSTER.length) % CHARACTER_ROSTER.length;
   updateCarouselUI();
-  scheduleCarouselPreview();
+  scheduleCarouselPreview(delta);
 }
 
 if ($('char-prev')) $('char-prev').onclick = () => moveCarousel(-1);
@@ -614,9 +634,10 @@ if ($('char-loading-veil')) {
 }
 document.querySelectorAll('#char-carousel-dots .char-dot').forEach((dot, idx) => {
   dot.onclick = () => {
+    const dir = idx === carouselIndex ? 0 : (idx > carouselIndex ? 1 : -1);
     carouselIndex = idx;
     updateCarouselUI();
-    scheduleCarouselPreview();
+    scheduleCarouselPreview(dir);
   };
 });
 if ($('char-equip-btn')) {

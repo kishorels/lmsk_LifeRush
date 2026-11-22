@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.8.1">
+  <link rel="stylesheet" href="style.css?v=3.8.3">
 </head>
 <body>
 <header>
@@ -162,11 +162,12 @@
     <div id="select-screen" class="select-screen" hidden>
       <!-- Zero-Lag 2D Scenic Map & Character Showcase Backdrop (Zero WebGL in Menus) -->
       <div id="menu-preview-stage" class="menu-preview-stage" aria-hidden="true">
-        <img id="menu-map-bg" class="menu-map-bg" src="assets/maps/school.jpg" alt="" decoding="async">
+        <img id="menu-map-bg" class="menu-map-bg is-active" src="assets/maps/school.jpg" alt="" decoding="async">
+        <img id="menu-map-bg-next" class="menu-map-bg" src="assets/maps/school.jpg" alt="" decoding="async">
         <div class="menu-map-vignette"></div>
         <div id="menu-hero-stage" class="menu-hero-stage">
           <div class="menu-hero-podium"></div>
-          <img id="menu-hero-img" class="menu-hero-img" src="assets/portraits/male.png" alt="" decoding="async">
+          <img id="menu-hero-img" class="menu-hero-img" src="assets/portraits/male.png?v=3.8.3" alt="" decoding="async">
         </div>
       </div>
 
@@ -413,6 +414,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.8.2"></script>
+<script type="module" src="boot.js?v=3.8.3"></script>
 </body>
 </html>
