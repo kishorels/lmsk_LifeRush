@@ -1,4 +1,4 @@
-import {GRANDFATHER_GATE} from './grandfather-route.js';
+import {GRANDFATHER_GATE,SCHOOL_ROAD_START,HOME_YARD_START} from './grandfather-route.js?v=3.9.2';
 import {planting,greeterStart,greeterSpacing,greetingFrame,propSizes} from './elder-landscape.js';
 import {SECTION_LENGTH,villageLayout,houseTypes,cowPose} from './village-layout.js';
 const streetImage = name => {
@@ -161,6 +161,18 @@ export function createLiteScenery(ctx, project, polygon, box) {
     if(shade.naturalWidth)ctx.drawImage(shade,p.x-width*p.k*.55,p.y-width*p.k*.085,width*p.k*1.1,width*p.k*.17);
   }
   const layouts=new Map();
+  const fieldTiles=new Map();
+  function fieldTexture(image){
+    if(!image.naturalWidth)return image;
+    if(!fieldTiles.has(image)){
+      const sheet=document.createElement('canvas');
+      sheet.width=2048;sheet.height=256;
+      const brush=sheet.getContext('2d');
+      for(let i=0;i<8;i++)brush.drawImage(image,i*256,0,256,256);
+      fieldTiles.set(image,sheet);
+    }
+    return fieldTiles.get(image);
+  }
   function village(distance,time,elder=false) {
     if(!villageImages.plaster){
       for(const name of [...houseTypes.map((_,i)=>'front-'+i),'plaster','tile','thatch','cow0','cow1','cow2','cow3','canal-clear','banana','haycart','well','palm','goat','grass','paddy','verge','lane','earth','neem']){
@@ -219,27 +231,36 @@ export function createLiteScenery(ctx, project, polygon, box) {
     }
     if(elder){
       const verge=elderImage('verge'),earth=elderImage('path');
-      const surfaces=[[-15,-3.66,verge,'#80834f'],[-3.68,3.68,earth,'#bd9169'],[3.66,15,verge,'#80834f']];
-      const step=1.5,period=8;
+      const sandSurfaces=[[-15,-3.66,verge,'#80834f'],[-3.68,3.68,earth,'#bd9169'],[3.66,15,verge,'#80834f']];
+      const schoolSurfaces=[[-86,-11.95,villageImages.verge,'#708249'],[-11.95,-6.45,villageImages['canal-clear'],'#438a98'],[-6.45,-3.55,villageImages.verge,'#708249'],[-3.55,3.55,villageImages.lane,'#787068'],[3.55,8,villageImages.verge,'#769042'],[8,90,villageImages.paddy,'#879d69']];
+      const step=2,period=8;
       for(let row=Math.floor((distance+172)/step);row>=Math.floor((distance-2)/step);row--){
         const near=Math.max(-2,row*step-distance),far=(row+1)*step-distance;
         if(far<=near)continue;
-        for(const [left,right,img,color] of surfaces){
+        const world=row*step-3;
+        const schoolRoad=world>=SCHOOL_ROAD_START&&world<HOME_YARD_START;
+        for(const [left,right,img,color] of schoolRoad?schoolSurfaces:sandSurfaces){
           const a=project(left,near),b=project(right,near),c=project(right,far),d=project(left,far);
           ctx.save();ctx.beginPath();ctx.moveTo(a.x,a.y+.5);ctx.lineTo(b.x,b.y+.5);
           ctx.lineTo(c.x,c.y-.5);ctx.lineTo(d.x,d.y-.5);ctx.closePath();
           ctx.fillStyle=color;ctx.fill();
           if(img.naturalWidth){
             ctx.clip();
-            const crop=img.height/period,sy=(period-1-(row%period+period)%period)*crop;
+            const texture=schoolRoad && right-left>30 ? fieldTexture(img) : img;
+            const tile=img===villageImages['canal-clear']?row+time*.25:row;
+            const crop=texture.height/period,sy=(period-1-(tile%period+period)%period)*crop;
             const hh=a.y-d.y,sourceH=crop*(far-near)/step;
             // Match the road width at both ends of the slice, especially underfoot.
             const strips=Math.max(1,Math.ceil(hh/7));
             for(let band=0;band<strips;band++){
               const t=(band+.5)/strips;
               const l=d.x+(a.x-d.x)*t,r=c.x+(b.x-c.x)*t;
-              ctx.drawImage(img,0,sy+sourceH*band/strips,img.width,sourceH/strips,l-.6,d.y+hh*band/strips-.5,r-l+1.2,hh/strips+1);
+              ctx.drawImage(texture,0,sy+sourceH*band/strips,texture.width,sourceH/strips,l-.6,d.y+hh*band/strips-.5,r-l+1.2,hh/strips+1);
             }
+          }
+          if(schoolRoad && left===-3.55 && world<SCHOOL_ROAD_START+14 && earth.naturalWidth){
+            ctx.clip();ctx.globalAlpha=1-(world-SCHOOL_ROAD_START)/14;
+            ctx.drawImage(earth,0,(period-1-(row%period+period)%period)*earth.height/period,earth.width,earth.height/period,d.x,d.y-.5,b.x-a.x,a.y-d.y+1);
           }
           ctx.restore();
         }
@@ -247,7 +268,7 @@ export function createLiteScenery(ctx, project, polygon, box) {
       const first=Math.floor(distance/6)-1;
       for(let i=first;i<first+30;i++){
         const z=i*6-distance+3;
-        if(z<0||z>170)continue;
+        if(i*6>=SCHOOL_ROAD_START||z<0||z>170)continue;
         for(const side of [-1,1]){
           const x=side*3.98;
           entries.push({z,draw:()=>{
@@ -265,6 +286,7 @@ export function createLiteScenery(ctx, project, polygon, box) {
       const firstSection=Math.floor(distance/28)-1;
       for(let index=firstSection;index<firstSection+8;index++){
         const centre=(index+.5)*28;
+        if(centre>=SCHOOL_ROAD_START)continue;
         for(const side of [-1,1])for(const tree of planting((index%4+4)%4,side)){
           const z=centre-tree.z-distance+3;
           if(z<0||z>165)continue;
@@ -288,23 +310,26 @@ export function createLiteScenery(ctx, project, polygon, box) {
         }
       }
       const visit=Math.max(0,Math.ceil((distance-greeterStart-6)/greeterSpacing)),at=greeterStart+visit*greeterSpacing,z=at-distance+3;
-      if(at<=GRANDFATHER_GATE&&z>0&&z<98)entries.push({z,draw:()=>{
+      if(at<SCHOOL_ROAD_START&&z>0&&z<98)entries.push({z,draw:()=>{
         const img=elderImage('greeting'),x=visit%2?4.52:-4.52,p=project(x,z),f=greetingFrame(at-distance);
         if(!img.naturalWidth)return;
         groundShade(x,z,.9);
         ctx.drawImage(img,(f%8)*img.width/8,Math.floor(f/8)*img.height/4,img.width/8,img.height/4,p.x-.49*p.k,p.y-1.86*p.k,.98*p.k,1.86*p.k);
       }});
-      return entries;
-    }
+      house({type:'veranda',x:0,w:8,h:5,yaw:0},GRANDFATHER_GATE+7.2-distance);
+      distance-=SCHOOL_ROAD_START;
+    } else {
     roadStrip(-36,-11.95,villageImages.verge,8,distance,'#708249');
     roadStrip(-11.95,-6.45,villageImages['canal-clear'],32,distance+time*.045,'#438a98');
     roadStrip(-6.45,-3.55,villageImages.verge,8,distance,'#708249');
     roadStrip(3.55,8,villageImages.verge,6,distance,'#769042');
     roadStrip(8,65,villageImages.paddy,12,distance,'#879d69');
     roadStrip(-3.55,3.55,villageImages.lane,32,distance,'#787068');
+    }
     const first=Math.max(0,Math.floor((distance-10)/SECTION_LENGTH));
     for(const key of layouts.keys())if(key<first||key>first+4)layouts.delete(key);
     for(let i=first;i<=first+4;i++){
+      if(elder && i*SECTION_LENGTH>=HOME_YARD_START-SCHOOL_ROAD_START) break;
       if(!layouts.has(i)){
         const layout=villageLayout(i);
         const random=layout.random;

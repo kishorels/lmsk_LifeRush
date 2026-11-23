@@ -6,12 +6,14 @@ import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 
 import {SECTION_LENGTH as LENGTH,villageLayout,houseTypes,cowPose} from './village-layout.js';
 import {createVillageHouses} from './village-house.js';
-import {roadCurveX} from './campus-layout.js';
+import {roadCurveX,roadCurveY} from './campus-layout.js?v=3.9.2';
 import {sceneWeather} from './weather.js';
+import {SCHOOL_ROAD_START,HOME_YARD_START} from './grandfather-route.js?v=3.9.2';
 const VISIBLE_SECTIONS = 7;
 
 export function createVillageRoute(scene) {
   const root = new Group();
+  root.name = 'school-village-road';
   root.visible = false;
   scene.add(root);
   const clock = {value: 0};
@@ -258,17 +260,20 @@ export function createVillageRoute(scene) {
   }
   const sections=Array(VISIBLE_SECTIONS);
   return state=>{
-    root.visible=state.map==='finalrun';
+    const homecoming=state.map==='grandfather';
+    const distance=homecoming?state.distance-SCHOOL_ROAD_START:state.distance;
+    root.visible=state.map==='finalrun'||(homecoming&&distance>-VISIBLE_SECTIONS*LENGTH);
     if(!root.visible)return;
     const activeCount=scene.userData?.lowEnd?5:VISIBLE_SECTIONS;
-    clock.value=state.time;
+    clock.value=state.time||0;
     const weather=sceneWeather(state);
     for(const mat of tintMaterials)mat.color.copy(day).lerp(night,weather.night*.75);
-    const first=Math.floor(state.distance/LENGTH)-1;
+    const first=Math.floor(distance/LENGTH)-1;
     for(let sIdx=0;sIdx<VISIBLE_SECTIONS;sIdx++){
       if(sections[sIdx])sections[sIdx].visible=false;
     }
     for(let index=first;index<first+activeCount;index++){
+      if(homecoming && (index<0 || index*LENGTH>=HOME_YARD_START-SCHOOL_ROAD_START))continue;
       const slot=((index%VISIBLE_SECTIONS)+VISIBLE_SECTIONS)%VISIBLE_SECTIONS;
       let group=sections[slot];
       if(!group||group.userData.index!==index){
@@ -283,11 +288,11 @@ export function createVillageRoute(scene) {
         group.userData.index=index;
       }
       group.visible=true;
-      group.position.set(-roadCurveX(state.distance,'finalrun'),0,state.distance-index*LENGTH);
+      group.position.set(-roadCurveX(state.distance,state.map),homecoming?-roadCurveY(state.distance,state.map):0,distance-index*LENGTH);
       for(const mesh of group.children){
         const cow=mesh.userData.cow;
         if(!cow)continue;
-        const pose=cowPose(state.time,index);
+        const pose=cowPose(clock.value,index);
         mesh.position.x=cow.x+mesh.userData.baseCurve+pose.offset;
         mesh.scale.x=cow.w*pose.flip;
         mesh.material=cows[pose.frame];

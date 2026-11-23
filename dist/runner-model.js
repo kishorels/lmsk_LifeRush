@@ -622,7 +622,8 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     const turnBlend = 1 - Math.exp(-6.5 * Math.min(.05, dt || .016));
     currentRotationY += (targetRotY - currentRotationY) * turnBlend;
     model.rotation.y = currentRotationY - lean * .65;
-    pace+=(Math.min(1.65,1+(state.speed-22)/40)-pace)*blend;
+    const targetPace=state.map==='grandfather'?Math.max(.24,Math.min(1.2,state.speed/17)):Math.min(1.65,1+(state.speed-22)/40);
+    pace+=(targetPace-pace)*blend;
     if (name === 'Run' || name === 'InjuredRun') next.setEffectiveTimeScale(pace);
     const stepDt = frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0));
     mixer.update(stepDt);

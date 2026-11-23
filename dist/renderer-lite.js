@@ -1,12 +1,11 @@
-import {GRANDFATHER_GATE} from './grandfather-route.js';
 import {branchForkClearance} from './road-events.js';
 import {pickupTypes} from './progression.js';
 import {drawLitePowerup} from './pickup-models.js';
 import {drawLiteCoin} from './coin.js';
-import {createLiteScenery} from './lite-scenery.js?v=2.2.1';
+import {createLiteScenery} from './lite-scenery.js?v=3.9.2';
 import {createLiteCollegeRain} from './college-rain-lite.js';
 import {sceneWeather,hasCollegeRain,weatherColor} from './weather.js';
-import {campusAnchor,campusKind,CAMPUS_SLOTS,roadCurveX,roadCurveY} from './campus-layout.js';
+import {campusAnchor,campusKind,CAMPUS_SLOTS,roadCurveX,roadCurveY} from './campus-layout.js?v=3.9.2';
 import {drawAirliner,flightPhase} from './airliner.js';
 import {repeatedVans,sideVehicleX} from './traffic-rules.js';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,height,chasePose,capturePose,isCapture,SCHOOL_GATE,FINALRUN_GATE,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION} from './engine.js';
@@ -236,7 +235,7 @@ function drawElder(){
   }
   if(!elderAtlas.naturalWidth)return false;
   const p=project(s.x*2.2,3),scale=p.k*2.2,lift=height(s);
-  let frame=Math.floor(s.time*Math.max(12,s.speed)*1.1)%12;
+  let frame=Math.floor(s.distance*1.1)%12;
   if(s.roll)frame=17+Math.min(5,Math.floor((1-s.roll/ROLL_DURATION)*6));
   else if(s.slide)frame=15+(s.slide<.32?1:0);
   else if(s.jump||s.drop)frame=12+Math.min(2,Math.floor((1-s.jump/JUMP_DURATION)*3));
@@ -503,8 +502,6 @@ if(s.map!=='grandfather'){school(scenery);traffic(scenery);}
 if(s.map==='finalrun')scenery.push(...sceneryArt.village(s.distance,s.time));
 else if(s.map==='grandfather'){
   scenery.push(...sceneryArt.village(s.distance,s.time,true));
-  const gate=GRANDFATHER_GATE-s.distance+3;
-  if(gate>0&&gate<178)scenery.push({z:gate,draw:()=>sceneryArt.villageProp('temple',0,gate)});
 }else for(let slot=0;slot<CAMPUS_SLOTS;slot++){
  const anchor=campusAnchor(slot,s.distance),kind=campusKind(anchor),z=anchor-s.distance+3;
  const coast=seaBridge ? branchForkClearance(anchor,s) : null;

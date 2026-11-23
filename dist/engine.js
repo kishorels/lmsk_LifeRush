@@ -1,7 +1,7 @@
 import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase,routeSegment} from './traffic-rules.js';
 import {pickupTypes as PICKUP_TYPES, powerById, runPickup} from './progression.js';
 import {ROAD_EVENT_TYPES,updateRoadEvents,triggerRoadEvent,forkPlanAt,branchElevationAt,branchOffsetXAt,roadHillY,LMSK_LETTERS} from './road-events.js';
-import {populateGrandfatherPath} from './grandfather-route.js';
+import {populateGrandfatherPath,memoryPace,GRANDFATHER_GATE} from './grandfather-route.js?v=3.9.2';
 export {trafficPattern, PICKUP_TYPES, ROAD_EVENT_TYPES, LMSK_LETTERS, powerById, forkPlanAt, branchElevationAt, branchOffsetXAt, roadHillY};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95, INJURED_DURATION = 10;
@@ -588,6 +588,10 @@ export function step(s, dt, random = Math.random) {
   if (s.nitro > 0) s.speed = Math.max(s.speed * 1.45, 56);
   if (s.turboBoost > 0) s.speed = Math.max(s.speed + 13, 46);
   s.speed *= trafficRate;
+  if (s.map === 'grandfather') {
+    s.speed = memoryPace(d, s.speed);
+    if (d >= GRANDFATHER_GATE - 12) s.lane = 0;
+  }
   s.distance += s.speed * dt;
   const villageFinale = s.map === 'grandfather';
   if (!villageFinale) updateRoadEvents(s, dt, vanSurface);

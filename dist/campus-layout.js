@@ -1,4 +1,5 @@
 import { FINALRUN_GATE } from './engine.js';
+import {SCHOOL_ROAD_START,HOME_YARD_START} from './grandfather-route.js?v=3.9.2';
 export const CAMPUS_SPACING=32,CAMPUS_SLOTS=10,CAMPUS_START=64;
 // A slot moves continuously until its whole section is behind the camera.
 export function campusAnchor(slot,distance) {
@@ -9,7 +10,11 @@ export function campusKind(anchor){return Math.floor((anchor-CAMPUS_START)/CAMPU
 
 // Smooth Kodaikanal-style S-curves and gentle mountain slopes on the College map.
 export function roadCurveX(distance, map = 'school', isFinalRun = false) {
- if (map === 'grandfather') return 4.6*Math.sin(distance/43) + 3.1*Math.sin(distance/71);
+ if (map === 'grandfather') {
+   if (distance < SCHOOL_ROAD_START) return (4.6*Math.sin(distance/43) + 3.1*Math.sin(distance/71)) * smootherstep((SCHOOL_ROAD_START-distance)/36);
+   const schoolCurve=roadCurveX(distance-SCHOOL_ROAD_START,'finalrun');
+   return distance<=HOME_YARD_START ? schoolCurve : schoolCurve+1.8*smootherstep((distance-HOME_YARD_START)/16);
+ }
  if (map === 'finalrun') {
    const entry=smootherstep((distance-45)/70), exit=smootherstep((FINALRUN_GATE-140-distance)/110);
    return entry*exit*(13*Math.sin(distance/51)+6*Math.sin(distance/29));
@@ -22,7 +27,7 @@ export function roadCurveX(distance, map = 'school', isFinalRun = false) {
 }
 
 export function roadCurveY(distance, map = 'school', isFinalRun = false) {
- if (map === 'grandfather') return .82*Math.sin(distance/39) + .48*Math.sin(distance/67);
+ if (map === 'grandfather') return (.82*Math.sin(distance/39) + .48*Math.sin(distance/67)) * smootherstep((SCHOOL_ROAD_START-distance)/36);
  if (map !== 'college') return 0;
  const ramp = Math.max(0, Math.min(1, (distance - 25) / 60));
  const ease = ramp * ramp * (3 - 2 * ramp);

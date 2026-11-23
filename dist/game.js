@@ -1,10 +1,11 @@
-import {GRANDFATHER_GATE} from './grandfather-route.js';
+import {playVillageMemory} from './village-memory-player.js';
+import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls} from './power-controls.js?v=3.3.0';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.6.8';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.9.2';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE} from './engine.js?v=3.6.8';
-import {createRenderer} from './renderer3d.js?v=3.9.1';
-import {createLiteRenderer} from './renderer-lite.js?v=3.3.1';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE} from './engine.js?v=3.9.2';
+import {createRenderer} from './renderer3d.js?v=3.9.2';
+import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 
 import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
 import {initializeBuildProfile} from './build-profile.js';
@@ -1188,7 +1189,7 @@ function launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chos
   if ($('toast')) {
     $('toast').hidden = false;
     $('toast').textContent = targetStage === 'grandfather'
-      ? `Grandfather’s village · Reach the temple at ${GRANDFATHER_GATE.toLocaleString()} m`
+      ? `Grandfather’s village · Follow the school road home at ${GRANDFATHER_GATE.toLocaleString()} m`
       : targetStage === 'itpark'
       ? `The Final Run · IT Park Stage · Reach ${FINALRUN_GATE.toLocaleString()}m`
       : targetStage === 'college'
@@ -1961,7 +1962,7 @@ function crash(completed=false){
   
   const elderFinale=s.map==='grandfather';
   const resultMessage=elderFinale
-    ? completed ? `Temple reached · ${runDist.toLocaleString()} m · ${s.coins} coins` : `Village trail · ${runDist} m · ${s.cause==='slide'?'Slide under the hanging cloth.':s.cause==='jump'?'Jump over the wooden obstacles.':'Follow the coins through the clearing.'}`
+    ? completed ? `Home reached · ${runDist.toLocaleString()} m · ${s.coins} coins` : `Village trail · ${runDist} m · ${s.cause==='slide'?'Slide under the hanging cloth.':s.cause==='jump'?'Jump over the wooden obstacles.':'Follow the coins through the clearing.'}`
     : isFinalRun
     ? hint
     : completed
@@ -1981,7 +1982,7 @@ function crash(completed=false){
     $('btn-share-score').hidden = isFinalRun;
     $('btn-share-score').onclick = () => shareReportCard(runDist, s.coins + bonusCoins, grade, s.nearMissCount || 0);
   }
-  $('tip').textContent = elderFinale ? (completed?'All four stages complete.':`Reach the village temple at ${GRANDFATHER_GATE.toLocaleString()} m.`) : isFinalRun
+  $('tip').textContent = elderFinale ? (completed?'All four stages complete.':`Reach his childhood home at ${GRANDFATHER_GATE.toLocaleString()} m.`) : isFinalRun
     ? `Reach ${FINALRUN_GATE.toLocaleString()}m on the village road to complete The Final Run.`
     : `Coins: ${s.coins + bonusCoins} | Bank: ${totalCoins.toLocaleString()} | Grade: ${grade}`;
 }
@@ -2088,7 +2089,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     pause();
     effects.pauseBgm?.();
-  } else if(sound && !game.classList.contains('mode-splash') && !finalIntroActive && !collegeIntroActive) {
+  } else if(sound && s.mode!=='remembering' && !game.classList.contains('mode-splash') && !finalIntroActive && !collegeIntroActive) {
     effects.startBgm?.();
   }
 });
@@ -2109,7 +2110,7 @@ document.addEventListener('visibilitychange',()=>{
 function tick(t) {
   const dt = prev ? Math.min(0.1, (t-prev)/1000) : 0;
   prev = t;
-  if (runLoadingActive) return;
+  if (runLoadingActive || s.mode === 'remembering') return;
   if (finalIntroActive || collegeIntroActive) {
     if (draw && cutsceneWarmupFrames > 0) {
       cutsceneWarmupFrames--;
@@ -2140,6 +2141,19 @@ function tick(t) {
 
   step(s, dt);
   const finishGate=s.map==='grandfather'?GRANDFATHER_GATE:(s.map==='finalrun'||s.isFinalRun)?FINALRUN_GATE:Infinity;
+  const memory=old==='running' && reachedMemory(s,distanceBefore);
+  if(memory) {
+    const run=s;
+    run.distance=memory.at;
+    run.speed=0;
+    run.mode='remembering';
+    effects.pauseBgm?.();
+    playVillageMemory(memory,sound,()=>{
+      if(s!==run) return;
+      if(memory.at===GRANDFATHER_GATE) {run.mode='finished';completeFinalRun();}
+      else {run.mode='running';if(sound) effects.startBgm?.();}
+    });
+  }
   if(old==='running'&&s.mode==='running'&&distanceBefore<finishGate&&s.distance>=finishGate){
     s.distance=finishGate;
     s.speed=0;

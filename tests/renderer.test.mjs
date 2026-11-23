@@ -5,14 +5,16 @@ test('3D scene builds and animates all obstacle types, characters and reset with
  elder.items=[{type:'jump',variant:'logs',lane:0,z:38}];
  const {Raycaster,Vector3}=await import(three);
  const down=new Vector3(0,-1,0);
- for(const distance of [0,38,215,704,1195,1200]){
+ for(const distance of [0,38,215,224,350,704,1183,1195,1200]){
    elder.distance=distance;
    draw(elder,'aged-elder');
    const root=canvas.scene.getObjectByName('grandfather-village');
    assert.equal(root?.visible,true);
    for(const x of [-2.2,0,2.2]){
-     const hits=new Raycaster(new Vector3(x,1,0),down,0,2).intersectObjects(root.children,false);
-     assert.ok(hits.some(hit=>Math.abs(hit.point.y-.03)<.01),'walkable dirt under the runner at '+distance);
+     const schoolRoad=distance>=224&&distance<1184;
+     const ground=schoolRoad?canvas.scene.getObjectByName('school-village-road'):root;
+     const hits=new Raycaster(new Vector3(x,1,0),down,0,2).intersectObjects(ground.children.filter(object=>object.visible),schoolRoad);
+     assert.ok(hits.some(hit=>Math.abs(hit.point.y-(schoolRoad?.115:distance>=1184?.11:.03))<.015),'walkable ground under the runner at '+distance);
    }
  }
  draw(village,'male');

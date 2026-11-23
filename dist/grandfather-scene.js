@@ -4,9 +4,9 @@ import {
   SphereGeometry, SRGBColorSpace, TextureLoader, TorusGeometry
 } from './vendor/three.module.js';
 import { bakeGroup } from './bake-static-meshes.js';
-import { roadCurveX, roadCurveY, roadCurveSlope } from './campus-layout.js';
+import { roadCurveX, roadCurveY, roadCurveSlope } from './campus-layout.js?v=3.9.2';
 import { createVillageHouses } from './village-house.js';
-import { GRANDFATHER_GATE } from './grandfather-route.js';
+import { GRANDFATHER_GATE, SCHOOL_ROAD_START, HOME_YARD_START } from './grandfather-route.js?v=3.9.2';
 
 import {planting,greetingFrame,greeterStart,greeterSpacing} from './elder-landscape.js';
 const windClock={value:0};
@@ -218,47 +218,38 @@ function villageArt() {
     }
     return bake(g);
   }
-  function temple() {
-    const g=new Group();arch(g);
-    const ochre=paint(0xc56a37,'village/tile'),cream=paint(0xf1d392,'village/plaster');
-    for(const side of [-1,1]){
-      part(g,cream,side*4.15,2.01,-1.2,2.7,4.0,4.5);
-      part(g,ochre,side*4.15,4.18,-1.2,3.15,.38,5.1);
-    }
-    for(let tier=0;tier<5;tier++){
-      const w=8.6-tier*1.35,d=4.6-tier*.6,y=5.4+tier*.94;
-      part(g,cream,0,y,-1,w,.85,d);
-      part(g,ochre,0,y+.46,-1,w+.52,.22,d+.50);
-      for(let i=-2;i<=2;i++)part(g,stone[1],i*w*.18,y,-.94+d/2,.23,.71,.21);
-    }
-    for(const x of [-.95,0,.95])part(g,brass,x,10.13,-1,.31,.55,.31,ball);
-    return bake(g);
-  }
-  art={prop,section,temple,paint};return art;
+  art={prop,section,makeHouse,paint};return art;
 }
 
 export function grandfatherObstacle(variant) { return villageArt().prop(variant); }
 
 export function createGrandfatherVillage(scene) {
   const root=new Group();root.name='grandfather-village';scene.add(root);
-  const {section,temple,paint}=villageArt();
-  function ribbon(left,right,height,material,repeatAcross,softEdge=false) {
-    const positions=[],uv=[],indices=[];
-    for(let z=-56;z<=GRANDFATHER_GATE+280;z+=2){
+  const {section,makeHouse,paint}=villageArt();
+  function ribbon(start,end,left,right,height,material,repeatAcross,softEdge=false,fade=false) {
+    const positions=[],uv=[],indices=[],colors=[];
+    for(let z=start;z<=end;z+=2){
       const x=roadCurveX(z,map),y=roadCurveY(z,map)+height;
       const i=positions.length/3;
       const leftEdge=softEdge?.13*Math.sin(z*.43)+.09*Math.cos(z*.86):0;
       const rightEdge=softEdge?.16*Math.cos(z*.36)+.07*Math.sin(z*.71):0;
       positions.push(x+left+leftEdge,y,-z,x+right+rightEdge,y,-z);
+      if(fade){const alpha=(end-z)/(end-start);colors.push(1,1,1,alpha,1,1,1,alpha);}
       uv.push(0,z/7,repeatAcross,z/7);
       if(i)indices.push(i-2,i-1,i,i,i-1,i+1);
     }
     const geo=new BufferGeometry();geo.setAttribute('position',new Float32BufferAttribute(positions,3));
+    if(fade)geo.setAttribute('color',new Float32BufferAttribute(colors,4));
     geo.setAttribute('uv',new Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
     const mesh=new Mesh(geo,material);mesh.receiveShadow=true;root.add(mesh);
   }
-  ribbon(-100,100,-.05,paint(0xf2eee2,'elder/verge'),46);
-  ribbon(-3.68,3.68,.03,paint(0xeee2cc,'elder/path'),1,true);
+  const verge=paint(0xf2eee2,'elder/verge'),earth=paint(0xeee2cc,'elder/path');
+  ribbon(-56,SCHOOL_ROAD_START,-100,100,-.05,verge,46);
+  ribbon(-56,SCHOOL_ROAD_START,-3.68,3.68,.03,earth,1,true);
+  const dust=earth.clone();dust.transparent=true;dust.vertexColors=true;dust.depthWrite=false;
+  ribbon(SCHOOL_ROAD_START,SCHOOL_ROAD_START+14,-3.57,3.57,.132,dust,1,true,true);
+  ribbon(HOME_YARD_START,GRANDFATHER_GATE+160,-100,100,-.05,verge,46);
+  ribbon(HOME_YARD_START,GRANDFATHER_GATE+20,-4.5,4.5,.11,earth,1,true);
   const templates=Array.from({length:4},(_,i)=>section(i));
   const slots=Array.from({length:8},()=>{const g=new Group();root.add(g);return g;});
   const greetingMat=new MeshBasicMaterial({map:paint(0xffffff,'elder/greeting').map?.clone()||null,alphaTest:.30,side:DoubleSide,toneMapped:false});
@@ -267,15 +258,14 @@ export function createGrandfatherVillage(scene) {
   host.name='village-welcome';host.castShadow=true;root.add(host);
   const horizon=new Mesh(new PlaneGeometry(405,136),new MeshBasicMaterial({map:paint(0xffffff,'elder/horizon').map,fog:false,toneMapped:false,depthWrite:false}));
   horizon.position.set(0,41,-176);horizon.renderOrder=-.5;scene.add(horizon);
-  const shrine=temple();
-  shrine.position.set(roadCurveX(GRANDFATHER_GATE,map),roadCurveY(GRANDFATHER_GATE,map),-GRANDFATHER_GATE);
-  root.add(shrine);
+  const home=makeHouse({type:'veranda',angle:0,x:roadCurveX(GRANDFATHER_GATE,map),z:-GRANDFATHER_GATE-4.2,w:8,h:5});
+  home.name='childhood-home';home.rotation.y=0;root.add(home);
   return state=>{
     root.visible=state.map===map;horizon.visible=root.visible;if(!root.visible)return;
     windClock.value=state.time||0;
     const d=state.distance;
     const visit=Math.max(0,Math.ceil((d-greeterStart-6)/greeterSpacing)),at=greeterStart+visit*greeterSpacing;
-    host.visible=at<=GRANDFATHER_GATE&&at-d<95;
+    host.visible=at<SCHOOL_ROAD_START&&at-d<95;
     if(host.visible){
       const side=visit%2?1:-1,frame=greetingFrame(at-d);
       host.position.set(roadCurveX(at,map)+side*4.52,roadCurveY(at,map)+.93,-at);
@@ -287,7 +277,7 @@ export function createGrandfatherVillage(scene) {
     for(let i=first;i<first+slots.length;i++){
       const slot=slots[(i%slots.length+slots.length)%slots.length];
       const center=(i+.5)*sectionLength;
-      slot.visible=center<GRANDFATHER_GATE+30;
+      slot.visible=center<SCHOOL_ROAD_START;
       if(!slot.visible||slot.userData.index===i)continue;
       const kind=(i%templates.length+templates.length)%templates.length;
       if(slot.userData.kind!==kind){slot.clear();slot.add(templates[kind].clone());slot.userData.kind=kind;}

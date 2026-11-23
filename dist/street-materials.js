@@ -2,7 +2,7 @@ import {
   CanvasTexture, Color, TextureLoader, RepeatWrapping, SRGBColorSpace, EquirectangularReflectionMapping,
   Mesh, MeshStandardMaterial, PlaneGeometry, DoubleSide, Group, InstancedMesh, Object3D, DynamicDrawUsage
 } from './vendor/three.module.js';
-import { roadCurveX, roadCurveY, roadCurveSlope, curveSlopeAt, curveRelX, curveRelY } from './campus-layout.js';
+import { roadCurveX, roadCurveY, roadCurveSlope, curveSlopeAt, curveRelX, curveRelY } from './campus-layout.js?v=3.9.2';
 import { wetCollegeAsphalt } from './college-rain3d.js';
 import { hasCollegeRain, sceneWeather } from './weather.js';
 export { roadCurveX, roadCurveY, roadCurveSlope, curveSlopeAt, curveRelX, curveRelY };

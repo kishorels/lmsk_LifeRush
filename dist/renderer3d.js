@@ -1,13 +1,13 @@
 import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
 import {createPickupModels,makeCoin} from './pickup-models.js?v=3.8.0';
 import {createGuardEffect} from './guard-effect.js?v=3.4.8';
-import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.9.0';
+import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.9.2';
 import {createSideTraffic,buildSideVehicle} from './side-vehicles.js?v=3.8.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
 import {createSky} from './sky-scene.js?v=3.9.0';
 import {createCampus} from './campus-scene.js?v=3.8.0';
-import {createGrandfatherVillage,grandfatherObstacle} from './grandfather-scene.js';
-import {createVillageRoute} from './village-scene.js?v=3.9.0';
+import {createGrandfatherVillage,grandfatherObstacle} from './grandfather-scene.js?v=3.9.2';
+import {createVillageRoute} from './village-scene.js?v=3.9.2';
 import {createCollegeCampus} from './college-scene.js?v=3.8.0';
 import {createItParkCampus} from './itpark-scene.js?v=3.8.0';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.8.0';
@@ -18,7 +18,7 @@ import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.8.0';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
 import {loadChaserModel} from './chaser-model.js?v=3.8.0';
-import {loadRunnerModel} from './runner-model.js?v=3.8.0';
+import {loadRunnerModel} from './runner-model.js?v=3.9.2';
 import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.6.8';
 export function createRenderer(canvas, callbacks = {}){
  const isTouchDevice=typeof navigator!=='undefined'&&(navigator.maxTouchPoints>0||(typeof window!=='undefined'&&'ontouchstart' in window));
@@ -476,7 +476,7 @@ export function createRenderer(canvas, callbacks = {}){
      if(updateCampus)updateCampus(s,weather);
    }
  }else if(updateCampus)updateCampus(s,weather);
- if(s.map==='finalrun'){if(!updateVillage)updateVillage=createVillageRoute(scene);updateVillage(s);}
+ if(s.map==='finalrun'||s.map==='grandfather'){if(!updateVillage)updateVillage=createVillageRoute(scene);updateVillage(s);}
  else if(updateVillage)updateVillage(s);
  if(s.map==='grandfather' && !updateGrandfather)updateGrandfather=createGrandfatherVillage(scene);
  if(updateGrandfather)updateGrandfather(s);
