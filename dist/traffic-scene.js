@@ -151,6 +151,7 @@ export function prewarmTrafficTemplates(map, targetGroup) {
    buildFreightSemiTruck(22, 2.8, 2),
    buildRedShuttleCart(20, 1.72),
    buildWDP4DTrain({ length: 12, roof: 2.8, lane: 0 }),
+   buildWDP4DTrain({ length: 18, roof: 2.6, lane: 0 }),
    buildWDP4DTrain({ length: 22, roof: 2.8, lane: 0, roofRide: true }),
    buildRailRampWagon(20, 1.72)
   );

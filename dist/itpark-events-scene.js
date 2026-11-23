@@ -643,9 +643,13 @@ export function createRoadEventsScene(scene) {
   const rockB = getMat('reRockB', { color: 0x8d7b69, roughness: 0.90, metalness: 0.02, flatShading: true });
   const rockC = getMat('reRockC', { color: 0x5f544b, roughness: 0.94, metalness: 0.02, flatShading: true });
   const rockDark = getMat('reRockD', { color: 0x4a413a, roughness: 0.96, metalness: 0.02 });
-  const caveGlass = getMat('reCaveGlass', {
-    color: 0xaee9ff, roughness: 0.04, metalness: 0.3, transparent: true, opacity: 0.26, depthWrite: false, emissive: 0x38bdf8, emissiveIntensity: 0.12
+  const caveGlass = new MeshBasicMaterial({
+    color: 0xaee9ff, transparent: true, opacity: 0.24, depthWrite: false
   });
+  const caveFoamMat = new MeshBasicMaterial({
+    color: 0xe6f8ff, transparent: true, opacity: 0.72, depthWrite: false
+  });
+  const isTouchScene = Boolean(scene.userData?.isTouch);
   const hazard = hazardMat();
   const chevLeft = tunnelChevronMat(false);
   const chevRight = tunnelChevronMat(true);
@@ -894,23 +898,25 @@ export function createRoadEventsScene(scene) {
     }
     return bakeGroup(g);
   }
-  function makeInstancedPool(tpl, maxCount, renderOrderOverride = 0) {
+  const skyDeckWorld = new Group();
+  skyLoop.add(skyDeckWorld);
+  function makeInstancedPool(tpl, maxCount, renderOrderOverride = 0, allowShadow = false) {
     return tpl.children.map(child => {
       const inst = new InstancedMesh(child.geometry, child.material, maxCount);
-      inst.receiveShadow = child.receiveShadow;
+      inst.receiveShadow = allowShadow && child.receiveShadow && child.material !== skyRailGlass;
       inst.frustumCulled = false;
       inst.instanceMatrix.setUsage(DynamicDrawUsage);
       if (child.material === skyGlassFloor) inst.renderOrder = 2;
       else if (child.material === skyRailGlass) inst.renderOrder = 3;
       else if (renderOrderOverride) inst.renderOrder = renderOrderOverride;
       inst.count = 0;
-      skyLoop.add(inst);
+      skyDeckWorld.add(inst);
       return inst;
     });
   }
-  const skyDeckInsts = makeInstancedPool(buildSkyBayDeckTemplate(), skyBayCount);
-  const skyPierInsts = makeInstancedPool(buildSkyPierTemplate(), Math.ceil(skyBayCount / 2) + 1);
-  const skyQuayInsts = makeInstancedPool(quayTemplate, skyBayCount);
+  const skyDeckInsts = makeInstancedPool(buildSkyBayDeckTemplate(), skyBayCount, 0, true);
+  const skyPierInsts = makeInstancedPool(buildSkyPierTemplate(), Math.ceil(skyBayCount / 2) + 1, 0, false);
+  const skyQuayInsts = makeInstancedPool(quayTemplate, skyBayCount, 0, false);
   const pierFoamInst = new InstancedMesh(ringGeo, foamMat, skyBayCount);
   pierFoamInst.frustumCulled = false;
   pierFoamInst.renderOrder = 1;
@@ -920,6 +926,7 @@ export function createRoadEventsScene(scene) {
   const skyDummy = new Object3D();
   const foamDummy = new Object3D();
   foamDummy.rotation.order = 'YXZ';
+  let lastSkyBay = null, lastSkyPlanStart = null, lastSkyBranchStart = null, lastSkyBranchEnd = null, lastSkyPreview = null;
   // Zero-mesh bay markers preserve world-space pier coordinates on glass-bridge-deck with 0 draw calls.
   const skyBayMarkers = Array.from({ length: skyBayCount }, (_, i) => {
     const marker = new Group();
@@ -955,7 +962,9 @@ export function createRoadEventsScene(scene) {
     part(g, cyanLed, 0, 14.08, 0, 7.8, 0.14, 0.34);
     part(g, metroWhite, 0, 20.6, 0, 7.6, 0.88, 1.15);
     part(g, cyanLed, 0, 20.1, 0, 6.8, 0.16, 0.36);
-    return bakeGroup(g);
+    const baked = bakeGroup(g);
+    for (const c of baked.children) c.receiveShadow = false;
+    return baked;
   }
   const pylonTpl = buildSeaBridgePylon();
   const bridgePylons = [0, 1, 2, 3].map(() => {
@@ -1062,26 +1071,24 @@ export function createRoadEventsScene(scene) {
   const oceanBaseMat = new MeshStandardMaterial({
     color: 0x0b9cd1,
     map: oceanTex.colorMap,
-    bumpMap: scene.userData?.lowEnd ? null : oceanTex.bumpMap,
+    bumpMap: (scene.userData?.lowEnd || isTouchScene) ? null : oceanTex.bumpMap,
     bumpScale: 0.28,
     roughness: 0.08,
     metalness: 0.62,
     envMapIntensity: 1.9
   });
-  const oceanSwellMat = new MeshStandardMaterial({
+  const oceanSwellMat = new MeshBasicMaterial({
     color: 0xa5f3fc,
     map: oceanTex.swellMap,
-    roughness: 0.05,
-    metalness: 0.35,
     transparent: true,
-    opacity: 0.36,
+    opacity: 0.34,
     depthWrite: false
   });
   const seaPlaneGeo = new PlaneGeometry(720, 440);
   seaPlaneGeo.rotateX(-Math.PI / 2);
   const seaBaseMesh = new Mesh(seaPlaneGeo, oceanBaseMat);
   seaBaseMesh.position.set(0, SEA_Y, -145);
-  seaBaseMesh.receiveShadow = true;
+  seaBaseMesh.receiveShadow = false;
   seaWorld.add(seaBaseMesh);
 
   const seaSwellMesh = new Mesh(seaPlaneGeo, oceanSwellMat);
@@ -1255,7 +1262,7 @@ export function createRoadEventsScene(scene) {
 
     return new MeshStandardMaterial({
       map: tex,
-      bumpMap: bumpTex,
+      bumpMap: (scene.userData?.lowEnd || isTouchScene) ? null : bumpTex,
       bumpScale: 0.10,
       roughness: 0.84,
       metalness: 0.04
@@ -1343,7 +1350,7 @@ export function createRoadEventsScene(scene) {
 
     return new MeshStandardMaterial({
       map: tex,
-      bumpMap: bumpTex,
+      bumpMap: (scene.userData?.lowEnd || isTouchScene) ? null : bumpTex,
       bumpScale: 0.06,
       roughness: 0.92,
       metalness: 0.02
@@ -1646,15 +1653,11 @@ export function createRoadEventsScene(scene) {
     tex.wrapS = RepeatWrapping;
     tex.wrapT = RepeatWrapping;
     tex.repeat.set(1, 2);
-    const mat = new MeshStandardMaterial({
+    const mat = new MeshBasicMaterial({
       map: tex,
-      emissiveMap: tex,
-      emissive: 0x38bdf8,
-      emissiveIntensity: 0.82,
-      roughness: 0.12,
-      metalness: 0.25,
       transparent: true,
       opacity: 0.84,
+      depthWrite: false,
       side: DoubleSide
     });
     mat.userData = { tex };
@@ -1685,10 +1688,12 @@ export function createRoadEventsScene(scene) {
       part(bay, rockDark, side * 6.05, 3.8, 0, 1.5, 7.8, BAY_LEN + 0.04);
       part(bay, rockDark, side * 4.45, CAVE_ROOF_Y + 0.25, 0, 3.1, 0.75, BAY_LEN + 0.04);
       // Rugged faceted boulders arching inward from road edge up to the skylight
-      const profile = [[5.40, 0.95, 1.15], [5.30, 2.55, 1.20], [5.15, 4.15, 1.15], [4.70, 5.65, 1.10], [3.95, 6.90, 1.00]];
-      const lowCave = Boolean(scene.userData?.lowEnd);
-      const rows = lowCave ? [-5.3, 0, 5.3] : [-6.4, -3.2, 0, 3.2, 6.4];
-      const zStretch = lowCave ? 1.45 : 1.0;
+      const compactCave = Boolean(scene.userData?.lowEnd || isTouchScene);
+      const profile = compactCave
+        ? [[5.40, 1.05, 1.34], [5.25, 2.85, 1.38], [4.95, 4.75, 1.32], [4.10, 6.55, 1.24]]
+        : [[5.40, 0.95, 1.15], [5.30, 2.55, 1.20], [5.15, 4.15, 1.15], [4.70, 5.65, 1.10], [3.95, 6.90, 1.00]];
+      const rows = compactCave ? [-5.3, 0, 5.3] : [-6.4, -3.2, 0, 3.2, 6.4];
+      const zStretch = compactCave ? 1.52 : 1.0;
       rows.forEach((rz, ri) => {
         profile.forEach(([px, py, r], pi) => {
           const seed = ri * 13 + pi * 7 + (side > 0 ? 101 : 0);
@@ -1713,7 +1718,7 @@ export function createRoadEventsScene(scene) {
 
       // Cascading 3D Waterfall sheets pouring down rock walls + frothing splash pools at base
       part(bay, waterfallMat, side * 4.38, 3.85, 0, 0.14, 6.2, 3.4);
-      part(bay, foamMat, side * 4.15, 0.32, 0, 0.95, 0.28, 3.8);
+      part(bay, caveFoamMat, side * 4.15, 0.32, 0, 0.95, 0.28, 3.8);
     }
     const signalPink = getMat('metroPink', {color:0xff457e,emissive:0xcc1353,emissiveIntensity:.65});
     for (const lane of [-1,0,1]) {
@@ -1724,7 +1729,14 @@ export function createRoadEventsScene(scene) {
       part(bay,side<0?signalPink:cyanLed,side*3.78,1.8,0,.1,.16,15.8);
       part(bay,warmLamp,side*3.82,3.6,-5,.14,.46,.32);
     }
-    return bakeGroup(bay);
+    const bakedBay = bakeGroup(bay);
+    // Keep shadows on the tunnel asphalt & rails while skipping expensive PCF lookups on rock walls & ceiling lights.
+    for (const c of bakedBay.children) {
+      if (c.material !== asphalt && c.material !== darkMetal && c.material !== steel) {
+        c.receiveShadow = false;
+      }
+    }
+    return bakedBay;
   }
 
   const caveTemplate = buildCaveBay();
@@ -1732,24 +1744,35 @@ export function createRoadEventsScene(scene) {
   for (const part of [...caveTemplate.children]) {
     if (part.material.transparent) glassTemplate.add(part);
   }
-  // Short batches keep frustum culling effective around bends. Glass, water
-  // and foam remain individual meshes for back-to-front transparency sorting.
-  const baysPerBatch = 6;
-  const tunnelBatches = Array.from({ length: BAY_COUNT / baysPerBatch }, () => {
-    const opaque = caveTemplate.children.map(part => {
-      const mesh = new InstancedMesh(part.geometry, part.material, baysPerBatch);
-      mesh.receiveShadow = part.receiveShadow;
-      tunLoop.add(mesh);
-      return mesh;
-    });
-    const glass = Array.from({ length: baysPerBatch }, () => {
-      const bay = glassTemplate.clone();
-      bay.matrixAutoUpdate = false;
-      tunLoop.add(bay);
-      return bay;
-    });
-    return { opaque, glass };
+  // Single instanced batch for opaque tunnel cuts 40 -> ~10 draw calls and avoids CPU computeBoundingSphere stalls at high speed!
+  // On mobile touch GPUs, instancing transparent skylight/waterfalls cuts 72 individual transparent draws -> 3 instanced draws!
+  const baysPerBatch = BAY_COUNT;
+  const tunnelOpaque = caveTemplate.children.map(part => {
+    const mesh = new InstancedMesh(part.geometry, part.material, baysPerBatch);
+    mesh.receiveShadow = part.receiveShadow;
+    mesh.frustumCulled = false;
+    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    mesh.count = 0;
+    tunLoop.add(mesh);
+    return mesh;
   });
+  const tunnelGlassInsts = isTouchScene ? glassTemplate.children.map(part => {
+    const mesh = new InstancedMesh(part.geometry, part.material, baysPerBatch);
+    mesh.receiveShadow = false;
+    mesh.frustumCulled = false;
+    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    mesh.renderOrder = part.material === caveGlass ? 2 : 1;
+    mesh.count = 0;
+    tunLoop.add(mesh);
+    return mesh;
+  }) : null;
+  const tunnelGlassGroups = isTouchScene ? null : Array.from({ length: baysPerBatch }, () => {
+    const bay = glassTemplate.clone();
+    bay.matrixAutoUpdate = false;
+    tunLoop.add(bay);
+    return bay;
+  });
+  const tunDummy = new Object3D();
   let lastTunnelBay, lastPlanStart, lastCurveStart, lastCurveEnd;
   function positionTunnel(state, plan) {
     const first = Math.max(0, Math.floor((state.distance - plan.start - 32) / BAY_LEN));
@@ -1761,31 +1784,40 @@ export function createRoadEventsScene(scene) {
     lastCurveStart = state.branchStart;
     lastCurveEnd = state.branchEnd;
 
-    const tunFar = scene.userData?.ultraLow ? 158 : scene.userData?.lowEnd ? 210 : Infinity;
-    const tunGlassFar = scene.userData?.ultraLow ? 78 : tunFar;
-    let n = first;
-    for (const { opaque, glass } of tunnelBatches) {
-      let count = 0;
-      for (const bay of glass) {
-        const start = plan.start + n++ * BAY_LEN;
-        const length = Math.min(BAY_LEN, plan.end - start);
-        const center = start + length / 2;
-        const relZ = center - state.distance;
-        const inRange = length > 0 && relZ <= tunFar;
-        bay.visible = inRange && relZ <= tunGlassFar;
-        if (!inRange) continue;
-        bay.position.set(branchCurveX(center, state), branchCurveY(center, state), plan.start - center);
-        bay.rotation.y = -Math.atan(curveSlopeAt(center, state));
-        bay.scale.z = length / BAY_LEN;
-        bay.updateMatrix();
-        for (const mesh of opaque) mesh.setMatrixAt(count, bay.matrix);
-        count++;
+    const tunFar = scene.userData?.ultraLow ? 158 : scene.userData?.lowEnd ? 195 : isTouchScene ? 225 : Infinity;
+    const tunGlassFar = scene.userData?.ultraLow ? 78 : scene.userData?.lowEnd ? 115 : isTouchScene ? 155 : tunFar;
+    let count = 0;
+    let glassCount = 0;
+    for (let bi = 0; bi < baysPerBatch; bi++) {
+      const start = plan.start + (first + bi) * BAY_LEN;
+      const length = Math.min(BAY_LEN, plan.end - start);
+      const center = start + length / 2;
+      const relZ = center - state.distance;
+      const inRange = length > 0 && relZ <= tunFar;
+      const bay = tunnelGlassGroups ? tunnelGlassGroups[bi] : tunDummy;
+      if (tunnelGlassGroups) bay.visible = inRange && relZ <= tunGlassFar;
+      if (!inRange) continue;
+      bay.position.set(branchCurveX(center, state), branchCurveY(center, state), plan.start - center);
+      bay.rotation.y = -Math.atan(curveSlopeAt(center, state));
+      bay.scale.set(1, 1, length / BAY_LEN);
+      bay.updateMatrix();
+      for (const mesh of tunnelOpaque) mesh.setMatrixAt(count, bay.matrix);
+      count++;
+      if (tunnelGlassInsts && relZ <= tunGlassFar) {
+        for (const mesh of tunnelGlassInsts) mesh.setMatrixAt(glassCount, bay.matrix);
+        glassCount++;
       }
-      for (const mesh of opaque) {
-        mesh.count = count;
-        mesh.visible = count > 0;
+    }
+    for (const mesh of tunnelOpaque) {
+      mesh.count = count;
+      mesh.visible = count > 0;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    if (tunnelGlassInsts) {
+      for (const mesh of tunnelGlassInsts) {
+        mesh.count = glassCount;
+        mesh.visible = glassCount > 0;
         mesh.instanceMatrix.needsUpdate = true;
-        if (count) mesh.computeBoundingSphere();
       }
     }
   }
@@ -1913,7 +1945,11 @@ export function createRoadEventsScene(scene) {
         part(trainRaw, whiteLed, noseX + dir * 0.56, 0.65, -0.62, 0.12, 0.22, 0.34);
       }
     }
-    return { deckTpl: bakeGroup(deckRaw), trainTpl: bakeGroup(trainRaw) };
+    const deckTpl = bakeGroup(deckRaw);
+    for (const c of deckTpl.children) c.receiveShadow = false;
+    const trainTpl = bakeGroup(trainRaw);
+    for (const c of trainTpl.children) c.receiveShadow = false;
+    return { deckTpl, trainTpl };
   }
   const metroTpls = buildMetroViaductTemplates();
   function buildMetroViaduct() {
@@ -2140,6 +2176,7 @@ export function createRoadEventsScene(scene) {
   bolt2.rotation.y = 0.3;
   lightningBolts.add(bolt1, bolt2);
 
+  let lastTreeWindStep = -1;
   const updateRoadEvents = (state, weather) => {
     const running = state.mode === 'running' || state.mode === 'countdown' || state.mode === 'starting';
     const isPark = state.map === 'itpark';
@@ -2201,36 +2238,48 @@ export function createRoadEventsScene(scene) {
       portalPreview.rotation.y = -Math.atan(roadCurveSlope(plan.start, state.map));
     }
 
-    // Continuous 1,000m Full-Width 3-Lane Curved Glass Bridge Loop (Instanced!) + Realistic Ocean Sea View!
+    // Continuous 1,000m Full-Width 3-Lane Curved Glass Bridge Loop (Instanced + 16m cached!) + Realistic Ocean Sea View!
     const onSky = isBridgePreview || ((running || ['paused','falling','captured','crashed'].includes(state.mode)) && chosen === 'skybridge' && state.distance >= plan.start - 1 && state.distance <= plan.end + 4);
     skyLoop.visible = onSky;
     if (onSky) {
-      let deckCount = 0, pierCount = 0, quayCount = 0, foamCount = 0;
       const tNow = state.time || 0;
+      let foamCount = 0;
       if (isBridgePreview) {
-        for (let offset = 0; offset < skyBayCount; offset++) {
-          const bayZ = 8 - offset * BAY_LEN;
-          const marker = skyBayMarkers[offset];
-          marker.visible = bayZ > -340;
-          if (!marker.visible) continue;
-          marker.position.set(0, 0, bayZ);
-          marker.rotation.set(0, 0, 0);
-          marker.scale.set(1, 1, 1);
-          marker.updateMatrix();
-          for (const inst of skyDeckInsts) inst.setMatrixAt(deckCount, marker.matrix);
-          deckCount++;
-          if (offset % 2 === 0 && pierCount < skyPierInsts[0].instanceMatrix.count) {
-            for (const inst of skyPierInsts) inst.setMatrixAt(pierCount, marker.matrix);
-            pierCount++;
-            for (const side of [-1, 1]) {
-              if (foamCount >= skyBayCount) break;
-              foamDummy.position.set(side * 3.45, SEA_Y + 0.22, bayZ);
-              foamDummy.rotation.set(Math.PI / 2, 0, 0);
-              foamDummy.scale.set(2.45, 2.75, 0.35);
-              foamDummy.updateMatrix();
-              pierFoamInst.setMatrixAt(foamCount++, foamDummy.matrix);
+        skyDeckWorld.position.set(0, 0, 0);
+        if (lastSkyPreview !== true) {
+          lastSkyPreview = true;
+          lastSkyBay = null;
+          let deckCount = 0, pierCount = 0;
+          for (let offset = 0; offset < skyBayCount; offset++) {
+            const bayZ = 8 - offset * BAY_LEN;
+            const marker = skyBayMarkers[offset];
+            marker.visible = bayZ > -340;
+            if (!marker.visible) continue;
+            marker.position.set(0, 0, bayZ);
+            marker.rotation.set(0, 0, 0);
+            marker.scale.set(1, 1, 1);
+            marker.updateMatrix();
+            for (const inst of skyDeckInsts) inst.setMatrixAt(deckCount, marker.matrix);
+            deckCount++;
+            if (offset % 2 === 0 && pierCount < skyPierInsts[0].instanceMatrix.count) {
+              for (const inst of skyPierInsts) inst.setMatrixAt(pierCount, marker.matrix);
+              pierCount++;
+              for (const side of [-1, 1]) {
+                if (foamCount >= skyBayCount) break;
+                foamDummy.position.set(side * 3.45, SEA_Y + 0.22, bayZ);
+                foamDummy.rotation.set(Math.PI / 2, 0, 0);
+                foamDummy.scale.set(2.45, 2.75, 0.35);
+                foamDummy.updateMatrix();
+                pierFoamInst.setMatrixAt(foamCount++, foamDummy.matrix);
+              }
             }
           }
+          for (const inst of skyDeckInsts) { inst.count = deckCount; inst.visible = deckCount > 0; inst.instanceMatrix.needsUpdate = true; }
+          for (const inst of skyPierInsts) { inst.count = pierCount; inst.visible = pierCount > 0; inst.instanceMatrix.needsUpdate = true; }
+          for (const inst of skyQuayInsts) { inst.count = 0; inst.visible = false; }
+          pierFoamInst.count = foamCount;
+          pierFoamInst.visible = foamCount > 0;
+          pierFoamInst.instanceMatrix.needsUpdate = true;
         }
         bridgePylons[0].visible = true;
         bridgePylons[0].position.set(0, 0, -56);
@@ -2243,6 +2292,10 @@ export function createRoadEventsScene(scene) {
         returnHeadland.visible = false;
       } else {
         const firstBay = Math.max(0, Math.floor((state.distance - plan.start - 40) / BAY_LEN));
+        const skyFar = ultraLow ? 148 : lowEnd ? 195 : isTouchScene ? 245 : 335;
+        skyDeckWorld.position.set(-branchCurveX(state.distance, state), -branchCurveY(state.distance, state), state.distance - plan.start);
+        const needDeckRebuild = lastSkyPreview !== false || firstBay !== lastSkyBay || plan.start !== lastSkyPlanStart || state.branchStart !== lastSkyBranchStart || state.branchEnd !== lastSkyBranchEnd;
+        let deckCount = 0, pierCount = 0, quayCount = 0;
         for (let offset = 0; offset < skyBayCount; offset++) {
           const n = firstBay + offset;
           const marker = skyBayMarkers[n % skyBayCount];
@@ -2258,33 +2311,51 @@ export function createRoadEventsScene(scene) {
           marker.position.set(bx, by, -relZ);
           marker.rotation.set(0, rotY, 0);
           marker.scale.set(1, 1, length / BAY_LEN);
-          marker.updateMatrix();
-          if (relZ > (ultraLow ? 148 : lowEnd ? 195 : 335) || relZ < -42) continue;
-          for (const inst of skyDeckInsts) inst.setMatrixAt(deckCount, marker.matrix);
-          deckCount++;
-          if ((bayCenter <= plan.start + COAST_SHORE_LEN) || (bayCenter >= plan.end - COAST_SHORE_LEN)) {
-            for (const inst of skyQuayInsts) inst.setMatrixAt(quayCount, marker.matrix);
-            quayCount++;
+          if (relZ > skyFar || relZ < -42) continue;
+          if (needDeckRebuild) {
+            skyDummy.position.set(branchCurveX(bayCenter, state), branchCurveY(bayCenter, state), plan.start - bayCenter);
+            skyDummy.rotation.set(0, rotY, 0);
+            skyDummy.scale.set(1, 1, length / BAY_LEN);
+            skyDummy.updateMatrix();
+            for (const inst of skyDeckInsts) inst.setMatrixAt(deckCount, skyDummy.matrix);
+            deckCount++;
+            if ((bayCenter <= plan.start + COAST_SHORE_LEN) || (bayCenter >= plan.end - COAST_SHORE_LEN)) {
+              for (const inst of skyQuayInsts) inst.setMatrixAt(quayCount, skyDummy.matrix);
+              quayCount++;
+            }
+            if (n % 2 === 0 && pierCount < skyPierInsts[0].instanceMatrix.count) {
+              for (const inst of skyPierInsts) inst.setMatrixAt(pierCount, skyDummy.matrix);
+              pierCount++;
+            }
           }
-          if (n % 2 === 0 && pierCount < skyPierInsts[0].instanceMatrix.count) {
-            for (const inst of skyPierInsts) inst.setMatrixAt(pierCount, marker.matrix);
-            pierCount++;
-            if (!ultraLow) {
-              const bayWorldY = branchCurveY(bayCenter, state);
-              const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
-              for (const side of [-1, 1]) {
-                if (foamCount >= skyBayCount) break;
-                const pulse = 1 + Math.sin(tNow * 2.4 + foamCount * 0.9) * 0.14;
-                const sx = side * 3.45;
-                foamDummy.position.set(bx + sx * cosR, by + SEA_Y + 0.22 - bayWorldY, -relZ - sx * sinR);
-                foamDummy.rotation.set(Math.PI / 2, rotY, 0);
-                foamDummy.scale.set(2.45 * pulse, 2.75 * pulse, 0.35);
-                foamDummy.updateMatrix();
-                pierFoamInst.setMatrixAt(foamCount++, foamDummy.matrix);
-              }
+          if (n % 2 === 0 && !ultraLow && relZ < 175) {
+            const bayWorldY = branchCurveY(bayCenter, state);
+            const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
+            for (const side of [-1, 1]) {
+              if (foamCount >= skyBayCount) break;
+              const pulse = 1 + Math.sin(tNow * 2.4 + foamCount * 0.9) * 0.14;
+              const sx = side * 3.45;
+              foamDummy.position.set(bx + sx * cosR, by + SEA_Y + 0.22 - bayWorldY, -relZ - sx * sinR);
+              foamDummy.rotation.set(Math.PI / 2, rotY, 0);
+              foamDummy.scale.set(2.45 * pulse, 2.75 * pulse, 0.35);
+              foamDummy.updateMatrix();
+              pierFoamInst.setMatrixAt(foamCount++, foamDummy.matrix);
             }
           }
         }
+        if (needDeckRebuild) {
+          lastSkyPreview = false;
+          lastSkyBay = firstBay;
+          lastSkyPlanStart = plan.start;
+          lastSkyBranchStart = state.branchStart;
+          lastSkyBranchEnd = state.branchEnd;
+          for (const inst of skyDeckInsts) { inst.count = deckCount; inst.visible = deckCount > 0; inst.instanceMatrix.needsUpdate = true; }
+          for (const inst of skyPierInsts) { inst.count = pierCount; inst.visible = pierCount > 0; inst.instanceMatrix.needsUpdate = true; }
+          for (const inst of skyQuayInsts) { inst.count = quayCount; inst.visible = quayCount > 0; inst.instanceMatrix.needsUpdate = true; }
+        }
+        pierFoamInst.count = foamCount;
+        pierFoamInst.visible = foamCount > 0;
+        pierFoamInst.instanceMatrix.needsUpdate = true;
         // Position dramatic rocky coastal headlands at the exact edge where shore meets pure open ocean!
         for (const [hl, worldZ] of [[departHeadland, plan.start + COAST_SHORE_LEN], [returnHeadland, plan.end - COAST_SHORE_LEN]]) {
           const relZ = worldZ - state.distance;
@@ -2313,12 +2384,6 @@ export function createRoadEventsScene(scene) {
           }
         }
       }
-      for (const inst of skyDeckInsts) { inst.count = deckCount; inst.visible = deckCount > 0; inst.instanceMatrix.needsUpdate = true; }
-      for (const inst of skyPierInsts) { inst.count = pierCount; inst.visible = pierCount > 0; inst.instanceMatrix.needsUpdate = true; }
-      for (const inst of skyQuayInsts) { inst.count = quayCount; inst.visible = quayCount > 0; inst.instanceMatrix.needsUpdate = true; }
-      pierFoamInst.count = foamCount;
-      pierFoamInst.visible = foamCount > 0;
-      pierFoamInst.instanceMatrix.needsUpdate = true;
     } else {
       for (const p of bridgePylons) p.visible = false;
       departHeadland.visible = false;
@@ -2414,8 +2479,10 @@ export function createRoadEventsScene(scene) {
         islandLeft.position.z = -195 + bayProg * 28;
         lighthouseBeacon.rotation.y = t * 0.85;
 
-        // Real wind sway animation for all instanced island trees (throttled on low-end phones to cut matrix uploads by 66%!)
-        if (!lowEnd || Math.floor(t * 20) % 3 === 0) {
+        // Real wind sway animation for all instanced island trees (throttled on mobile to cut GPU matrix uploads by 75%!)
+        const windStep = (lowEnd || isTouchScene) ? Math.floor(t * 15) : -1;
+        if (!(lowEnd || isTouchScene) || windStep !== lastTreeWindStep) {
+          lastTreeWindStep = windStep;
           for (const batch of islandTreeBatches) {
             const { inst, specs } = batch;
             for (let idx = 0; idx < specs.length; idx++) {
@@ -2585,6 +2652,36 @@ export function createRoadEventsScene(scene) {
       pCore.scale.setScalar(2.2 + Math.sin(t * 4.5) * 0.35);
       tunnelCosmicPortal.position.set(curveRelX(state.distance + 220, state), curveRelY(state.distance + 220, state) + 3.6, -220);
       tunnelCosmicPortal.rotation.y = -Math.atan(curveSlopeAt(state.distance + 220, state));
+    }
+  };
+  updateRoadEvents.setWarmupVisible = (on) => {
+    portalArch.visible = on;
+    portalPreview.visible = on;
+    skyLoop.visible = on;
+    seaWorld.visible = on;
+    tunLoop.visible = on;
+    skyExitArch.visible = on;
+    tunExitPortal.visible = on;
+    departHeadland.visible = on;
+    bridgePylons[0].visible = on;
+    metroBridges[0].bridge.visible = on;
+    helicopter.visible = on;
+    blimp.visible = on;
+    heliFloorReflection.visible = on;
+    tunnelCosmicPortal.visible = on;
+    const warmCount = on ? 1 : 0;
+    for (const inst of skyDeckInsts) { inst.count = warmCount; inst.visible = on; }
+    for (const inst of skyPierInsts) { inst.count = warmCount; inst.visible = on; }
+    for (const inst of skyQuayInsts) { inst.count = warmCount; inst.visible = on; }
+    pierFoamInst.count = warmCount; pierFoamInst.visible = on;
+    for (const inst of tunnelOpaque) { inst.count = warmCount; inst.visible = on; }
+    if (tunnelGlassInsts) {
+      for (const inst of tunnelGlassInsts) { inst.count = warmCount; inst.visible = on; }
+    }
+    if (!on) {
+      lastSkyBay = null;
+      lastSkyPreview = null;
+      lastTunnelBay = null;
     }
   };
   // Start completely hidden until IT Park is active so background pre-warming never leaks meshes onto other maps.

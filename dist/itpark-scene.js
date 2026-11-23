@@ -1086,9 +1086,11 @@ export function createItParkCampus(scene) {
         coralBannerMat.emissiveIntensity = 0.35 + (1 - pulse) * 0.20 + night * 0.30;
       }
     }
-    const ultraFar = ultraLow ? 142 : lowEnd ? 195 : Infinity;
-    const rearCut = ultraLow ? 20 : Infinity;
-    const insideUnderpass = ultraLow && state.activeBranch === 'underpass' && state.distance >= (state.branchStart || 0) + 10 && state.distance <= (state.branchEnd || 0) - 95;
+    const isTouch = Boolean(scene.userData?.isTouch);
+    const ultraFar = ultraLow ? 142 : lowEnd ? 195 : isTouch ? 265 : Infinity;
+    const rearCut = (ultraLow || isTouch) ? 26 : Infinity;
+    // Inside the Metro Tunnel's rock cavern, cull unseen exterior skyscraper towers on mobile except near entry & final 165m exit vista.
+    const insideUnderpass = (ultraLow || isTouch) && state.activeBranch === 'underpass' && state.distance >= (state.branchStart || 0) + 18 && state.distance <= (state.branchEnd || 0) - 165;
     for (let slot = 0; slot < slots.length; slot++) {
       const item = slots[slot];
       if (!active || insideUnderpass) { item.root.visible = false; continue; }

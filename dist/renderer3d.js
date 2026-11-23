@@ -9,11 +9,11 @@ import {createCampus} from './campus-scene.js?v=3.8.0';
 import {createGrandfatherVillage,grandfatherObstacle} from './grandfather-scene.js?v=3.9.2';
 import {createVillageRoute} from './village-scene.js?v=3.9.2';
 import {createCollegeCampus} from './college-scene.js?v=3.8.0';
-import {createItParkCampus} from './itpark-scene.js?v=3.8.0';
+import {createItParkCampus} from './itpark-scene.js?v=3.10.12';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.8.0';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.8.0';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.9.0';
-import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.9.0';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.10.12';
+import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.10.12';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.8.0';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
@@ -95,6 +95,7 @@ export function createRenderer(canvas, callbacks = {}){
  };
  const scene=new T.Scene();scene.background=new T.Color('#64d6ff');scene.fog=new T.Fog('#78dcff',150,325);
  const initLow=activeTier==='ultra-low'||activeTier==='low';
+ scene.userData.isTouch=isTouchDevice;
  scene.userData.ultraLow=(activeTier==='ultra-low');
  scene.userData.lowEnd=initLow;
  scene.userData.maxAniso=initLow?1:activeTier==='med'?2:4;
@@ -528,7 +529,8 @@ export function createRenderer(canvas, callbacks = {}){
      if(avgDt>0.024){
        smoothWindows=0;
        slowWindows++;
-       if(slowWindows>=2){
+       const dropNeeded=(activeTier==='high'&&isFlagshipGpu)?3:2;
+       if(slowWindows>=dropNeeded){
          slowWindows=0;
          if(activeTier==='high'){
            const curCap=getDprCap();
@@ -818,8 +820,10 @@ export function createRenderer(canvas, callbacks = {}){
      if (lastStateMap !== 'itpark') updateItPark({ map: '__none__', distance: 0, time: 0 }, dummyWeather);
    } else if (id === 'itpark:events') {
      if (!updateRoadEvents) updateRoadEvents = createLevelScene(createRoadEventsScene);
+     updateRoadEvents.setWarmupVisible?.(true);
      try { renderer.compile?.(scene, camera); } catch {}
      initObjectTextures(scene);
+     updateRoadEvents.setWarmupVisible?.(false);
      if (lastStateMap !== 'itpark') updateRoadEvents({ map: '__none__', distance: 0, time: 0 }, dummyWeather);
    } else if (id === 'itpark:props') {
      compileWarmupProps('itpark');
