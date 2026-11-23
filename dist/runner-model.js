@@ -504,10 +504,15 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     mixer = new AnimationMixer(model);
     actions = Object.fromEntries(names.map(name => [name, mixer.clipAction(clips.get(name))]));
     if (injuredData) {
+      // aged-elder.glb uses a Y-up 1:1 meter armature (hips y ≈ 0.90), unlike male/female's
+      // Z-down 0.01 cm Mixamo armatures (hips z ≈ -83). Applying male's cm-scale InjuredRun
+      // position track onto aged-elder teleports Grandfather ~75m off-screen when hit!
       const trackKey = injuredData[selected]
         ? selected
-        : (selected.includes('female') || selected.includes('woman') ? 'female' : 'male');
-      const rawTracks = injuredData[trackKey] || [];
+        : selected === 'aged-elder'
+          ? null
+          : (selected.includes('female') || selected.includes('woman') ? 'female' : 'male');
+      const rawTracks = trackKey ? (injuredData[trackKey] || []) : [];
       if (rawTracks.length) {
         const hasColon = Boolean(model?.getObjectByName?.('mixamorig:Hips'));
         const tracks = rawTracks.map(t => {
@@ -616,7 +621,10 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     }
     const blend=1-Math.exp(-10*Math.min(.05,dt||0));
     lean+=((state.mode==='running'?(state.lane-state.x)*.20:0)-lean)*blend;
-    model.rotation.z=lean;
+    const limpSway = (state.mode === 'running' && state.injured && !actions.InjuredRun)
+      ? Math.sin((state.time || 0) * 9) * 0.065
+      : 0;
+    model.rotation.z=lean + limpSway;
     const isFront = state.mode === 'ready' || state.mode === 'select' || state.mode === 'intro';
     const targetRotY = isFront ? 0 : Math.PI;
     const turnBlend = 1 - Math.exp(-6.5 * Math.min(.05, dt || .016));

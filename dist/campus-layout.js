@@ -1,4 +1,4 @@
-import { FINALRUN_GATE } from './engine.js';
+import { FINALRUN_GATE, finalRunGateFor } from './engine.js';
 import {SCHOOL_ROAD_START,HOME_YARD_START} from './grandfather-route.js?v=3.9.2';
 export const CAMPUS_SPACING=32,CAMPUS_SLOTS=10,CAMPUS_START=64;
 // A slot moves continuously until its whole section is behind the camera.
@@ -16,13 +16,15 @@ export function roadCurveX(distance, map = 'school', isFinalRun = false) {
    return distance<=HOME_YARD_START ? schoolCurve : schoolCurve+1.8*smootherstep((distance-HOME_YARD_START)/16);
  }
  if (map === 'finalrun') {
-   const entry=smootherstep((distance-45)/70), exit=smootherstep((FINALRUN_GATE-140-distance)/110);
+   const bendGate = Math.max(1000, FINALRUN_GATE);
+   const entry=smootherstep((distance-45)/70), exit=smootherstep((bendGate-140-distance)/110);
    return entry*exit*(13*Math.sin(distance/51)+6*Math.sin(distance/29));
  }
  if (map !== 'college') return 0;
  const ramp = Math.max(0, Math.min(1, (distance - 22) / 55));
  const ease = ramp * ramp * (3 - 2 * ramp);
- const exit = isFinalRun ? smootherstep((FINALRUN_GATE - 140 - distance) / 110) : 1;
+ const colGate = finalRunGateFor('college');
+ const exit = isFinalRun ? smootherstep((colGate - 140 - distance) / 110) : 1;
  return ease * exit * (6.8 * Math.sin(distance * 0.0095) + 2.6 * Math.sin(distance * 0.021));
 }
 
@@ -31,7 +33,8 @@ export function roadCurveY(distance, map = 'school', isFinalRun = false) {
  if (map !== 'college') return 0;
  const ramp = Math.max(0, Math.min(1, (distance - 25) / 60));
  const ease = ramp * ramp * (3 - 2 * ramp);
- const exit = isFinalRun ? smootherstep((FINALRUN_GATE - 140 - distance) / 110) : 1;
+ const colGate = finalRunGateFor('college');
+ const exit = isFinalRun ? smootherstep((colGate - 140 - distance) / 110) : 1;
  return ease * exit * (0.65 * Math.sin(distance * 0.013));
 }
 

@@ -3,7 +3,7 @@ import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls} from './power-controls.js?v=3.3.0';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.9.2';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE} from './engine.js?v=3.9.2';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.9.2';
 import {createRenderer} from './renderer3d.js?v=3.9.2';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 
@@ -77,6 +77,43 @@ function activateEnterButton() {
   }
 }
 
+// Prevent OS media controls / lock-screen / headset play-pause keys from pausing cutscene videos.
+try {
+  if (typeof navigator !== 'undefined' && navigator.mediaSession?.setActionHandler) {
+    for (const act of ['pause', 'stop', 'seekbackward', 'seekforward', 'seekto']) {
+      try { navigator.mediaSession.setActionHandler(act, () => {}); } catch {}
+    }
+  }
+} catch {}
+
+function gamePauseVideo(v) {
+  if (!v) return;
+  v.dataset.gamePaused = '1';
+  try { v.pause(); } catch {}
+}
+
+function lockVideoNoUserPause(v, shouldStayPlaying) {
+  if (!v || v.dataset.pauseLocked === '1') return;
+  v.dataset.pauseLocked = '1';
+  v.controls = false;
+  v.tabIndex = -1;
+  v.removeAttribute('controls');
+  v.setAttribute('controlslist', 'nodownload noplaybackrate noremoteplayback');
+  v.setAttribute('disablepictureinpicture', '');
+  v.setAttribute('disableremoteplayback', '');
+  v.addEventListener('contextmenu', e => e.preventDefault());
+  v.addEventListener('pause', () => {
+    if (v.dataset.gamePaused === '1' || v.ended || document.hidden) return;
+    if (shouldStayPlaying()) {
+      queueMicrotask(() => {
+        if (v.dataset.gamePaused !== '1' && !v.ended && !document.hidden && shouldStayPlaying()) {
+          v.play().catch(() => {});
+        }
+      });
+    }
+  });
+}
+
 function setupIntroVideo() {
   const video = $('intro-video');
   if (!video) {
@@ -97,12 +134,11 @@ function setupIntroVideo() {
   }
 
   let videoFrozen = false;
+  lockVideoNoUserPause(video, () => !videoFrozen && !introFinished && game.classList.contains('mode-splash'));
   function freezeAtEnd() {
     if (videoFrozen) return;
     videoFrozen = true;
-    try {
-      video.pause();
-    } catch {}
+    gamePauseVideo(video);
     showButtonOnLogo();
   }
 
@@ -121,6 +157,7 @@ function setupIntroVideo() {
   video.addEventListener('error', () => activateEnterButton());
 
   const tryPlay = () => {
+    delete video.dataset.gamePaused;
     video.muted = !wantSound;
     video.defaultMuted = !wantSound;
     video.volume = 1.0;
@@ -132,7 +169,10 @@ function setupIntroVideo() {
         const p2 = video.play();
         if (p2 && typeof p2.catch === 'function') {
           p2.catch(() => setTimeout(() => {
-            if (video.hasAttribute('src')) video.play().catch(() => activateEnterButton());
+            if (video.hasAttribute('src') && !videoFrozen && !introFinished) {
+              delete video.dataset.gamePaused;
+              video.play().catch(() => activateEnterButton());
+            }
           }, 180));
         }
       });
@@ -845,7 +885,7 @@ function enterGameFromSplash() {
     const v = $('intro-video');
     if (v) {
       v.muted = true;
-      v.pause();
+      gamePauseVideo(v);
     }
   } catch {}
   playEnterSound(sound);
@@ -1122,16 +1162,20 @@ let finalRunActiveCharId = '';
 let lastFinalRunChosenPowers = [];
 let cutsceneWarmupFrames = 0;
 let cutscenePrewarmedCharLoaded = false;
+let cutscenePrewarmTimer = 0;
+let cutscenePrewarmNonce = 0;
+let cutscenePrewarmDone = false;
 
-function prewarmFinalRunStage(targetMap, targetStage, targetCharId, chosen) {
+function cancelCutscenePrewarm() {
+  cutscenePrewarmNonce++;
+  if (cutscenePrewarmTimer) { clearTimeout(cutscenePrewarmTimer); cutscenePrewarmTimer = 0; }
+}
+
+function initFinalRunStageState(targetMap, targetStage, targetCharId, chosen) {
   const powersToEquip = (chosen && chosen.length) ? chosen : (lastFinalRunChosenPowers.length ? lastFinalRunChosenPowers : defaultChosenPowers());
   lastFinalRunChosenPowers = powersToEquip;
   finalRunActiveCharId = targetCharId;
   character = 'male';
-  // Lazily create WebGL renderer on first run, loading ONLY the active stage's hero & map behind the cutscene!
-  ensureRenderer(targetCharId);
-  draw?.preload?.(targetCharId);
-  draw?.warmMapNow?.(targetMap);
 
   s = fresh();
   s.level = playerLevel(profile.xp);
@@ -1148,25 +1192,77 @@ function prewarmFinalRunStage(targetMap, targetStage, targetCharId, chosen) {
   step(s, 0.001);
   s.distance = 0;
   s.time = 0;
-  cutsceneWarmupFrames = 2;
+  cutsceneWarmupFrames = 0;
+  cutscenePrewarmDone = false;
+  cutscenePrewarmedCharLoaded = Boolean(draw?.isLoaded?.(targetCharId));
+}
+
+function scheduleCutscenePrewarm(targetMap, targetStage, targetCharId, chosen, videoEl) {
+  cancelCutscenePrewarm();
+  initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
+  const nonce = cutscenePrewarmNonce;
+  let started = false;
+
+  const runChunkedWarmup = () => {
+    if (started || nonce !== cutscenePrewarmNonce) return;
+    started = true;
+    if (cutscenePrewarmTimer) { clearTimeout(cutscenePrewarmTimer); cutscenePrewarmTimer = 0; }
+
+    // Wait 450ms after video playback stabilizes before doing any WebGL work so opening frames stay silky-smooth.
+    cutscenePrewarmTimer = setTimeout(() => {
+      if (nonce !== cutscenePrewarmNonce) return;
+      if (targetStage === 'grandfather') effects.preloadBgm?.('grandfather');
+      ensureRenderer(targetCharId);
+      draw?.preload?.(targetCharId);
+
+      const nextStep = () => {
+        if (nonce !== cutscenePrewarmNonce) return;
+        const ran = draw?.warmMapStep ? draw.warmMapStep(targetMap) : null;
+        if (ran) {
+          // Space each shader/mesh warmup chunk by 420ms so the H.264 video decoder never stutters.
+          cutscenePrewarmTimer = setTimeout(nextStep, 420);
+          return;
+        }
+        cutscenePrewarmDone = true;
+        cutscenePrewarmedCharLoaded = Boolean(draw?.isLoaded?.(targetCharId));
+        cutscenePrewarmTimer = setTimeout(() => {
+          if (nonce !== cutscenePrewarmNonce) return;
+          cutsceneWarmupFrames = 1;
+        }, 350);
+      };
+
+      cutscenePrewarmTimer = setTimeout(nextStep, 420);
+    }, 450);
+  };
+
+  if (videoEl && !videoEl.paused && videoEl.readyState >= 2 && (videoEl.currentTime || 0) > 0.05) {
+    runChunkedWarmup();
+  } else {
+    if (videoEl) videoEl.addEventListener('playing', runChunkedWarmup, { once: true });
+    // Safety fallback so warmup still proceeds even if the video buffers slowly or is muted/stalled.
+    cutscenePrewarmTimer = setTimeout(runChunkedWarmup, 1400);
+  }
+}
+
+function prewarmFinalRunStage(targetMap, targetStage, targetCharId, chosen) {
+  initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
+  ensureRenderer(targetCharId);
+  draw?.preload?.(targetCharId);
+  draw?.warmMapNow?.(targetMap);
+  cutscenePrewarmDone = true;
+  cutsceneWarmupFrames = 1;
   cutscenePrewarmedCharLoaded = Boolean(draw?.isLoaded?.(targetCharId));
 }
 
 function launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chosen) {
+  cancelCutscenePrewarm();
   if (!s?.isFinalRun || s.finalRunStage !== targetStage || s.map !== targetMap) {
-    prewarmFinalRunStage(targetMap, targetStage, targetCharId, chosen);
+    initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
   }
-  // Defer next cutscene video buffering by 3s so Frame 1 of gameplay has 0 media demux contention
-  const nextVidId = targetStage === 'village' ? 'college-intro-video'
-    : targetStage === 'college' ? 'itrun-intro-video'
-    : targetStage === 'itpark' ? 'grandfather-intro-video' : '';
-  if (nextVidId) {
-    setTimeout(() => {
-      if (s?.isFinalRun && s.finalRunStage === targetStage && s.mode === 'running') {
-        try { $(nextVidId)?.load?.(); } catch {}
-      }
-    }, 3000);
-  }
+  ensureRenderer(targetCharId);
+  draw?.preload?.(targetCharId);
+  // No-op if chunked prewarm already finished during the cutscene; safely completes any remaining step if skipped early.
+  draw?.warmMapNow?.(targetMap);
   finalRunActiveCharId = targetCharId;
   character = 'male';
   s.distance = 0;
@@ -1189,20 +1285,27 @@ function launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chos
   if ($('toast')) {
     $('toast').hidden = false;
     $('toast').textContent = targetStage === 'grandfather'
-      ? `Grandfather’s village · Follow the school road home at ${GRANDFATHER_GATE.toLocaleString()} m`
+      ? `Grandfather’s village · Follow the soil trail & school road home (${GRANDFATHER_GATE.toLocaleString()} m)`
       : targetStage === 'itpark'
-      ? `The Final Run · IT Park Stage · Reach ${FINALRUN_GATE.toLocaleString()}m`
+      ? `The Final Run · IT Park Stage · Reach ${finalRunGateFor('itpark').toLocaleString()}m`
       : targetStage === 'college'
-        ? `The Final Run · College Stage · Reach ${FINALRUN_GATE.toLocaleString()}m`
-        : `Village road · Reach the school at ${FINALRUN_GATE.toLocaleString()}m`;
+        ? `The Final Run · College Stage · Reach ${finalRunGateFor('college').toLocaleString()}m`
+        : `Village road · Reach the school at ${finalRunGateFor('village').toLocaleString()}m`;
   }
   effects.setEnabled(sound);
   effects.unlock();
-  if (sound) effects.startBgm?.();
-  effects.play('bell');
+  if (targetStage === 'grandfather') {
+    if (sound) effects.startBgm?.('grandfather', { restart: true });
+    else effects.setBgmTrack?.('grandfather', { restart: true });
+  } else {
+    if (sound) effects.startBgm?.('default');
+    else effects.setBgmTrack?.('default');
+    effects.play('bell');
+  }
 }
 
 function stopCollegeIntroOverlay() {
+  cancelCutscenePrewarm();
   collegeIntroActive = false;
   cutsceneWarmupFrames = 0;
   if (collegeIntroTimer) { clearTimeout(collegeIntroTimer); collegeIntroTimer = 0; }
@@ -1214,7 +1317,7 @@ function stopCollegeIntroOverlay() {
     if (v) {
       v.onended = null;
       v.onerror = null;
-      try { v.pause(); } catch {}
+      gamePauseVideo(v);
     }
   }
   if (stage) {
@@ -1228,6 +1331,7 @@ function stopCollegeIntroOverlay() {
 }
 
 function turnScreenOffAfterFinalCollegeStage() {
+  cancelCutscenePrewarm();
   const overlay = $('college-intro-overlay');
   const stage = $('college-countdown-stage');
   if (collegeIntroTimer) { clearTimeout(collegeIntroTimer); collegeIntroTimer = 0; }
@@ -1247,7 +1351,7 @@ function turnScreenOffAfterFinalCollegeStage() {
     if (v) {
       v.onended = null;
       v.onerror = null;
-      try { v.pause(); } catch {}
+      gamePauseVideo(v);
     }
   }
   if (stage) {
@@ -1270,7 +1374,9 @@ function getOrCreateCutsceneVideo(videoId, videoSrc) {
     video.id = videoId;
     video.className = 'intro-video college-intro-video';
     video.setAttribute('playsinline', '');
-    video.setAttribute('preload', 'auto');
+    video.setAttribute('preload', 'none');
+    video.setAttribute('tabindex', '-1');
+    video.setAttribute('controlslist', 'nodownload noplaybackrate noremoteplayback');
     video.setAttribute('disablepictureinpicture', '');
     video.setAttribute('disableremoteplayback', '');
     video.src = videoSrc;
@@ -1282,6 +1388,7 @@ function getOrCreateCutsceneVideo(videoId, videoSrc) {
 }
 
 function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targetMap, targetStage, targetCharId, withCountdown = true, endToHub = false }) {
+  cancelCutscenePrewarm();
   const overlay = $('college-intro-overlay');
   const video = getOrCreateCutsceneVideo(videoId, videoSrc) || $('college-intro-video');
   const stage = $('college-countdown-stage');
@@ -1311,10 +1418,12 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
     if (!v || v === video) continue;
     v.onended = null;
     v.onerror = null;
-    try { v.pause(); } catch {}
+    gamePauseVideo(v);
     v.hidden = true;
     v.style.display = 'none';
   }
+  overlay.oncontextmenu = e => e.preventDefault();
+  lockVideoNoUserPause(video, () => collegeIntroActive && !video.hidden);
   video.hidden = false;
   video.style.display = 'block';
   if (video.getAttribute('src') !== videoSrc) {
@@ -1332,9 +1441,9 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
   void overlay.offsetWidth;
   overlay.classList.add('is-screen-off');
 
-  // Pre-warm the upcoming 3D map, obstacles, shadow shaders & auto-selected character behind the black screen
+  // Lightweight JS stage prep only during blackout; 3D WebGL shader warming runs in spaced chunks AFTER video playback starts!
   if (!endToHub && targetMap) {
-    prewarmFinalRunStage(targetMap, targetStage, targetCharId, chosen);
+    initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
   }
 
   let currentStep = '';
@@ -1364,8 +1473,9 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
     if (collegeIntroTimer) { clearTimeout(collegeIntroTimer); collegeIntroTimer = 0; }
     video.onended = null;
     video.onerror = null;
-    try { video.pause(); } catch {}
+    gamePauseVideo(video);
     if (endToHub) {
+      cancelCutscenePrewarm();
       finalRunActiveCharId = '';
       s = fresh();
       s.map = selectedMap;
@@ -1400,7 +1510,7 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
 
   function monitorTransitionProgress() {
     if (!collegeIntroActive || launched) return;
-    if (!endToHub && targetCharId && !cutscenePrewarmedCharLoaded && draw?.isLoaded?.(targetCharId)) {
+    if (!endToHub && targetCharId && cutscenePrewarmDone && !cutscenePrewarmedCharLoaded && draw?.isLoaded?.(targetCharId)) {
       cutscenePrewarmedCharLoaded = true;
       cutsceneWarmupFrames = 1;
     }
@@ -1431,9 +1541,8 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
     video.setAttribute('src', videoSrc);
   }
   try {
-    video.pause();
+    gamePauseVideo(video);
     if (video.readyState >= 1) video.currentTime = 0;
-    else video.addEventListener('loadedmetadata', () => { try { video.currentTime = 0; } catch {} }, { once: true });
   } catch {}
   video.muted = !sound;
   video.defaultMuted = !sound;
@@ -1445,8 +1554,9 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
 
   function attemptPlayVideo() {
     if (!collegeIntroActive || launched) return;
+    delete video.dataset.gamePaused;
     try {
-      if (video.currentTime > 1.5) video.currentTime = 0;
+      if (video.readyState >= 1 && video.currentTime > 1.5) video.currentTime = 0;
     } catch {}
     video.muted = !sound;
     video.defaultMuted = !sound;
@@ -1461,7 +1571,10 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
           p2.catch(() => {
             // If still buffering, wait for canplay instead of cutting off the video
             video.addEventListener('canplay', () => {
-              if (collegeIntroActive && !launched) video.play().catch(() => {});
+              if (collegeIntroActive && !launched) {
+                delete video.dataset.gamePaused;
+                video.play().catch(() => {});
+              }
             }, { once: true });
           });
         }
@@ -1474,11 +1587,9 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
     if (!collegeIntroActive) return;
     overlay.classList.remove('is-screen-off');
     overlay.classList.add('is-playing-video');
-    if (video.readyState >= 2) {
-      attemptPlayVideo();
-    } else {
-      video.addEventListener('canplay', attemptPlayVideo, { once: true });
-      attemptPlayVideo();
+    attemptPlayVideo();
+    if (!endToHub && targetMap) {
+      scheduleCutscenePrewarm(targetMap, targetStage, targetCharId, chosen, video);
     }
     collegeIntroRaf = requestAnimationFrame(monitorTransitionProgress);
   }, 850);
@@ -1526,6 +1637,7 @@ function playGrandfatherIntroAfterItPark() {
 }
 
 function stopFinalRunIntroOverlay() {
+  cancelCutscenePrewarm();
   finalIntroActive = false;
   cutsceneWarmupFrames = 0;
   if (finalIntroRaf) { cancelAnimationFrame(finalIntroRaf); finalIntroRaf = 0; }
@@ -1534,7 +1646,7 @@ function stopFinalRunIntroOverlay() {
   const video = $('finalrun-intro-video');
   const stage = $('finalrun-countdown-stage');
   if (video) {
-    try { video.pause(); } catch {}
+    gamePauseVideo(video);
   }
   if (stage) {
     stage.hidden = true;
@@ -1547,6 +1659,7 @@ function stopFinalRunIntroOverlay() {
 }
 
 function playFinalRunIntro(chosen) {
+  cancelCutscenePrewarm();
   const overlay = $('finalrun-intro-overlay');
   const video = $('finalrun-intro-video');
   const stage = $('finalrun-countdown-stage');
@@ -1564,13 +1677,12 @@ function playFinalRunIntro(chosen) {
 
   overlay.hidden = false;
   overlay.classList.remove('is-fading-out');
+  overlay.oncontextmenu = e => e.preventDefault();
+  lockVideoNoUserPause(video, () => finalIntroActive && !launched);
   if (stage) {
     stage.hidden = true;
     stage.classList.remove('is-pop', 'is-start');
   }
-
-  // Stage 1 of The Final One: Auto-select 1st School Boy with Hat ('male') & pre-warm 3D village + obstacles + shadow shaders immediately
-  prewarmFinalRunStage('finalrun', 'village', 'male', chosen);
 
   let currentStep = '';
   let launched = false;
@@ -1595,7 +1707,7 @@ function playFinalRunIntro(chosen) {
     if (launched || !finalIntroActive) return;
     launched = true;
     if (finalIntroRaf) { cancelAnimationFrame(finalIntroRaf); finalIntroRaf = 0; }
-    try { video.pause(); } catch {}
+    gamePauseVideo(video);
     showCountdownStep('START');
     launchPrewarmedFinalRunStage('finalrun', 'village', 'male', chosen);
     finalIntroHideTimer = setTimeout(() => {
@@ -1608,7 +1720,7 @@ function playFinalRunIntro(chosen) {
 
   function monitorProgress() {
     if (!finalIntroActive || launched) return;
-    if (!cutscenePrewarmedCharLoaded && draw?.isLoaded?.('male')) {
+    if (cutscenePrewarmDone && !cutscenePrewarmedCharLoaded && draw?.isLoaded?.('male')) {
       cutscenePrewarmedCharLoaded = true;
       cutsceneWarmupFrames = 1;
     }
@@ -1633,21 +1745,36 @@ function playFinalRunIntro(chosen) {
   if (!video.getAttribute('src')) {
     video.setAttribute('src', 'assets/videos/final_one_intro.mp4');
   }
-  try { video.currentTime = 0; } catch {}
+  try {
+    if (video.readyState >= 1) video.currentTime = 0;
+  } catch {}
   video.muted = !sound;
   video.defaultMuted = !sound;
   video.volume = 1.0;
 
+  // Start the intro video FIRST with zero WebGL contention on Frame 0!
+  delete video.dataset.gamePaused;
   const p = video.play();
   if (p && typeof p.catch === 'function') {
     p.catch(() => {
+      if (!finalIntroActive || launched) return;
       video.muted = true;
       const p2 = video.play();
       if (p2 && typeof p2.catch === 'function') {
-        p2.catch(() => finishIntroAndLaunch());
+        p2.catch(() => {
+          video.addEventListener('canplay', () => {
+            if (finalIntroActive && !launched) {
+              delete video.dataset.gamePaused;
+              video.play().catch(() => finishIntroAndLaunch());
+            }
+          }, { once: true });
+        });
       }
     });
   }
+
+  // Stage 1 of The Final One: Warm 3D village & hero in spaced non-blocking chunks AFTER video starts playing smoothly.
+  scheduleCutscenePrewarm('finalrun', 'village', 'male', chosen, video);
   finalIntroRaf = requestAnimationFrame(monitorProgress);
 }
 
@@ -1792,7 +1919,8 @@ function beginRun(chosen){
         $('toast').textContent = targetMap === 'finalrun' ? `Village road · Reach the school at ${FINALRUN_GATE.toLocaleString()}m` : targetMap === 'itpark' ? 'IT Park · Follow the shuttle roof ramp' : targetMap === 'college' ? 'College rush · Find the next roof ramp' : 'School rush · Find the next roof ramp';
         runLoadingActive = false;
         hideRunLoadingVeilSmooth();
-        if (sound) effects.startBgm?.();
+        if (sound) effects.startBgm?.('default');
+        else effects.setBgmTrack?.('default');
         if (targetMap !== 'finalrun') effects.play('swag');
         effects.play('bell');
       };
@@ -1892,7 +2020,7 @@ function completeFinalRun() {
 }
 
 function crash(completed=false){
-  if (s.map !== 'grandfather' && (s.map === 'finalrun' || s.isFinalRun) && (completed || s.distance >= FINALRUN_GATE)) {
+  if (s.map !== 'grandfather' && (s.map === 'finalrun' || s.isFinalRun) && (completed || s.distance >= finalRunGateFor(s.map))) {
     completeFinalRun();
     return;
   }
@@ -1914,7 +2042,7 @@ function crash(completed=false){
   recordRunMissions(deltaDist, deltaCoins + deltaBonus, deltaNear);
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
   if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
-  effects.play(completed?'bell':'over');
+  if (!(s.map === 'grandfather' && completed)) effects.play(completed?'bell':'over');
   setScreenMode('gameover');
   const isCol = s.map === 'college' || selectedMap === 'college';
   const isFinalRun = Boolean(s.isFinalRun || s.map === 'finalrun' || selectedMap === 'finalrun');
@@ -1962,7 +2090,7 @@ function crash(completed=false){
   
   const elderFinale=s.map==='grandfather';
   const resultMessage=elderFinale
-    ? completed ? `Home reached · ${runDist.toLocaleString()} m · ${s.coins} coins` : `Village trail · ${runDist} m · ${s.cause==='slide'?'Slide under the hanging cloth.':s.cause==='jump'?'Jump over the wooden obstacles.':'Follow the coins through the clearing.'}`
+    ? completed ? `Home reached · ${runDist.toLocaleString()} m` : `Village trail · ${runDist} m · ${s.cause==='slide'?'Slide under the hanging cloth.':s.cause==='jump'?'Jump over the wooden obstacles.':'Follow the clear village path.'}`
     : isFinalRun
     ? hint
     : completed
@@ -1983,7 +2111,7 @@ function crash(completed=false){
     $('btn-share-score').onclick = () => shareReportCard(runDist, s.coins + bonusCoins, grade, s.nearMissCount || 0);
   }
   $('tip').textContent = elderFinale ? (completed?'All four stages complete.':`Reach his childhood home at ${GRANDFATHER_GATE.toLocaleString()} m.`) : isFinalRun
-    ? `Reach ${FINALRUN_GATE.toLocaleString()}m on the village road to complete The Final Run.`
+    ? `Reach ${finalRunGateFor(s.map).toLocaleString()}m to complete this stage of The Final Run.`
     : `Coins: ${s.coins + bonusCoins} | Bank: ${totalCoins.toLocaleString()} | Grade: ${grade}`;
 }
 
@@ -2026,7 +2154,8 @@ if($('start')) $('start').onclick=e=>{
 };
 if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   if(s.mode==='paused'){resume();return;}
-  // After crash → go back to character select screen (LET'S RUN page)
+  // After crash or completing Grandfather's journey → return to main hub & restore default BGM
+  const wasGrandfather = s.map === 'grandfather';
   finalRunActiveCharId = '';
   s=fresh();
   s.map=selectedMap;
@@ -2040,10 +2169,15 @@ if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   updateCarouselUI();
   setScreenMode('select');
   showHub('home');
+  if (wasGrandfather) {
+    if (sound) effects.startBgm?.('default');
+    else effects.setBgmTrack?.('default');
+  }
 };
 if($('restart')) $('restart').onclick=start;
 if($('btn-change-char')) $('btn-change-char').onclick=()=>{
   const wasPaused = s.mode === 'paused';
+  const wasGrandfather = s.map === 'grandfather';
   finalRunActiveCharId = '';
   s=fresh();
   s.map=selectedMap;
@@ -2057,6 +2191,10 @@ if($('btn-change-char')) $('btn-change-char').onclick=()=>{
   updateCarouselUI();
   setScreenMode('select');
   showHub(wasPaused ? 'home' : 'characters');
+  if (wasGrandfather) {
+    if (sound) effects.startBgm?.('default');
+    else effects.setBgmTrack?.('default');
+  }
 };
 $('pause').onclick=()=>s.mode==='paused'?resume():pause();
 
@@ -2075,6 +2213,13 @@ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointe
 window.addEventListener('keydown',e=>{
   if ($('power-picker')?.open) return;
   if(e.target?.closest?.('input, textarea, select')) return;
+  // Never allow keyboard shortcuts or media keys to pause/interrupt active videos.
+  if (finalIntroActive || collegeIntroActive || game.classList.contains('mode-splash')) {
+    if ([' ', 'k', 'K', 'p', 'P', 'Escape', 'MediaPlayPause', 'MediaPause', 'MediaStop'].includes(e.key)) {
+      e.preventDefault();
+      return;
+    }
+  }
   if(s.mode!=='running'&&e.target?.closest?.('button')&&(e.key===' '||e.key==='Enter'))return;
   if(s.mode!=='running' && game.classList.contains('mode-select') && game.classList.contains('hub-characters')) {
     if(e.key==='ArrowLeft'){ e.preventDefault(); moveCarousel(-1); return; }
@@ -2085,11 +2230,13 @@ window.addEventListener('keydown',e=>{
   if(e.key==='Escape'||e.key==='p'){s.mode==='paused'?resume():pause();}
 });
 
+let creditsAudioTakeover = false;
+
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     pause();
     effects.pauseBgm?.();
-  } else if(sound && s.mode!=='remembering' && !game.classList.contains('mode-splash') && !finalIntroActive && !collegeIntroActive) {
+  } else if(sound && !creditsAudioTakeover && (s.mode!=='remembering' || s.map==='grandfather') && !game.classList.contains('mode-splash') && !finalIntroActive && !collegeIntroActive) {
     effects.startBgm?.();
   }
 });
@@ -2140,18 +2287,26 @@ function tick(t) {
   }
 
   step(s, dt);
-  const finishGate=s.map==='grandfather'?GRANDFATHER_GATE:(s.map==='finalrun'||s.isFinalRun)?FINALRUN_GATE:Infinity;
+  const finishGate=s.map==='grandfather'?GRANDFATHER_GATE:(s.map==='finalrun'||s.isFinalRun)?finalRunGateFor(s.map):Infinity;
   const memory=old==='running' && reachedMemory(s,distanceBefore);
   if(memory) {
     const run=s;
     run.distance=memory.at;
     run.speed=0;
     run.mode='remembering';
-    effects.pauseBgm?.();
-    playVillageMemory(memory,sound,()=>{
+    // Keep Courtyard Sunset playing across Grandfather's road & memories 1-5; fade it out cleanly right before finalvideo & credits start!
+    if (run.map !== 'grandfather') effects.pauseBgm?.();
+    playVillageMemory(memory, sound, () => {
+      creditsAudioTakeover = false;
       if(s!==run) return;
       if(memory.at===GRANDFATHER_GATE) {run.mode='finished';completeFinalRun();}
-      else {run.mode='running';if(sound) effects.startBgm?.();}
+      else {run.mode='running';if(sound && run.map !== 'grandfather') effects.startBgm?.();}
+    }, {
+      keepBgmPlaying: run.map === 'grandfather',
+      onCreditsStart: () => {
+        creditsAudioTakeover = true;
+        effects.fadeOutBgm?.(1.25);
+      }
     });
   }
   if(old==='running'&&s.mode==='running'&&distanceBefore<finishGate&&s.distance>=finishGate){
@@ -2274,10 +2429,12 @@ function tick(t) {
     else if (s.finalRunStage === 'college') draw?.preload?.('college-man');
     else if (s.finalRunStage === 'itpark') draw?.preload?.('aged-elder');
   }
-  for (const m of [100, 250, 500]) {
-    if (distanceBefore < m && s.distance >= m) {
-      effects.play('bell');
-      $('toast').textContent = `School Bell Rang at ${m}m! Keep Rushing!`;
+  if (s.map !== 'grandfather') {
+    for (const m of [100, 250, 500]) {
+      if (distanceBefore < m && s.distance >= m) {
+        effects.play('bell');
+        $('toast').textContent = `School Bell Rang at ${m}m! Keep Rushing!`;
+      }
     }
   }
   if (distanceBefore < 1000 && s.distance >= 1000 && s.map !== 'finalrun' && !s.isFinalRun) {

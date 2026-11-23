@@ -8,7 +8,12 @@ export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95, IN
 export const MAGNET_RADIUS = 18, CAPTURE_GESTURE_START = 2.55;
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
-export const SCHOOL_GATE = 11, FINALRUN_GATE = 1000;
+export const SCHOOL_GATE = 11, FINALRUN_GATE = 10000, FINALRUN_COLLEGE_GATE = 5000, FINALRUN_ITPARK_GATE = 5000;
+export function finalRunGateFor(stageOrMap) {
+  if (stageOrMap === 'college') return FINALRUN_COLLEGE_GATE;
+  if (stageOrMap === 'itpark') return FINALRUN_ITPARK_GATE;
+  return FINALRUN_GATE;
+}
 export const SCHOOL_VAN = Object.freeze({ lane: 1, ramp: 22, rear: 32, front: 54, roof: 1.72, width: 1.94 });
 export function routeVans(distance,seed=0) { return [entryVan(seed),...repeatedVans(distance,seed)]; }
 export const ROOF_COINS = Object.freeze([35, 41, 47, 53]);
@@ -784,14 +789,15 @@ export function step(s, dt, random = Math.random) {
   if (farCheckDue) s.lastFarEscape = s.time;
   if (!villageFinale) enforceOpenEscapeLane(s, farCheckDue);
 
+  const stageGate = finalRunGateFor(s.map);
   if (!villageFinale && (s.map === 'finalrun' || s.isFinalRun)) {
     for (const o of s.items) {
-      if (!o.done && !PICKUP_TYPES.has(o.type) && o.z >= FINALRUN_GATE - 65) {
+      if (!o.done && !PICKUP_TYPES.has(o.type) && o.z >= stageGate - 65) {
         o.done = true;
         o.cleared = true;
       }
     }
-    if ((s.map === 'finalrun' || (s.isFinalRun && s.map === 'college')) && s.distance >= FINALRUN_GATE - 30) {
+    if ((s.map === 'finalrun' || (s.isFinalRun && s.map === 'college')) && s.distance >= stageGate - 30) {
       s.lane = 0;
     }
   }
@@ -801,7 +807,7 @@ export function step(s, dt, random = Math.random) {
   if(s.jumpBuffer>0 && !s.jump && !s.drop && !s.fallSpeed && !s.hit)action(s,'jump');
   for(const van of villageFinale ? [] : routeVans(s.distance,s.runSeed)) {
     if(s.ghost > 0) continue;
-    if((s.map === 'finalrun' || s.isFinalRun) && van.ramp >= FINALRUN_GATE - 85) continue;
+    if((s.map === 'finalrun' || s.isFinalRun) && van.ramp >= stageGate - 85) continue;
     if(s.distance>=van.rear && s.distance<van.front && Math.abs(s.x-van.lane)*2.2<=van.width/2 && height(s)<van.roof-.18) {
       if (s.nitro > 0) {
         s.floor = van.roof;

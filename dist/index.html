@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.9.1">
+  <link rel="stylesheet" href="style.css?v=3.10.0">
 </head>
 <body>
 <header>
@@ -99,7 +99,7 @@
 
     <!-- SCREEN 1: INTRO VIDEO SPLASH SCREEN -->
     <div id="splash-screen" class="splash-screen">
-      <video id="intro-video" class="intro-video" src="assets/videos/intro_video.mp4" poster="assets/videos/intro-poster.jpg" autoplay playsinline preload="auto" disablepictureinpicture disableremoteplayback></video>
+      <video id="intro-video" class="intro-video" src="assets/videos/intro_video.mp4" poster="assets/videos/intro-poster.jpg" autoplay playsinline preload="auto" tabindex="-1" disablepictureinpicture disableremoteplayback controlslist="nodownload noplaybackrate noremoteplayback"></video>
       <div id="splash-enter-wrap" class="splash-enter-wrap" hidden>
         <button id="btn-enter" class="enter-btn ready" type="button" aria-label="Enter Game">
           <span class="enter-btn-sheen" aria-hidden="true"></span>
@@ -116,7 +116,7 @@
 
     <!-- FINAL ONE MAP INTRO VIDEO & 3-2-1-START CUTSCENE OVERLAY -->
     <div id="finalrun-intro-overlay" class="finalrun-intro-overlay" hidden>
-      <video id="finalrun-intro-video" class="intro-video" src="assets/videos/final_one_intro.mp4" playsinline preload="auto" disablepictureinpicture disableremoteplayback></video>
+      <video id="finalrun-intro-video" class="intro-video" src="assets/videos/final_one_intro.mp4" playsinline preload="none" tabindex="-1" disablepictureinpicture disableremoteplayback controlslist="nodownload noplaybackrate noremoteplayback"></video>
       <div id="finalrun-countdown-stage" class="finalrun-countdown-stage" hidden aria-live="assertive">
         <div class="finalrun-countdown-halo" aria-hidden="true"></div>
         <div class="finalrun-countdown-ring" aria-hidden="true"></div>
@@ -128,9 +128,9 @@
     <!-- FINAL ONE 10,000m COMPLETION: SCREEN TURN OFF, COLLEGE / IT PARK INTRO VIDEO & 3-2-1-START OVERLAY -->
     <div id="college-intro-overlay" class="college-intro-overlay" hidden>
       <div id="college-screen-off-flash" class="college-screen-off-flash" aria-hidden="true"></div>
-      <video id="college-intro-video" class="intro-video college-intro-video" src="assets/videos/college_intro.mp4" playsinline preload="auto" disablepictureinpicture disableremoteplayback></video>
-      <video id="itrun-intro-video" class="intro-video college-intro-video" src="assets/videos/it_run.mp4?v=3.6.9" playsinline preload="auto" disablepictureinpicture disableremoteplayback hidden></video>
-      <video id="grandfather-intro-video" class="intro-video college-intro-video" src="assets/videos/granfather_intro.mp4?v=3.7.0" playsinline preload="auto" disablepictureinpicture disableremoteplayback hidden></video>
+      <video id="college-intro-video" class="intro-video college-intro-video" src="assets/videos/college_intro.mp4" playsinline preload="none" tabindex="-1" disablepictureinpicture disableremoteplayback controlslist="nodownload noplaybackrate noremoteplayback"></video>
+      <video id="itrun-intro-video" class="intro-video college-intro-video" src="assets/videos/it_run.mp4?v=3.6.9" playsinline preload="none" tabindex="-1" disablepictureinpicture disableremoteplayback controlslist="nodownload noplaybackrate noremoteplayback" hidden></video>
+      <video id="grandfather-intro-video" class="intro-video college-intro-video" src="assets/videos/granfather_intro.mp4?v=3.7.0" playsinline preload="none" tabindex="-1" disablepictureinpicture disableremoteplayback controlslist="nodownload noplaybackrate noremoteplayback" hidden></video>
       <div id="college-countdown-stage" class="finalrun-countdown-stage" hidden aria-live="assertive">
         <div class="finalrun-countdown-halo" aria-hidden="true"></div>
         <div class="finalrun-countdown-ring" aria-hidden="true"></div>
@@ -427,6 +427,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.9.2"></script>
+<script type="module" src="boot.js?v=3.10.0"></script>
 </body>
 </html>

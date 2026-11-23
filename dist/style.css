@@ -108,6 +108,10 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   object-fit: cover;
   display: block;
   background: #000000;
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
 }
 .intro-video[hidden] {
   display: none !important;
@@ -2414,4 +2418,9 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
     background: #000000;
     transform: scaleY(1);
   }
+}
+
+/* Grandfather's peaceful homecoming stage: hide coin counter pill */
+#game.grandfather-round .coins {
+  display: none !important;
 }

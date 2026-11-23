@@ -4,7 +4,7 @@ import {buildPorscheGT3RS,buildBugattiChiron,buildRedShuttleCart,buildFreightSem
 import {buildWDP4DTrain,buildRailRampWagon} from './wdp4d-train.js?v=3.8.0';
 import {BoxGeometry,Group,Mesh,MeshStandardMaterial} from './vendor/three.module.js';
 import {repeatedVans} from './traffic-rules.js';
-import {FINALRUN_GATE} from './engine.js';
+import {FINALRUN_GATE, finalRunGateFor} from './engine.js';
 import {curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
 export function createTraffic(scene) {
  let lastSeed,lastMap;
@@ -65,7 +65,7 @@ export function createTraffic(scene) {
   const lowEnd=Boolean(scene.userData?.lowEnd);
   for(const v of (map==='grandfather' ? [] : repeatedVans(s.distance,s.runSeed))) {
    if(v.ramp>s.distance+trafficFar||v.front<s.distance-15)continue;
-   if((s.map==='finalrun'||s.isFinalRun)&&v.ramp>=FINALRUN_GATE-85)continue;
+   if((s.map==='finalrun'||s.isFinalRun)&&v.ramp>=finalRunGateFor(s.map)-85)continue;
    const vanInCave=onCave&&v.rear>=s.branchStart-4&&v.rear<s.branchEnd;
    const vanKey=`${map}:${vanInCave}:${v.front-v.rear}:${v.roof}:${v.rear-v.ramp}`;
    visible.add(v.id);

@@ -2,7 +2,7 @@ import {BoxGeometry,CanvasTexture,Group,Mesh,MeshStandardMaterial,RepeatWrapping
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {roadsideTree} from './street-materials.js';
 import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
-import {FINALRUN_GATE} from './engine.js';
+import {FINALRUN_GATE, finalRunGateFor} from './engine.js';
 import {branchForkClearance} from './road-events.js';
 import {hasCollegeRain, sceneWeather} from './weather.js';
 
@@ -140,7 +140,7 @@ export function createCollegeCampus(scene){
    const item=slots[slot];
    if(!college){item.root.visible=false;continue;}
    const anchor=campusAnchor(slot,state.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,state);
-   if(clr.hide||(state.isFinalRun&&anchor>=FINALRUN_GATE-55)){item.root.visible=false;continue;}
+   if(clr.hide||(state.isFinalRun&&anchor>=finalRunGateFor('college')-55)){item.root.visible=false;continue;}
    item.root.visible=true;
    if(item.kind!==kind){item.root.clear();if(!cache[slot].has(kind))cache[slot].set(kind,templates[kind].clone());item.root.add(cache[slot].get(kind));item.kind=kind;}
    item.root.position.set(curveRelX(anchor,state),curveRelY(anchor,state)+clr.dropY,state.distance-anchor);

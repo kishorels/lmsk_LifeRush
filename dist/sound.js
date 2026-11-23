@@ -206,77 +206,236 @@ export function createSound() {
   return false;
  }
 
- // Decode the bundled song once. Its loop then runs on the audio clock, independently of rendering.
- let musicBuffer, musicLoading, musicSource, musicGain, mediaFallback;
- let musicWanted = false, useMedia = false, musicOffset = 0, musicStartedAt = 0, duck = 1;
+ // Decode bundled music tracks once. Each loop runs on the audio clock, independently of rendering.
+ const MUSIC_TRACKS = {
+  default: './assets/bgm.mp3',
+  grandfather: './assets/courtyard_sunset.mp3?v=2',
+ };
+ const TRACK_BASE_GAIN = {
+  default: MUSIC_BASE_GAIN,
+  grandfather: 0.56,
+ };
+ const musicBuffers = new Map();
+ const musicLoadings = new Map();
+ const musicOffsets = new Map();
+ const mediaFallbacks = new Map();
+ let activeMusicTrack = 'default';
+ let musicSource, musicGain, activeMediaFallback;
+ let musicWanted = false, useMedia = false, musicStartedAt = 0, duck = 1;
+ let musicFadeTimer = 0;
+
+ function clearMusicFadeTimer() {
+  if (musicFadeTimer) { clearTimeout(musicFadeTimer); musicFadeTimer = 0; }
+ }
+
+ function currentMusicGain() {
+  return (TRACK_BASE_GAIN[activeMusicTrack] ?? MUSIC_BASE_GAIN) * volumes.music * duck;
+ }
 
  function updateMusicVolume() {
-  const volume = MUSIC_BASE_GAIN * volumes.music * duck;
+  const volume = currentMusicGain();
   if (musicGain && context) musicGain.gain.setTargetAtTime(volume, context.currentTime, .05);
-  if (mediaFallback && mediaFallback.volume !== volume) mediaFallback.volume = volume;
+  if (activeMediaFallback && activeMediaFallback.volume !== volume) activeMediaFallback.volume = volume;
  }
 
- function playMusic() {
-  if (!musicWanted || !enabled) return;
-  resumeIfNeeded();
-  if (musicSource) return;
-  if (musicBuffer && context) {
-   musicGain.gain.cancelScheduledValues(context.currentTime);
-   musicGain.gain.setValueAtTime(MUSIC_BASE_GAIN * volumes.music * duck, context.currentTime);
-   const source = context.createBufferSource();
-   source.buffer = musicBuffer;
-   source.loop = true;
-   source.connect(musicGain);
-   const safeOffset = (musicBuffer.duration > 0 && Number.isFinite(musicOffset))
-    ? ((musicOffset % musicBuffer.duration) + musicBuffer.duration) % musicBuffer.duration
-    : 0;
-   source.start(0, safeOffset);
-   musicSource = source;
-   musicStartedAt = context.currentTime;
-  } else if (useMedia && typeof Audio !== 'undefined') {
-   mediaFallback ??= (typeof document !== 'undefined' && document.getElementById('bgm-player'))
-     || new Audio(new URL('./assets/bgm.mp3', import.meta.url).href);
-   mediaFallback.loop = true;
-   updateMusicVolume();
-   if (mediaFallback.paused) mediaFallback.play()?.catch(() => {});
-  }
- }
-
- function startBgm() {
-  if (!enabled) return;
-  musicWanted = true;
-  unlock();
-  resumeIfNeeded();
-  if (musicBuffer || useMedia) { playMusic(); return; }
-  if (musicLoading) return;
-  if (!context?.decodeAudioData || typeof fetch === 'undefined') {
-   useMedia = true;
-   playMusic();
-   return;
-  }
-  musicLoading = (async () => {
-   try {
-    const response = await fetch(new URL('./assets/bgm.mp3', import.meta.url));
-    if (!response.ok) throw new Error('Music unavailable');
-    musicBuffer = await context.decodeAudioData(await response.arrayBuffer());
-    musicGain = context.createGain();
-    musicGain.connect(getSharedOutput(context));
-   } catch { useMedia = true; }
-   playMusic();
-  })();
- }
-
- function pauseBgm() {
-  musicWanted = false;
-  if (musicSource && context && musicBuffer) {
-   if (musicBuffer.duration > 0) {
-    musicOffset = (musicOffset + Math.max(0, context.currentTime - musicStartedAt)) % musicBuffer.duration;
+ function stopCurrentMusicSource(saveOffset = true) {
+  if (musicSource && context) {
+   const buf = musicBuffers.get(activeMusicTrack);
+   if (saveOffset && buf && buf.duration > 0) {
+    const prev = musicOffsets.get(activeMusicTrack) || 0;
+    musicOffsets.set(activeMusicTrack, (prev + Math.max(0, context.currentTime - musicStartedAt)) % buf.duration);
    }
    try { musicSource.stop(); } catch {}
    try { musicSource.disconnect(); } catch {}
    musicSource = null;
   }
-  mediaFallback?.pause();
+  if (activeMediaFallback) {
+   try { activeMediaFallback.pause(); } catch {}
+   activeMediaFallback = null;
+  }
+ }
+
+ function getMediaFallback(trackKey) {
+  let el = mediaFallbacks.get(trackKey);
+  if (!el && typeof Audio !== 'undefined') {
+   if (trackKey === 'default') {
+    el = (typeof document !== 'undefined' && document.getElementById('bgm-player'))
+      || new Audio(new URL(MUSIC_TRACKS.default, import.meta.url).href);
+   } else {
+    el = new Audio(new URL(MUSIC_TRACKS[trackKey], import.meta.url).href);
+   }
+   mediaFallbacks.set(trackKey, el);
+  }
+  return el;
+ }
+
+ function loadTrack(trackKey) {
+  if (!MUSIC_TRACKS[trackKey]) return Promise.resolve();
+  if (musicBuffers.has(trackKey)) return Promise.resolve();
+  const existing = musicLoadings.get(trackKey);
+  if (existing) return existing;
+  if (!context?.decodeAudioData || typeof fetch === 'undefined') {
+   useMedia = true;
+   return Promise.resolve();
+  }
+  const job = (async () => {
+   try {
+    const response = await fetch(new URL(MUSIC_TRACKS[trackKey], import.meta.url));
+    if (!response.ok) throw new Error('Music unavailable');
+    const decoded = await context.decodeAudioData(await response.arrayBuffer());
+    musicBuffers.set(trackKey, decoded);
+    if (!musicGain) {
+     musicGain = context.createGain();
+     musicGain.connect(getSharedOutput(context));
+    }
+   } catch {
+    useMedia = true;
+   }
+  })();
+  musicLoadings.set(trackKey, job);
+  return job;
+ }
+
+ function playMusic() {
+  if (!musicWanted || !enabled) return;
+  resumeIfNeeded();
+  if (musicSource || activeMediaFallback) return;
+  const buf = musicBuffers.get(activeMusicTrack);
+  if (buf && context) {
+   if (!musicGain) {
+    musicGain = context.createGain();
+    musicGain.connect(getSharedOutput(context));
+   }
+   musicGain.gain.cancelScheduledValues(context.currentTime);
+   musicGain.gain.setValueAtTime(currentMusicGain(), context.currentTime);
+   const source = context.createBufferSource();
+   source.buffer = buf;
+   source.loop = true;
+   source.connect(musicGain);
+   const rawOffset = musicOffsets.get(activeMusicTrack) || 0;
+   const safeOffset = (buf.duration > 0 && Number.isFinite(rawOffset))
+    ? ((rawOffset % buf.duration) + buf.duration) % buf.duration
+    : 0;
+   source.start(0, safeOffset);
+   musicSource = source;
+   musicStartedAt = context.currentTime;
+  } else if (useMedia && typeof Audio !== 'undefined') {
+   const el = getMediaFallback(activeMusicTrack);
+   if (el) {
+    el.loop = true;
+    activeMediaFallback = el;
+    updateMusicVolume();
+    if (el.paused) el.play()?.catch(() => {});
+   }
+  }
+ }
+
+ function setBgmTrack(trackKey = 'default', { restart = false } = {}) {
+  if (!MUSIC_TRACKS[trackKey]) return;
+  const changed = trackKey !== activeMusicTrack;
+  if (changed) {
+   stopCurrentMusicSource(true);
+   activeMusicTrack = trackKey;
+  }
+  if (restart) {
+   stopCurrentMusicSource(false);
+   musicOffsets.set(trackKey, 0);
+   const el = mediaFallbacks.get(trackKey);
+   if (el) { try { el.currentTime = 0; } catch {} }
+  }
+  if (musicWanted && enabled && (changed || restart)) {
+   startBgm(trackKey);
+  }
+ }
+
+ function preloadBgm(trackKey = 'grandfather') {
+  if (!MUSIC_TRACKS[trackKey]) return;
+  unlock();
+  if (context?.decodeAudioData && typeof fetch !== 'undefined') {
+   void loadTrack(trackKey);
+  }
+ }
+
+ function startBgm(trackKey, options = {}) {
+  clearMusicFadeTimer();
+  const targetTrack = (trackKey && MUSIC_TRACKS[trackKey]) ? trackKey : activeMusicTrack;
+  if (targetTrack !== activeMusicTrack) {
+   stopCurrentMusicSource(true);
+   activeMusicTrack = targetTrack;
+  }
+  if (options?.restart) {
+   stopCurrentMusicSource(false);
+   musicOffsets.set(activeMusicTrack, 0);
+   const el = mediaFallbacks.get(activeMusicTrack);
+   if (el) { try { el.currentTime = 0; } catch {} }
+  }
+  if (!enabled) return;
+  musicWanted = true;
+  unlock();
+  resumeIfNeeded();
+  if (musicBuffers.has(activeMusicTrack) || useMedia) { playMusic(); return; }
+  if (!context?.decodeAudioData || typeof fetch === 'undefined') {
+   useMedia = true;
+   playMusic();
+   return;
+  }
+  const trackAtCall = activeMusicTrack;
+  loadTrack(trackAtCall).then(() => {
+   if (activeMusicTrack === trackAtCall) playMusic();
+  });
+ }
+
+ function pauseBgm() {
+  clearMusicFadeTimer();
+  musicWanted = false;
+  stopCurrentMusicSource(true);
+ }
+
+ function fadeOutBgm(durationSec = 1.3) {
+  clearMusicFadeTimer();
+  musicWanted = false;
+  const dur = Math.max(0.15, Number(durationSec) || 1.3);
+  if (musicSource && musicGain && context) {
+   try {
+    const now = context.currentTime;
+    const cur = Math.max(0.0001, musicGain.gain.value || currentMusicGain());
+    musicGain.gain.cancelScheduledValues(now);
+    musicGain.gain.setValueAtTime(cur, now);
+    musicGain.gain.linearRampToValueAtTime(0.0001, now + dur);
+   } catch {}
+   musicFadeTimer = setTimeout(() => {
+    musicFadeTimer = 0;
+    if (!musicWanted) {
+     stopCurrentMusicSource(true);
+     if (musicGain && context) {
+      try { musicGain.gain.setValueAtTime(currentMusicGain(), context.currentTime); } catch {}
+     }
+    }
+   }, Math.round(dur * 1000) + 40);
+   return;
+  }
+  if (activeMediaFallback) {
+   const el = activeMediaFallback;
+   const startVol = Math.max(0, el.volume || currentMusicGain());
+   const steps = 16;
+   const stepMs = Math.max(25, Math.round((dur * 1000) / steps));
+   let i = 0;
+   const tickFade = () => {
+    if (musicWanted || activeMediaFallback !== el) { musicFadeTimer = 0; return; }
+    i++;
+    el.volume = Math.max(0, startVol * (1 - i / steps));
+    if (i < steps) {
+     musicFadeTimer = setTimeout(tickFade, stepMs);
+    } else {
+     musicFadeTimer = 0;
+     stopCurrentMusicSource(true);
+     el.volume = startVol;
+    }
+   };
+   musicFadeTimer = setTimeout(tickFade, stepMs);
+   return;
+  }
+  stopCurrentMusicSource(true);
  }
 
  function startWebAudioRain() {
@@ -350,6 +509,143 @@ export function createSound() {
   if (rainAudio) {
    try { rainAudio.pause(); } catch {}
   }
+ }
+
+ // Mild pure WebAudio village nature soundscape (soft palm breeze + gentle evening birds) for Grandfather's road.
+ let naturePlaying = false, natureBuffer = null, natureSource = null, natureFilter = null, natureLfo = null, natureLfoGain = null, natureGain = null;
+ let nextBirdAt = 1.8, birdIdx = 0;
+
+ function getNatureBuffer() {
+  if (natureBuffer || !context || typeof context.createBuffer !== 'function') return natureBuffer;
+  try {
+   const sr = context.sampleRate || 44100;
+   const len = Math.floor(sr * 4);
+   const buf = context.createBuffer(1, len, sr);
+   const data = buf.getChannelData(0);
+   // Smooth warm pink-ish noise (palm leaves & gentle canal breeze)
+   let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+   for (let i = 0; i < len; i++) {
+    const white = Math.random() * 2 - 1;
+    b0 = 0.99886 * b0 + white * 0.0555179;
+    b1 = 0.99332 * b1 + white * 0.0750759;
+    b2 = 0.96900 * b2 + white * 0.1538520;
+    b3 = 0.86650 * b3 + white * 0.3104856;
+    b4 = 0.55000 * b4 + white * 0.5329522;
+    b5 = -0.7616 * b5 - white * 0.0168980;
+    const pink = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.09;
+    b6 = white * 0.115926;
+    data[i] = pink;
+   }
+   // Seamless 0.25s edge crossfade so the 4s breeze loop has zero click
+   const fade = Math.min(Math.floor(sr * 0.25), Math.floor(len / 4));
+   for (let i = 0; i < fade; i++) {
+    const w = i / fade;
+    data[i] = data[i] * w + data[len - fade + i] * (1 - w);
+   }
+   natureBuffer = buf;
+  } catch {}
+  return natureBuffer;
+ }
+
+ function startVillageNature() {
+  if (!enabled || naturePlaying) return;
+  if (!context || typeof context.createBuffer !== 'function' || typeof context.createBiquadFilter !== 'function') return;
+  const buf = getNatureBuffer();
+  if (!buf) return;
+  naturePlaying = true;
+  try {
+   resumeIfNeeded();
+   const src = context.createBufferSource();
+   src.buffer = buf;
+   src.loop = true;
+
+   const filter = context.createBiquadFilter();
+   filter.type = 'bandpass';
+   filter.frequency.value = 540;
+   filter.Q.value = 0.65;
+
+   const gain = context.createGain();
+   const targetGain = 0.10 * level('ambience');
+   gain.gain.setValueAtTime(0.0001, context.currentTime);
+   gain.gain.linearRampToValueAtTime(targetGain, context.currentTime + 1.2);
+
+   src.connect(filter).connect(gain).connect(master || getSharedOutput(context));
+   src.start();
+
+   // Slow breathing wind swell LFO modulating filter frequency gently between 360Hz and 720Hz
+   if (typeof context.createOscillator === 'function') {
+    const lfo = context.createOscillator();
+    const lfoGain = context.createGain();
+    lfo.type = 'sine';
+    lfo.frequency.value = 0.12;
+    lfoGain.gain.value = 180;
+    lfo.connect(lfoGain).connect(filter.frequency);
+    lfo.start();
+    natureLfo = lfo;
+    natureLfoGain = lfoGain;
+   }
+
+   natureSource = src;
+   natureFilter = filter;
+   natureGain = gain;
+  } catch {
+   naturePlaying = false;
+  }
+ }
+
+ function stopVillageNature() {
+  if (!naturePlaying) return;
+  naturePlaying = false;
+  try { natureSource?.stop(); } catch {}
+  try { natureSource?.disconnect(); } catch {}
+  try { natureFilter?.disconnect(); } catch {}
+  try { natureLfo?.stop(); } catch {}
+  try { natureLfo?.disconnect(); } catch {}
+  try { natureLfoGain?.disconnect(); } catch {}
+  try { natureGain?.disconnect(); } catch {}
+  natureSource = natureFilter = natureLfo = natureLfoGain = natureGain = null;
+ }
+
+ function playMildVillageBird(pattern = 0) {
+  if (!enabled || !context || typeof context.createOscillator !== 'function') return;
+  const amb = level('ambience');
+  if (amb <= 0) return;
+  try {
+   resumeIfNeeded();
+   const now = context.currentTime;
+   const out = master || getSharedOutput(context);
+   const notes = pattern % 3 === 0
+    // Distant gentle sparrow double-chirp
+    ? [
+       { f0: 2150, f1: 2780, f2: 2350, t: 0, dur: 0.11, vol: 0.022 },
+       { f0: 2280, f1: 2920, f2: 2480, t: 0.17, dur: 0.12, vol: 0.020 }
+      ]
+    : pattern % 3 === 1
+     // Soft distant sunset koel-like flute call
+     ? [
+        { f0: 1180, f1: 1460, f2: 1260, t: 0, dur: 0.28, vol: 0.024 },
+        { f0: 1240, f1: 1520, f2: 1200, t: 0.42, dur: 0.34, vol: 0.022 }
+       ]
+     // Quiet single meadow trill
+     : [
+        { f0: 2420, f1: 3020, f2: 2560, t: 0, dur: 0.14, vol: 0.019 }
+       ];
+   for (const n of notes) {
+    const osc = context.createOscillator();
+    const g = context.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(n.f0, now + n.t);
+    osc.frequency.exponentialRampToValueAtTime(n.f1, now + n.t + n.dur * 0.45);
+    osc.frequency.exponentialRampToValueAtTime(n.f2, now + n.t + n.dur);
+    g.gain.setValueAtTime(0.0001, now + n.t);
+    g.gain.linearRampToValueAtTime(n.vol * amb, now + n.t + n.dur * 0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + n.t + n.dur);
+    osc.connect(g).connect(out);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch {} };
+    osc.start(now + n.t);
+    osc.stop(now + n.t + n.dur + 0.02);
+   }
+  } catch {}
  }
 
  function unlock() {
@@ -536,24 +832,41 @@ export function createSound() {
   play,
   startBgm,
   pauseBgm,
+  fadeOutBgm,
+  setBgmTrack,
+  preloadBgm,
   setVolumes(next){
    for(const key of Object.keys(volumes))if(Number.isFinite(Number(next?.[key])))volumes[key]=Math.max(0,Math.min(1,Number(next[key])));
    updateMusicVolume();
    if(rainGain && context)rainGain.gain.setTargetAtTime(0.36*level('ambience'), context.currentTime, 0.05);
    if(rainAudio)rainAudio.volume=0.42*level('ambience');
+   if(natureGain && context)natureGain.gain.setTargetAtTime(0.10*level('ambience'), context.currentTime, 0.08);
   },
   getVolumes(){return {...volumes};},
   setEnabled(value) {
    enabled = value;
    if (master) master.gain.value = enabled ? MASTER_GAIN : 0;
-   if (!value) { pauseBgm(); stopRainAudio(); }
+   if (!value) { pauseBgm(); stopRainAudio(); stopVillageNature(); }
   },
   update(s, character = 'male') {
    flyover(s);
    if (!s || s.mode !== 'running') {
     lastCollegeRainActive = false;
     stopRainAudio();
+    stopVillageNature();
     return;
+   }
+   const isGrandfatherRoad = s.map === 'grandfather';
+   if (isGrandfatherRoad && enabled) {
+    startVillageNature();
+    const t = s.time || 0;
+    if (t < nextBirdAt - 8) nextBirdAt = t + 1.8;
+    if (t >= nextBirdAt) {
+     playMildVillageBird(birdIdx++);
+     nextBirdAt = t + 2.8 + ((birdIdx * 1.37) % 2.9);
+    }
+   } else {
+    stopVillageNature();
    }
    const isCollegeRain = s.map === 'college' && hasCollegeRain(s);
    const isParkRain = s.map === 'itpark' && hasItParkRain(s);

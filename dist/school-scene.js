@@ -4,7 +4,7 @@ import {buildBus, buildCollegeVehicle} from './bus-model.js';
 import {buildRedShuttleCart} from './itpark-models.js?v=3.8.0';
 import {bakeGroup} from './bake-static-meshes.js';
 import { BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SRGBColorSpace } from './vendor/three.module.js';
-import { SCHOOL_GATE, FINALRUN_GATE, SCHOOL_VAN, ROOF_COINS } from './engine.js?v=3.6.8';
+import { SCHOOL_GATE, FINALRUN_GATE, finalRunGateFor, SCHOOL_VAN, ROOF_COINS } from './engine.js?v=3.9.2';
 
 export function createSchoolEntrance(scene) {
   const campus = new Group();
@@ -203,9 +203,9 @@ export function createSchoolEntrance(scene) {
     const isCollege=state.map==='college';
     const isPark=state.map==='itpark';
     const isFinalVillage=state.map==='finalrun';
-    // At the end of The Final One's College stage (>150m), display the LMSK IT PARK entrance arch & glass reception towers 26m before FINALRUN_GATE so the runner sprints deep inside IT Park!
+    // At the end of The Final One's College stage (>150m), display the LMSK IT PARK entrance arch & glass reception towers 26m before College stage gate so the runner sprints deep inside IT Park!
     const isFinalCollegeToItPark=isCollege&&Boolean(state.isFinalRun)&&state.distance>150;
-    const mapGate=isFinalCollegeToItPark?(FINALRUN_GATE-26):isFinalVillage?(FINALRUN_GATE-18):SCHOOL_GATE;
+    const mapGate=isFinalCollegeToItPark?(finalRunGateFor('college')-26):isFinalVillage?(FINALRUN_GATE-18):SCHOOL_GATE;
     campus.position.set(curveRelX(mapGate,state),curveRelY(mapGate,state),state.distance-(mapGate-SCHOOL_GATE));
     const showParkEntrance=isPark||isFinalCollegeToItPark;
     parkSigns.visible=showParkEntrance;parkWings.visible=showParkEntrance;

@@ -424,7 +424,7 @@ export function createRenderer(canvas, callbacks = {}){
 
  // Use the actual 3D Dark Gold & Crimson-Red coin model (makeCoin / mantis-flip-coin.glb) for collected-coin burst particles
  const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=makeCoin(scene,0,0,0);m.scale.setScalar(.55);m.visible=false;particles.push({m,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(11+i%5*1.8),tilt:(i%3-1)*.16});}let trackCameraY=0,total=0,lastTime=0,burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
- function resize(){const r=canvas.getBoundingClientRect();const rw=Math.round(r.width),rh=Math.round(r.height);if(!rw||!rh||(rw===lastCanvasW&&rh===lastCanvasH))return;lastCanvasW=rw;lastCanvasH=rh;renderer.setSize(rw,rh,false);camera.aspect=rw/rh;baseFov=rw/rh<.8?64:58;camera.fov=baseFov;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
+ function resize(){const r=canvas.getBoundingClientRect();const rw=Math.round(r.width),rh=Math.round(r.height);if(!rw||!rh||(rw===lastCanvasW&&rh===lastCanvasH))return;lastCanvasW=rw;lastCanvasH=rh;renderer.setSize(rw,rh,false);camera.aspect=rw/rh;const asp=rw/rh;baseFov=asp<.52?72:asp<.66?68:asp<.8?64:58;camera.fov=baseFov;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
  let perfFrames=0,perfTime=0,slowWindows=0;
  const renderFn=function render(s,character,frameDt){if(contextLost||renderer.getContext?.()?.isContextLost?.())return 'context-lost';stage.restore();capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
  // Adaptive FPS Auto-Scaler on mobile ('auto' mode): if FPS drops below ~40 FPS on any phone, automatically step down resolution & shadows!
@@ -589,13 +589,32 @@ export function createRenderer(canvas, callbacks = {}){
  const yTurnBank=s.activeBranch?Math.sin(yTurnProgress*Math.PI)*(s.activeBranch==='skybridge'?0.055:-0.055):0;
  const curveBank=branchCurved?-Math.atan(curveSlopeAt(s.distance+12,s))*.26:0;
  const laneBank=inSelect?0:-(s.lane-s.x)*.038;
- const targetCamX=s.mode==='intro'?.48:inSelect?0:camCurveX+s.x*.65;
- const targetCamY=inSelect?1.52:(collegeRun?4.25+camCurveY*.8:3.8+camCurveY*.75)+trackCameraY;
- const targetCamZ=inSelect?3.65:6.8;
- const targetLookX=inSelect?0:s.x*(collegeRun?.42:.37*.65)+bendX;
+ // On narrow mobile portrait screens (e.g. 9:16 / 9:20), track left/right lanes more closely and clamp
+ // curve sway so the runner NEVER drifts off the left or right screen edges on sharp bends (especially The Final One).
+ const camAspect=Math.max(0.38,camera.aspect||0.5);
+ const portraitFactor=Math.max(0,Math.min(1,(0.74-camAspect)/0.32));
+ const laneFollowCam=0.65+portraitFactor*0.88;
+ const laneFollowLook=(collegeRun?0.42:0.24)+portraitFactor*0.95;
+ const safeCamCurveX=camCurveX*(1-portraitFactor*0.35);
+ let targetCamX=s.mode==='intro'?.48:inSelect?0:safeCamCurveX+s.x*laneFollowCam;
+ const targetCamY=inSelect?1.52:(collegeRun?4.25+camCurveY*.8:3.8+camCurveY*.75)+trackCameraY+portraitFactor*(curvedRun?0.22:0.1);
+ const targetCamZ=inSelect?3.65:6.8+portraitFactor*(curvedRun?1.15:0.65);
+ let targetLookX=inSelect?0:s.x*laneFollowLook+bendX*(1-portraitFactor*0.28);
  const targetLookY=inSelect?.98:(collegeRun?1.02:1.35)+trackCameraY+bendY;
- const targetLookZ=inSelect?0:collegeRun||elderRun?-7.5:-12;
- const camBlend=1-Math.exp(-(curvedRun?7.5:5.5)*Math.min(.05,dt||.016));
+ const targetLookZ=inSelect?0:collegeRun||elderRun?-7.5:s.map==='finalrun'?-9.5:-12;
+ if(!inSelect&&!isCapture(s)){
+   const halfWAtRunner=targetCamZ*Math.tan((camera.fov*Math.PI)/360)*camAspect;
+   const tZ=targetCamZ/Math.max(1,targetCamZ-targetLookZ);
+   const rayXAtRunner=targetCamX+(targetLookX-targetCamX)*tZ;
+   const maxOffset=Math.max(0.5,halfWAtRunner*0.52);
+   const errX=s.x*2.2-rayXAtRunner;
+   if(Math.abs(errX)>maxOffset){
+     const shift=errX-Math.sign(errX)*maxOffset;
+     targetCamX+=shift;
+     targetLookX+=shift*0.88;
+   }
+ }
+ const camBlend=1-Math.exp(-(curvedRun?9.5:6.2)*Math.min(.05,dt||.016));
  camera.position.x+=(targetCamX-camera.position.x)*camBlend;
  camera.position.y+=(targetCamY-camera.position.y)*camBlend;
  camera.position.z+=(targetCamZ-camera.position.z)*camBlend;
@@ -710,7 +729,7 @@ export function createRenderer(canvas, callbacks = {}){
  function stepsForMap(map) {
    if (map === 'itpark') return ['base', 'itpark:campus', 'itpark:events', 'itpark:props'];
    if (map === 'college') return ['base', 'college:campus', 'college:props'];
-   if (map === 'grandfather') return ['base', 'grandfather:village'];
+   if (map === 'grandfather') return ['base', 'grandfather:village', 'finalrun:village'];
    if (map === 'finalrun') return ['base', 'finalrun:village', 'school:props'];
    return ['base', 'school:campus', 'school:props'];
  }
