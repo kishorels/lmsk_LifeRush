@@ -1,9 +1,9 @@
 import {GRANDFATHER_GATE} from './grandfather-route.js';
 import {createPowerControls} from './power-controls.js?v=3.3.0';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.6.8';
-import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.8.2';
+import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE} from './engine.js?v=3.6.8';
-import {createRenderer} from './renderer3d.js?v=3.9.0';
+import {createRenderer} from './renderer3d.js?v=3.9.1';
 import {createLiteRenderer} from './renderer-lite.js?v=3.3.1';
 
 import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
@@ -451,7 +451,7 @@ function soundButton(){
 soundButton();
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button, [role="button"]');
-  if (!btn || btn.disabled || btn.id === 'btn-enter' || btn.id === 'sound' || btn.closest('#touch-controls')) return;
+  if (!btn || btn.disabled || btn.id === 'btn-enter' || btn.id === 'start' || btn.id === 'sound' || btn.closest('#touch-controls')) return;
   playUiClick(sound);
 }, { passive: true });
 $('sound').onclick=()=>{
@@ -1659,6 +1659,22 @@ function start(){
 }
 let runLoadingActive = false;
 let runLaunchNonce = 0;
+let startBtnLaunching = false;
+function setRunLoadingProgress(pct, subText) {
+  const bar = $('run-loading-bar');
+  if (bar) bar.style.width = `${Math.max(8, Math.min(100, Math.round(pct)))}%`;
+  if (subText && $('run-loading-sub')) $('run-loading-sub').textContent = subText;
+}
+function hideRunLoadingVeilSmooth() {
+  const veil = $('run-loading-veil');
+  if (!veil || veil.hidden) return;
+  veil.classList.remove('is-visible');
+  veil.classList.add('is-fading-out');
+  setTimeout(() => {
+    veil.hidden = true;
+    veil.classList.remove('is-fading-out');
+  }, 290);
+}
 function beginRun(chosen){
   if (!isCollegeUnlocked() && selectedMap !== 'finalrun') {
     selectedMap = 'school';
@@ -1675,85 +1691,125 @@ function beginRun(chosen){
   const mapLabel = targetMap === 'itpark' ? 'IT PARK' : targetMap === 'college' ? 'COLLEGE CAMPUS' : targetMap === 'finalrun' ? 'THE FINAL RUN' : 'SCHOOL CAMPUS';
   if (veil) {
     if ($('run-loading-title')) $('run-loading-title').textContent = `PREPARING ${mapLabel}...`;
-    if ($('run-loading-sub')) $('run-loading-sub').textContent = 'Loading selected hero & track';
+    setRunLoadingProgress(14, 'Starting 3D engine...');
+    veil.classList.remove('is-fading-out', 'is-visible');
     veil.hidden = false;
+    void veil.offsetWidth;
+    veil.classList.add('is-visible');
   }
   runLoadingActive = true;
-  setScreenMode('running');
   effects.setEnabled(sound);
   effects.unlock();
 
-  // Paint the loading veil immediately on frame 0, then initialize & warm ONLY the chosen 1 hero + 1 map!
-  requestAnimationFrame(() => {
+  // Let the animated loading veil fade in cleanly BEFORE doing any WebGL/shader work (zero freeze feel!).
+  setTimeout(() => {
     if (launchId !== runLaunchNonce) return;
+    $('start')?.classList.remove('is-launching');
+    $('select-screen')?.classList.remove('is-launching-run');
+    startBtnLaunching = false;
+    setScreenMode('running');
+
+    // Chunk 1: initialize WebGL renderer & kick off ONLY the chosen hero GLB download.
     ensureRenderer(targetCharId);
     draw?.preload?.(targetCharId);
-    draw?.warmMapNow?.(targetMap);
+    setRunLoadingProgress(32, 'Loading track & campus...');
 
-    s = fresh();
-    s.level = playerLevel(profile.xp);
-    equipPowers(s, chosen);
-    s.enableForks = targetMap === 'itpark';
-    s.map = targetMap;
-    if (targetMap === 'finalrun') {
-      finalRunActiveCharId = 'male';
-      character = 'male';
-      s.isFinalRun = true;
-      s.finalRunStage = 'village';
-      s.turnTime = 0;
-      s.mode = 'running';
-      s.styleAction = 0;
-      s.speed = 28;
-    } else {
-      s.turnTime = 0.65;
-      s.mode = 'intro';
-      s.styleAction = SWEEP_SECONDS;
-      s.speed = 0;
-    }
-    // Pre-spawn initial obstacles before Frame 1 so gameplay starts with 0 spawn stutter.
-    step(s, 0.001);
-    s.distance = 0;
-    s.time = 0;
+    const pendingSteps = draw?.warmMapSteps ? draw.warmMapSteps(targetMap) : [];
+    const totalSteps = Math.max(1, pendingSteps.length);
+    let doneSteps = 0;
+    const stepLabels = {
+      base: 'Warming core shaders...',
+      'school:campus': 'Building school campus...',
+      'school:props': 'Loading obstacles & buses...',
+      'college:campus': 'Building college hills...',
+      'college:props': 'Loading college vehicles...',
+      'itpark:campus': 'Building IT Park towers...',
+      'itpark:events': 'Preparing Glass Bridge & metro...',
+      'itpark:props': 'Loading supercars & tech props...',
+      'finalrun:village': 'Building village trail...'
+    };
 
-    const startedAt = performance.now();
-    const finishLaunch = () => {
+    const runNextWarmChunk = () => {
       if (launchId !== runLaunchNonce) return;
-      // Render 2 warm frames behind the loading veil so every active shader & texture is uploaded to GPU!
-      try {
-        draw?.(s, targetCharId, 0.016);
-        draw?.(s, targetCharId, 0.016);
-      } catch {}
+      const stepId = draw?.warmMapStep ? draw.warmMapStep(targetMap) : null;
+      if (stepId) {
+        doneSteps++;
+        const pct = 34 + (doneSteps / totalSteps) * 52;
+        setRunLoadingProgress(pct, stepLabels[stepId] || 'Preparing track...');
+        // Yield 24ms between chunks so the spinner & progress bar stay silky-smooth with ZERO struck feel!
+        setTimeout(runNextWarmChunk, 24);
+        return;
+      }
+
+      // All map chunks warmed -> prepare fresh run state & wait for the 1 chosen hero GLB.
+      setRunLoadingProgress(90, 'Getting runner ready...');
+      s = fresh();
+      s.level = playerLevel(profile.xp);
+      equipPowers(s, chosen);
+      s.enableForks = targetMap === 'itpark';
+      s.map = targetMap;
+      if (targetMap === 'finalrun') {
+        finalRunActiveCharId = 'male';
+        character = 'male';
+        s.isFinalRun = true;
+        s.finalRunStage = 'village';
+        s.turnTime = 0;
+        s.mode = 'running';
+        s.styleAction = 0;
+        s.speed = 28;
+      } else {
+        s.turnTime = 0.65;
+        s.mode = 'intro';
+        s.styleAction = SWEEP_SECONDS;
+        s.speed = 0;
+      }
+      step(s, 0.001);
       s.distance = 0;
       s.time = 0;
-      prev = 0;
-      lastNearMissShown = 0;
-      lastEventBannerShown = 0;
-      lastLmskMask = -1;
-      lastFeverOn = false;
-      if ($('fever-veil')) $('fever-veil').hidden = true;
-      runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
-      if ($('btn-revive')) $('btn-revive').hidden = true;
-      if ($('btn-share-score')) $('btn-share-score').hidden = true;
-      if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
-      $('toast').textContent = targetMap === 'finalrun' ? `Village road · Reach the school at ${FINALRUN_GATE.toLocaleString()}m` : targetMap === 'itpark' ? 'IT Park · Follow the shuttle roof ramp' : targetMap === 'college' ? 'College rush · Find the next roof ramp' : 'School rush · Find the next roof ramp';
-      runLoadingActive = false;
-      if (veil) veil.hidden = true;
-      if (sound) effects.startBgm?.();
-      if (targetMap !== 'finalrun') effects.play('swag');
-      effects.play('bell');
+
+      const startedAt = performance.now();
+      const finishLaunch = () => {
+        if (launchId !== runLaunchNonce) return;
+        setRunLoadingProgress(100, 'Ready — Let’s Run!');
+        // Render 2 warm frames behind the veil so Frame 1 after fade-out has ZERO hitch!
+        try {
+          draw?.(s, targetCharId, 0.016);
+          draw?.(s, targetCharId, 0.016);
+        } catch {}
+        s.distance = 0;
+        s.time = 0;
+        prev = 0;
+        lastNearMissShown = 0;
+        lastEventBannerShown = 0;
+        lastLmskMask = -1;
+        lastFeverOn = false;
+        if ($('fever-veil')) $('fever-veil').hidden = true;
+        runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
+        if ($('btn-revive')) $('btn-revive').hidden = true;
+        if ($('btn-share-score')) $('btn-share-score').hidden = true;
+        if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
+        $('toast').textContent = targetMap === 'finalrun' ? `Village road · Reach the school at ${FINALRUN_GATE.toLocaleString()}m` : targetMap === 'itpark' ? 'IT Park · Follow the shuttle roof ramp' : targetMap === 'college' ? 'College rush · Find the next roof ramp' : 'School rush · Find the next roof ramp';
+        runLoadingActive = false;
+        hideRunLoadingVeilSmooth();
+        if (sound) effects.startBgm?.();
+        if (targetMap !== 'finalrun') effects.play('swag');
+        effects.play('bell');
+      };
+
+      const waitReady = () => {
+        if (launchId !== runLaunchNonce) return;
+        const loaded = usingLiteRenderer || !draw?.isLoaded || draw.isLoaded(targetCharId);
+        if (loaded || (performance.now() - startedAt) > 2200) {
+          requestAnimationFrame(finishLaunch);
+        } else {
+          setTimeout(waitReady, 35);
+        }
+      };
+      waitReady();
     };
 
-    const waitReady = () => {
-      if (launchId !== runLaunchNonce) return;
-      const loaded = usingLiteRenderer || !draw?.isLoaded || draw.isLoaded(targetCharId);
-      if (loaded || (performance.now() - startedAt) > 2200) {
-        requestAnimationFrame(finishLaunch);
-      } else {
-        setTimeout(waitReady, 35);
-      }
-    };
-    waitReady();
-  });
+    setTimeout(runNextWarmChunk, 24);
+  }, 150);
 }
 
 function pause(){
@@ -1948,8 +2004,24 @@ if ($('btn-revive')) {
 
 if($('start')) $('start').onclick=e=>{
   e?.preventDefault?.();
-  if($('start').dataset.loadError==='true') location.reload();
-  else start();
+  if($('start').dataset.loadError==='true'){ location.reload(); return; }
+  if (runLoadingActive || startBtnLaunching) return;
+  startBtnLaunching = true;
+  playLaunchClick(sound);
+  if (navigator.vibrate) try { navigator.vibrate(18); } catch {}
+  $('start').classList.remove('is-launching');
+  void $('start').offsetWidth;
+  $('start').classList.add('is-launching');
+  $('select-screen')?.classList.add('is-launching-run');
+  // Let the tactile 3D button punch-down & launch glow animate cleanly before entering the run!
+  setTimeout(() => {
+    if (!runLoadingActive) {
+      $('start')?.classList.remove('is-launching');
+      $('select-screen')?.classList.remove('is-launching-run');
+      startBtnLaunching = false;
+    }
+    start();
+  }, 200);
 };
 if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   if(s.mode==='paused'){resume();return;}

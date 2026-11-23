@@ -566,29 +566,63 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   align-items: center;
   justify-content: center;
   background: radial-gradient(circle at 50% 45%, rgba(10, 32, 68, 0.94) 0%, rgba(5, 14, 32, 0.98) 100%);
+  opacity: 0;
+  transform: scale(1.03);
+  transition: opacity 0.22s cubic-bezier(0.22, 1, 0.36, 1), transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.run-loading-veil.is-visible {
   opacity: 1;
-  transition: opacity 0.22s ease;
+  transform: scale(1);
+}
+.run-loading-veil.is-fading-out {
+  opacity: 0;
+  transform: scale(1.05);
+  pointer-events: none;
+  transition: opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.30s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .run-loading-veil[hidden] {
   display: none !important;
 }
 .run-loading-card {
+  width: min(296px, 82%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 22px 28px;
+  padding: 22px 24px;
   border-radius: 22px;
   background: linear-gradient(160deg, rgba(14, 42, 86, 0.95), rgba(7, 20, 46, 0.98));
   border: 1.5px solid rgba(0, 212, 255, 0.65);
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.7), 0 0 26px rgba(0, 212, 255, 0.22);
   text-align: center;
+  transform: translateY(10px) scale(0.95);
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.run-loading-veil.is-visible .run-loading-card {
+  transform: translateY(0) scale(1);
 }
 .run-loading-card strong {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 900;
   letter-spacing: 1.2px;
   color: #ffe268;
+}
+.run-loading-track {
+  width: 100%;
+  height: 7px;
+  border-radius: 99px;
+  background: rgba(6, 16, 36, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  overflow: hidden;
+}
+.run-loading-bar {
+  width: 12%;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #00e5ff 0%, #38bdf8 45%, #ffd754 100%);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.75);
+  transition: width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .run-loading-card small {
   font-size: 11px;
@@ -867,6 +901,8 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 }
 
 .btn-start-rush {
+  position: relative;
+  overflow: hidden;
   width: min(320px, 86%);
   background: linear-gradient(135deg, #ffe46b 0%, #ffb703 52%, #fb8500 100%);
   color: #0b1b32;
@@ -883,7 +919,24 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   gap: 10px;
   box-shadow: 0 6px 0 #b25900, 0 14px 32px rgba(251, 133, 0, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.7);
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
-  transition: transform .12s, box-shadow .12s, filter .15s;
+  transition: transform .14s cubic-bezier(0.22, 1, 0.36, 1), box-shadow .14s ease, filter .15s ease;
+  will-change: transform, box-shadow;
+}
+.btn-start-rush::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: -65%;
+  width: 45%;
+  height: 140%;
+  background: linear-gradient(110deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: skewX(-18deg);
+  pointer-events: none;
+  animation: startBtnSheen 3.2s ease-in-out infinite;
+}
+@keyframes startBtnSheen {
+  0%, 72%, 100% { left: -65%; }
+  88% { left: 135%; }
 }
 .btn-start-rush:hover {
   transform: translateY(-2px);
@@ -891,11 +944,45 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   box-shadow: 0 8px 0 #b25900, 0 18px 36px rgba(251, 133, 0, 0.62), inset 0 2px 0 rgba(255, 255, 255, 0.8);
 }
 .btn-start-rush:active {
-  transform: translateY(3px);
+  transform: translateY(4px) scale(0.95);
   box-shadow: 0 2px 0 #b25900, 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+.btn-start-rush.is-launching {
+  animation: btnStartLaunch 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+.btn-start-rush.is-launching .rush-arrow {
+  transform: translateX(12px) scale(1.18);
+}
+@keyframes btnStartLaunch {
+  0% { transform: translateY(0) scale(1); filter: brightness(1); }
+  38% { transform: translateY(5px) scale(0.93); box-shadow: 0 1px 0 #b25900, 0 0 28px rgba(255, 224, 96, 0.95); filter: brightness(1.18); }
+  100% { transform: translateY(-2px) scale(1.04); box-shadow: 0 6px 0 #b25900, 0 0 36px rgba(0, 229, 255, 0.85), 0 0 24px rgba(255, 215, 0, 0.9); filter: brightness(1.14); }
 }
 .btn-start-rush .rush-arrow {
   font-size: 19px;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.select-screen.is-launching-run .menu-hero-stage {
+  transform: translateY(-10px) scale(1.08);
+  opacity: 0.72;
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
+}
+.select-screen.is-launching-run .select-top-bar,
+.select-screen.is-launching-run .hub-top-right {
+  transform: translateY(-18px);
+  opacity: 0;
+  transition: transform 0.22s ease, opacity 0.2s ease;
+}
+.select-screen.is-launching-run .hub-nav,
+.select-screen.is-launching-run .select-player-badge {
+  transform: translateY(20px);
+  opacity: 0;
+  transition: transform 0.22s ease, opacity 0.2s ease;
+}
+.hub-nav button:active,
+.hub-map-card:active {
+  transform: scale(0.94) !important;
 }
 .select-guide-text {
   font-size: 9px;

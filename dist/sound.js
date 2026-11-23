@@ -601,20 +601,67 @@ export function playUiClick(enabled = true) {
   try {
     const ctx = uiAudioContext();
     if (!ctx) return;
+    const out = getSharedOutput(ctx);
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(580, now);
-    osc.frequency.exponentialRampToValueAtTime(980, now + 0.048);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(0.085, now + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
-    osc.connect(gain);
-    gain.connect(getSharedOutput(ctx));
-    osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch {} };
-    osc.start(now);
-    osc.stop(now + 0.085);
+    // Crisp tactile dual-harmonic mechanical pop click for responsive UI feedback.
+    const pop = ctx.createOscillator();
+    const popGain = ctx.createGain();
+    pop.type = 'sine';
+    pop.frequency.setValueAtTime(840, now);
+    pop.frequency.exponentialRampToValueAtTime(1380, now + 0.042);
+    popGain.gain.setValueAtTime(0.0001, now);
+    popGain.gain.linearRampToValueAtTime(0.13, now + 0.004);
+    popGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.062);
+    pop.connect(popGain);
+    popGain.connect(out);
+    pop.onended = () => { try { pop.disconnect(); popGain.disconnect(); } catch {} };
+    pop.start(now);
+    pop.stop(now + 0.068);
+
+    const body = ctx.createOscillator();
+    const bodyGain = ctx.createGain();
+    body.type = 'triangle';
+    body.frequency.setValueAtTime(360, now);
+    body.frequency.exponentialRampToValueAtTime(190, now + 0.038);
+    bodyGain.gain.setValueAtTime(0.0001, now);
+    bodyGain.gain.linearRampToValueAtTime(0.085, now + 0.003);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
+    body.connect(bodyGain);
+    bodyGain.connect(out);
+    body.onended = () => { try { body.disconnect(); bodyGain.disconnect(); } catch {} };
+    body.start(now);
+    body.stop(now + 0.052);
+  } catch {}
+}
+
+export function playLaunchClick(enabled = true) {
+  if (!enabled) return;
+  try {
+    const ctx = uiAudioContext();
+    if (!ctx) return;
+    const out = getSharedOutput(ctx);
+    const now = ctx.currentTime;
+    // Tactile punch click + crisp rising game-start launch chime for LET'S RUN.
+    const notes = [
+      { f0: 420, f1: 240, t: 0, dur: 0.045, vol: 0.12, type: 'triangle' },
+      { f0: 523, f1: 659, t: 0.015, dur: 0.10, vol: 0.12, type: 'triangle' },
+      { f0: 784, f1: 1046, t: 0.075, dur: 0.16, vol: 0.11, type: 'sine' }
+    ];
+    for (const n of notes) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = n.type;
+      osc.frequency.setValueAtTime(n.f0, now + n.t);
+      osc.frequency.exponentialRampToValueAtTime(n.f1, now + n.t + n.dur);
+      gain.gain.setValueAtTime(0.0001, now + n.t);
+      gain.gain.linearRampToValueAtTime(n.vol, now + n.t + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + n.t + n.dur);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch {} };
+      osc.start(now + n.t);
+      osc.stop(now + n.t + n.dur + 0.015);
+    }
   } catch {}
 }
 

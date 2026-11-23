@@ -711,6 +711,13 @@ export function createRenderer(canvas, callbacks = {}){
    }
    return false;
  };
+ renderFn.warmMapSteps = (map = 'school') => stepsForMap(map).filter(id => !warmedSteps.has(id));
+ renderFn.warmMapStep = (map = 'school') => {
+   for (const stepId of stepsForMap(map)) {
+     if (!warmedSteps.has(stepId)) { runWarmStep(stepId); return stepId; }
+   }
+   return null;
+ };
  renderFn.warmMapNow = (map = 'school') => {
    for (const stepId of stepsForMap(map)) runWarmStep(stepId);
  };
