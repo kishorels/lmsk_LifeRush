@@ -131,6 +131,12 @@ test('power wheel reveals slots only while holding POWER, activates strictly on 
       if (!winListeners.has(type)) winListeners.set(type, []);
       winListeners.get(type).push(fn);
     },
+    removeEventListener(type, fn) {
+      const list = winListeners.get(type);
+      if (!list) return;
+      const idx = list.indexOf(fn);
+      if (idx >= 0) list.splice(idx, 1);
+    },
   };
   try {
     const s = fresh(14);
@@ -183,11 +189,13 @@ test('power wheel reveals slots only while holding POWER, activates strictly on 
     assert.equal(slot1.classList.contains('aim'), false);
     assert.deepEqual(activated, [0, 1]);
 
-    // 5) Hold + pointercancel -> closes immediately with zero activation
+    // 5) Hold + pointercancel -> closes immediately with zero activation and detaches global pointermove listener
     trigger.onpointerdown(makeEvent({ pointerId: 4, clientX: 300, clientY: 500 }));
     assert.equal(wheel.classList.contains('open'), true);
+    assert.equal((winListeners.get('pointermove') || []).length, 1);
     trigger.onpointercancel(makeEvent({ pointerId: 4 }));
     assert.equal(wheel.classList.contains('open'), false);
+    assert.equal((winListeners.get('pointermove') || []).length, 0);
     assert.deepEqual(activated, [0, 1]);
   } finally {
     globalThis.document = origDoc;

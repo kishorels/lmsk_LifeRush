@@ -125,6 +125,11 @@ export function createPowerControls(state,activate) {
   function release() {
     const activePointerId = pointer?.id;
     pointer = null;
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleCancel);
+    }
     wheel.classList.remove('open');
     labels.forEach(label => label.classList.remove('aim'));
     if (activePointerId != null && typeof trigger.releasePointerCapture === 'function') {
@@ -134,22 +139,6 @@ export function createPowerControls(state,activate) {
       try { trigger.blur(); } catch {}
     }
   }
-  trigger.oncontextmenu = event => event.preventDefault();
-  trigger.onclick = event => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!pointer) release();
-  };
-  trigger.onpointerdown = event => {
-    if (pointer || state().mode !== 'running') return;
-    event.preventDefault();
-    event.stopPropagation();
-    pointer = {id:event.pointerId,x:event.clientX,y:event.clientY};
-    if (typeof trigger.setPointerCapture === 'function') {
-      try { trigger.setPointerCapture(event.pointerId); } catch {}
-    }
-    wheel.classList.add('open');
-  };
   const handleMove = event => {
     if (pointer?.id !== event.pointerId) return;
     event.preventDefault();
@@ -169,13 +158,31 @@ export function createPowerControls(state,activate) {
     if (event && pointer && event.pointerId != null && pointer.id !== event.pointerId) return;
     release();
   };
+  trigger.oncontextmenu = event => event.preventDefault();
+  trigger.onclick = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!pointer) release();
+  };
+  trigger.onpointerdown = event => {
+    if (pointer || state().mode !== 'running') return;
+    event.preventDefault();
+    event.stopPropagation();
+    pointer = {id:event.pointerId,x:event.clientX,y:event.clientY};
+    if (typeof trigger.setPointerCapture === 'function') {
+      try { trigger.setPointerCapture(event.pointerId); } catch {}
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pointermove', handleMove);
+      window.addEventListener('pointerup', handleUp);
+      window.addEventListener('pointercancel', handleCancel);
+    }
+    wheel.classList.add('open');
+  };
   trigger.onpointermove = handleMove;
   trigger.onpointerup = handleUp;
   trigger.onpointercancel = trigger.onlostpointercapture = handleCancel;
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-    window.addEventListener('pointercancel', handleCancel);
     window.addEventListener('blur', release);
     window.addEventListener('keydown',event => {
       if (state().mode !== 'running' || event.repeat || !['1','2'].includes(event.key)) return;
