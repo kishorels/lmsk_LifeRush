@@ -22,10 +22,11 @@ export function stormSkyMaterial(clock) {
     shader.uniforms.stormTime = clock;
     shader.vertexShader = 'varying vec3 domeDirection;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>', '#include <begin_vertex>\n domeDirection = position;');
-    shader.fragmentShader = 'varying vec3 domeDirection; uniform float stormTime;\n' + noiseGLSL +
+    shader.fragmentShader = 'varying vec3 domeDirection; uniform highp float stormTime;\n' + noiseGLSL +
       shader.fragmentShader.replace('#include <color_fragment>', `
         vec3 ray = normalize(domeDirection);
-        vec2 p = ray.xz * 1.65 / max(.085, ray.y + .14) + vec2(stormTime*.043,0.);
+        highp float st = mod(stormTime, 600.0);
+        vec2 p = ray.xz * 1.65 / max(.085, ray.y + .14) + vec2(st*.043,0.);
         float bank = .54*rainNoise(p) + .28*rainNoise(p*2.1) + .13*rainNoise(p*4.4) + .05*rainNoise(p*9.);
         vec3 clouds = mix(vec3(.038,.068,.135), vec3(.45,.55,.69), smoothstep(.21,.8,bank));
         diffuseColor.rgb = mix(vec3(.32,.45,.61), clouds, smoothstep(-.05,.23,ray.y));
@@ -43,27 +44,31 @@ export function wetCollegeAsphalt(material, distance, clock, strength, rainbowSt
       wetStrength: strength,
       rainbowStrength: rainbowStrength
     });
-    shader.vertexShader = 'varying vec2 roadUv;\n' + shader.vertexShader.replace(
+    shader.vertexShader = 'varying highp vec2 roadUv;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>', '#include <begin_vertex>\n roadUv = uv;');
-    shader.fragmentShader = 'varying vec2 roadUv; uniform float roadDistance, stormTime, wetStrength, rainbowStrength;\n' +
+    shader.fragmentShader = 'varying highp vec2 roadUv; uniform highp float roadDistance, stormTime; uniform float wetStrength, rainbowStrength;\n' +
       noiseGLSL + shader.fragmentShader.replace('#include <emissivemap_fragment>', `
         #include <emissivemap_fragment>
         if (wetStrength > 0.) {
-          vec2 p = vec2((roadUv.x-.5)*7.1, roadDistance-35.+roadUv.y*300.);
-          float grain = rainNoise(p*vec2(7.,18.) + vec2(0.,stormTime*.65));
-          float pool = smoothstep(.22,.68,rainNoise(p*vec2(1.3,.78))*.73 + grain*.27);
+          highp float distWrap = mod(roadDistance, 256.0);
+          highp float timeWrap = mod(stormTime, 120.0);
+          highp vec2 p = vec2((roadUv.x-.5)*7.1, distWrap-35.+roadUv.y*300.);
+          float grain = rainNoise(mod(p*vec2(7.,18.) + vec2(0.,timeWrap*.65), 128.0));
+          float pool = smoothstep(.22,.68,rainNoise(mod(p*vec2(1.3,.78), 128.0))*.73 + grain*.27);
           float lampX = abs(p.x) - (2.78 + .45*(grain-.5));
-          float lamps = exp(-6.*lampX*lampX) * pow(.5+.5*cos(6.283*(p.y-64.)/32.*3.),3.);
-          vec2 cells = p*1.65, cell = floor(cells);
+          float lampWave = clamp(.5+.5*cos(6.2831853*(p.y-64.)/32.*3.), 0.0, 1.0);
+          float lamps = exp(-min(40.0, 6.*lampX*lampX)) * (lampWave*lampWave*lampWave);
+          highp vec2 cells = p*1.65;
+          highp vec2 cell = mod(floor(cells), 256.0);
           float seed = rainHash(cell);
-          float age = fract(stormTime*(.64+.45*seed)+seed*17.) * 1.48;
+          float age = fract(timeWrap*(.64+.45*seed)+seed*17.) * 1.48;
           vec2 center = .32 + .36*vec2(seed,rainHash(cell+12.));
           float radius = length(fract(cells)-center);
-          float width = max(.014, fwidth(radius));
+          float width = clamp(fwidth(radius), .014, .45);
           float wave = 1.-smoothstep(0.,width,abs(radius-age*.31));
           float wake = 1.-smoothstep(0.,width,abs(radius-age*.31+.043));
           float ring = (wave + .36*wake) * max(0.,1.-age) * (.14+.86*pool);
-          float detail = 1.-smoothstep(.025,.22,fwidth(p.y));
+          float detail = 1.-smoothstep(.025,.22,clamp(fwidth(p.y), 0.0, 2.0));
           
           vec3 rainbowRefl = vec3(0.);
           if (rainbowStrength > 0.01) {
@@ -73,13 +78,14 @@ export function wetCollegeAsphalt(material, distance, clock, strength, rainbowSt
               mix(vec3(0.05, 0.82, 0.88), mix(vec3(0.15, 0.92, 0.30), mix(vec3(0.98, 0.86, 0.08), vec3(0.98, 0.20, 0.12), smoothstep(0.68, 1.0, rx)), smoothstep(0.40, 0.68, rx)), smoothstep(0.22, 0.40, rx)),
               smoothstep(0.18, 0.88, rx)
             );
-            float reflGleam = pow(smoothstep(0.12, 0.75, pool), 1.2) * (0.35 + 0.65 * grain) * (0.8 + 0.3 * ring);
+            float sp = clamp(smoothstep(0.12, 0.75, pool), 0.0, 1.0);
+            float reflGleam = sp * sqrt(max(sp, 1e-4)) * (0.35 + 0.65 * grain) * (0.8 + 0.3 * ring);
             rainbowRefl = spectral * reflGleam * rainbowStrength * 1.5;
           }
 
-          totalEmissiveRadiance += wetStrength * (
-            vec3(.06,.12,.22)*pool + vec3(1.37,.53,.09)*lamps*pool*(.09+grain)
-            + vec3(.24,.36,.52)*ring*detail + rainbowRefl);
+          vec3 wetGlow = vec3(.06,.12,.22)*pool + vec3(1.37,.53,.09)*lamps*pool*(.09+grain)
+            + vec3(.24,.36,.52)*ring*detail + rainbowRefl;
+          totalEmissiveRadiance += wetStrength * max(vec3(0.0), wetGlow);
         }
       `);
   };

@@ -999,22 +999,24 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 .hud-top-bar {
   position: absolute;
   top: max(12px, env(safe-area-inset-top));
-  left: 14px;
-  right: 14px;
+  left: 12px;
+  right: 12px;
   height: 42px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   z-index: 10;
   pointer-events: none;
 }
 .hud-brand-wrap {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   pointer-events: auto;
 }
 .hud-logo-mini {
-  height: 38px;
+  height: 36px;
   width: auto;
   border-radius: 10px;
   border: 1.5px solid #ffd54f90;
@@ -1024,17 +1026,22 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 }
 .hud-top-bar .location,
 .location {
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  transform: translate(-50%, -50%) !important;
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: #142d54e6;
   border: 1.5px solid #7bc5f860;
   border-radius: 20px;
-  padding: 6px 14px;
-  font-size: 10px;
+  padding: 5px 10px;
+  font-size: clamp(9px, 2.5vw, 10.5px);
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.6px;
   color: #eaf6ff;
   white-space: nowrap;
   box-shadow: 0 3px 10px #0004;
@@ -1044,7 +1051,8 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 .hud-top-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex: 0 0 auto;
+  gap: 6px;
   pointer-events: auto;
 }
 .hud-top-actions button,
@@ -2009,51 +2017,70 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   text-shadow: 0 0 6px rgba(0, 229, 255, 0.8);
 }
 
-/* Individual Power Slot Buttons (Slot 1 & Slot 2) - Hidden by default, visible only on hover / touch */
+/* Individual Power Slot Indicators (Slot 1 & Slot 2) - STRICTLY hidden unless holding #power-trigger */
 .power-direction {
   position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 54px;
+  height: 54px;
   padding: 0;
   margin: 0;
   border-radius: 50%;
   border: 2px solid rgba(56, 189, 248, 0.55);
   background: radial-gradient(circle at 35% 35%, rgba(15, 38, 64, 0.96), rgba(6, 17, 31, 0.99));
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 0 8px rgba(56, 189, 248, 0.15);
-  cursor: pointer;
-  opacity: 0;
   pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
   transform: scale(0.35);
-  transition: opacity 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease;
+  transition: opacity 0.08s ease-out, transform 0.08s ease-out, visibility 0s linear 0s, border-color 0.15s ease;
 }
 .power-direction.above {
-  bottom: 114%;
-  right: 5px;
+  bottom: 120%;
+  right: 4px;
   transform-origin: bottom center;
 }
 .power-direction.left {
-  right: 114%;
-  top: 5px;
+  right: 122%;
+  top: 4px;
   transform-origin: right center;
 }
 
-/* Revealed only on hover or when holding/touching the power button */
-#run-powers:hover .power-direction:not([hidden]),
-#run-powers.open .power-direction:not([hidden]),
-#run-powers:focus-within .power-direction:not([hidden]) {
-  opacity: 1;
-  pointer-events: auto;
-  transform: scale(1);
+/* Guarantee slots & power names stay completely hidden whenever trigger is NOT held */
+#run-powers:not(.open) .power-direction {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  animation: none !important;
 }
 
-.power-direction.aim, #run-powers:hover .power-direction:not([hidden]):hover {
-  transform: scale(1.18) !important;
+/* Revealed ONLY while actively holding #power-trigger (.open) */
+#run-powers.open .power-direction:not([hidden]) {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+  transform: scale(1);
+  transition: opacity 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s linear 0s, border-color 0.15s ease;
+}
+#run-powers.open #power-trigger {
+  transform: scale(0.92);
+  border-color: #facc15;
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.65), inset 0 0 12px rgba(250, 204, 21, 0.35);
+}
+
+#run-powers.open .power-direction.aim {
+  transform: scale(1.16) !important;
   border-color: #facc15 !important;
-  box-shadow: 0 0 22px rgba(250, 204, 21, 0.8), inset 0 0 10px rgba(250, 204, 21, 0.45) !important;
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.85), inset 0 0 10px rgba(250, 204, 21, 0.45) !important;
+}
+#run-powers.open .power-direction.aim .power-slot-name {
+  color: #fef08a;
+  border-color: rgba(250, 204, 21, 0.9);
+  background: rgba(22, 34, 58, 0.96);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.55);
 }
 
 /* Slot Ready State */
@@ -2078,6 +2105,8 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 .power-direction.active {
   border-color: #f97316;
   box-shadow: 0 0 20px rgba(249, 115, 22, 0.8), inset 0 0 10px rgba(249, 115, 22, 0.4);
+}
+#run-powers.open .power-direction.active {
   animation: slotActiveFlicker 0.6s infinite alternate;
 }
 @keyframes slotActiveFlicker {
@@ -2092,9 +2121,9 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   font-weight: 900;
 }
 
-/* Slot Recharging State */
-.power-direction.recharging {
-  opacity: 0.68;
+/* Slot Recharging State - scoped to open wheel so closed slots stay hidden */
+#run-powers.open .power-direction.recharging:not([hidden]) {
+  opacity: 0.72;
   filter: grayscale(0.25);
 }
 .power-direction.recharging .power-slot-status {
@@ -2130,6 +2159,30 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   color: #7dd3fc;
   font-size: 9px;
   font-weight: 900;
+}
+.power-slot-name {
+  position: absolute;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(7, 21, 38, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.6);
+  color: #e0f2fe;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.25px;
+  line-height: 1.25;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.power-direction.above .power-slot-name {
+  bottom: calc(100% + 6px);
+  right: 0;
+}
+.power-direction.left .power-slot-name {
+  top: calc(100% + 6px);
+  right: 0;
 }
 
 .fever-veil {
@@ -2173,14 +2226,8 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   transform: scale(1.12);
 }
 
-/* Crisp hardware-accelerated direct GPU display with zero blur */
 #world {
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
+  image-rendering: auto;
 }
 .game:not(.is-char-loading) #world {
   filter: none;

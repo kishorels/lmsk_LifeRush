@@ -1062,7 +1062,7 @@ export function createRoadEventsScene(scene) {
   const oceanBaseMat = new MeshStandardMaterial({
     color: 0x0b9cd1,
     map: oceanTex.colorMap,
-    bumpMap: oceanTex.bumpMap,
+    bumpMap: scene.userData?.lowEnd ? null : oceanTex.bumpMap,
     bumpScale: 0.28,
     roughness: 0.08,
     metalness: 0.62,
@@ -1686,14 +1686,16 @@ export function createRoadEventsScene(scene) {
       part(bay, rockDark, side * 4.45, CAVE_ROOF_Y + 0.25, 0, 3.1, 0.75, BAY_LEN + 0.04);
       // Rugged faceted boulders arching inward from road edge up to the skylight
       const profile = [[5.40, 0.95, 1.15], [5.30, 2.55, 1.20], [5.15, 4.15, 1.15], [4.70, 5.65, 1.10], [3.95, 6.90, 1.00]];
-      const rows = [-6.4, -3.2, 0, 3.2, 6.4];
+      const lowCave = Boolean(scene.userData?.lowEnd);
+      const rows = lowCave ? [-5.3, 0, 5.3] : [-6.4, -3.2, 0, 3.2, 6.4];
+      const zStretch = lowCave ? 1.45 : 1.0;
       rows.forEach((rz, ri) => {
         profile.forEach(([px, py, r], pi) => {
           const seed = ri * 13 + pi * 7 + (side > 0 ? 101 : 0);
           const j1 = hash01(seed) - 0.5, j2 = hash01(seed + 1) - 0.5, j3 = hash01(seed + 2) - 0.5;
           const mat = [rockA, rockB, rockC][(ri + pi + (side > 0 ? 1 : 0)) % 3];
           const rock = part(bay, mat, side * (px + j1 * 0.22), py + j2 * 0.3, rz + j3 * 0.7,
-            r * (0.92 + j1 * 0.12), r * (0.95 + j2 * 0.2), r * (1.5 + j3 * 0.3), rockGeo);
+            r * (0.92 + j1 * 0.12), r * (0.95 + j2 * 0.2), r * (1.5 + j3 * 0.3) * zStretch, rockGeo);
           rock.rotation.set(j1 * 2.4, j2 * 2.8, j3 * 2.2);
         });
       });
@@ -1759,15 +1761,19 @@ export function createRoadEventsScene(scene) {
     lastCurveStart = state.branchStart;
     lastCurveEnd = state.branchEnd;
 
+    const tunFar = scene.userData?.ultraLow ? 158 : scene.userData?.lowEnd ? 210 : Infinity;
+    const tunGlassFar = scene.userData?.ultraLow ? 78 : tunFar;
     let n = first;
     for (const { opaque, glass } of tunnelBatches) {
       let count = 0;
       for (const bay of glass) {
         const start = plan.start + n++ * BAY_LEN;
         const length = Math.min(BAY_LEN, plan.end - start);
-        bay.visible = length > 0;
-        if (!bay.visible) continue;
         const center = start + length / 2;
+        const relZ = center - state.distance;
+        const inRange = length > 0 && relZ <= tunFar;
+        bay.visible = inRange && relZ <= tunGlassFar;
+        if (!inRange) continue;
         bay.position.set(branchCurveX(center, state), branchCurveY(center, state), plan.start - center);
         bay.rotation.y = -Math.atan(curveSlopeAt(center, state));
         bay.scale.z = length / BAY_LEN;
@@ -2170,9 +2176,12 @@ export function createRoadEventsScene(scene) {
     const onPodium = state.mode === 'ready' || state.mode === 'select';
     const isBridgePreview = isPark && onPodium;
 
-    // Approach Twin-Portal Arch (front signs + center pier + planter) visible far ahead from 350m (beyond fog)!
+    // Approach Twin-Portal Arch (front signs + center pier + planter) visible far ahead!
+    const ultraLow = Boolean(scene.userData?.ultraLow);
+    const lowEnd = Boolean(scene.userData?.lowEnd);
+    const farLimit = ultraLow ? 162 : lowEnd ? 215 : 350;
     const forksOn = isPark && Boolean(state.enableForks);
-    const showArch = !isBridgePreview && running && forksOn && startRelZ > -14 && startRelZ < 350;
+    const showArch = !isBridgePreview && running && forksOn && startRelZ > -14 && startRelZ < farLimit;
     portalArch.visible = showArch;
     if (showArch) rightSign.material = underpassForkSignMat(isPark);
     if (showArch) {
@@ -2184,8 +2193,8 @@ export function createRoadEventsScene(scene) {
       centerPier.visible = startRelZ > -10;
     }
 
-    // Twin-Portal Approach Sleeves (Left Glass Bridge Ramp | Right Underpass Tunnel) visible from 350m!
-    const showPreview = !isBridgePreview && running && forksOn && !chosen && startRelZ >= -1 && startRelZ < 350;
+    // Twin-Portal Approach Sleeves (Left Glass Bridge Ramp | Right Underpass Tunnel)
+    const showPreview = !isBridgePreview && running && forksOn && !chosen && startRelZ >= -1 && startRelZ < farLimit;
     portalPreview.visible = showPreview;
     if (showPreview) {
       portalPreview.position.set(curveRelX(plan.start, state), curveRelY(plan.start, state), -startRelZ);
@@ -2250,7 +2259,7 @@ export function createRoadEventsScene(scene) {
           marker.rotation.set(0, rotY, 0);
           marker.scale.set(1, 1, length / BAY_LEN);
           marker.updateMatrix();
-          if (relZ > (scene.userData?.lowEnd ? 205 : 335) || relZ < -42) continue;
+          if (relZ > (ultraLow ? 148 : lowEnd ? 195 : 335) || relZ < -42) continue;
           for (const inst of skyDeckInsts) inst.setMatrixAt(deckCount, marker.matrix);
           deckCount++;
           if ((bayCenter <= plan.start + COAST_SHORE_LEN) || (bayCenter >= plan.end - COAST_SHORE_LEN)) {
@@ -2260,24 +2269,26 @@ export function createRoadEventsScene(scene) {
           if (n % 2 === 0 && pierCount < skyPierInsts[0].instanceMatrix.count) {
             for (const inst of skyPierInsts) inst.setMatrixAt(pierCount, marker.matrix);
             pierCount++;
-            const bayWorldY = branchCurveY(bayCenter, state);
-            const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
-            for (const side of [-1, 1]) {
-              if (foamCount >= skyBayCount) break;
-              const pulse = 1 + Math.sin(tNow * 2.4 + foamCount * 0.9) * 0.14;
-              const sx = side * 3.45;
-              foamDummy.position.set(bx + sx * cosR, by + SEA_Y + 0.22 - bayWorldY, -relZ - sx * sinR);
-              foamDummy.rotation.set(Math.PI / 2, rotY, 0);
-              foamDummy.scale.set(2.45 * pulse, 2.75 * pulse, 0.35);
-              foamDummy.updateMatrix();
-              pierFoamInst.setMatrixAt(foamCount++, foamDummy.matrix);
+            if (!ultraLow) {
+              const bayWorldY = branchCurveY(bayCenter, state);
+              const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
+              for (const side of [-1, 1]) {
+                if (foamCount >= skyBayCount) break;
+                const pulse = 1 + Math.sin(tNow * 2.4 + foamCount * 0.9) * 0.14;
+                const sx = side * 3.45;
+                foamDummy.position.set(bx + sx * cosR, by + SEA_Y + 0.22 - bayWorldY, -relZ - sx * sinR);
+                foamDummy.rotation.set(Math.PI / 2, rotY, 0);
+                foamDummy.scale.set(2.45 * pulse, 2.75 * pulse, 0.35);
+                foamDummy.updateMatrix();
+                pierFoamInst.setMatrixAt(foamCount++, foamDummy.matrix);
+              }
             }
           }
         }
         // Position dramatic rocky coastal headlands at the exact edge where shore meets pure open ocean!
         for (const [hl, worldZ] of [[departHeadland, plan.start + COAST_SHORE_LEN], [returnHeadland, plan.end - COAST_SHORE_LEN]]) {
           const relZ = worldZ - state.distance;
-          const vis = relZ > -28 && relZ < 350;
+          const vis = relZ > -28 && relZ < farLimit;
           hl.visible = vis;
           if (vis) {
             const wy = branchCurveY(worldZ, state);
@@ -2294,7 +2305,7 @@ export function createRoadEventsScene(scene) {
         for (let pi = 0; pi < bridgePylons.length; pi++) {
           const pWorld = firstPylon + pi * PYLON_STRIDE;
           const pRel = pWorld - state.distance;
-          const vis = pWorld < plan.end - 28 && pRel >= -48 && pRel < 360;
+          const vis = pWorld < plan.end - 28 && pRel >= -48 && pRel < farLimit + 12;
           bridgePylons[pi].visible = vis;
           if (vis) {
             bridgePylons[pi].position.set(curveRelX(pWorld, state), curveRelY(pWorld, state), -pRel);
@@ -2315,7 +2326,7 @@ export function createRoadEventsScene(scene) {
     }
 
     // Update Realistic 3D Ocean Sea World (stays level at true sea level while the Glass Bridge arches overhead!)
-    const showSea = onSky || (showPreview && startRelZ < 170);
+    const showSea = onSky || (showPreview && startRelZ < (lowEnd ? 95 : 170));
     seaWorld.visible = showSea;
     if (showSea) {
       const t = state.time || 0;
@@ -2324,94 +2335,110 @@ export function createRoadEventsScene(scene) {
       // Dynamic ocean tinting matching Day / Sunset / Night / Rain
       oceanBaseMat.color.copy(oceanDayCol).lerp(oceanSunsetCol, lowSun * 0.72).lerp(oceanNightCol, night * 0.9).lerp(oceanRainCol, rain * 0.65);
       oceanBaseMat.roughness = 0.07 + rain * 0.16;
-      oceanSwellMat.opacity = Math.max(0.14, 0.36 - night * 0.14 - rain * 0.12);
-      glintMat.color.copy(glintDayCol).lerp(glintSunCol, lowSun * 0.85).lerp(glintNightCol, night);
-      glintMat.opacity = Math.max(0.06, (0.36 - rain * 0.28) * (0.85 + 0.15 * Math.sin(t * 3.1)));
+      seaSwellMesh.visible = !lowEnd;
+      sunGlintInst.visible = !ultraLow;
+      waveCrestInst.visible = !ultraLow;
 
-      // Smooth dual-layer water scrolling with runner travel + natural ocean tide drift
+      // Smooth water scrolling with runner travel + natural ocean tide drift
       if (oceanTex.colorMap) {
         oceanTex.colorMap.offset.set((t * 0.028) % 1, (state.distance / 18 + t * 0.05) % 1);
       }
-      if (oceanTex.bumpMap) {
-        oceanTex.bumpMap.offset.set((t * 0.028) % 1, (state.distance / 18 + t * 0.05) % 1);
+      if (!lowEnd) {
+        oceanSwellMat.opacity = Math.max(0.14, 0.36 - night * 0.14 - rain * 0.12);
+        if (oceanTex.bumpMap) {
+          oceanTex.bumpMap.offset.set((t * 0.028) % 1, (state.distance / 18 + t * 0.05) % 1);
+        }
+        if (oceanTex.swellMap) {
+          oceanTex.swellMap.offset.set((-t * 0.042) % 1, (state.distance / 24 - t * 0.035) % 1);
+        }
+        seaSwellMesh.position.y = SEA_Y + 0.18 + Math.sin(t * 1.6) * 0.05;
       }
-      if (oceanTex.swellMap) {
-        oceanTex.swellMap.offset.set((-t * 0.042) % 1, (state.distance / 24 - t * 0.035) % 1);
-      }
-      // Subtle ocean heave + keep ocean surface anchored at true sea level below curved arch
-      seaSwellMesh.position.y = SEA_Y + 0.18 + Math.sin(t * 1.6) * 0.05;
       seaWorld.position.y = onSky && !isBridgePreview ? -branchCurveY(state.distance, state) : 0;
       seaWorld.position.z = isBridgePreview ? 0 : (onSky ? 0 : Math.min(0, -(startRelZ - 14)));
 
-      // Dancing sun/moon reflection glints across the ocean (1 InstancedMesh!)
-      for (let i = 0; i < sunGlints.length; i++) {
-        const g = sunGlints[i];
-        skyDummy.position.set(g.baseX + Math.sin(t * 1.4 + g.seed) * 2.2, SEA_Y + 0.25, g.z);
-        skyDummy.rotation.set(-Math.PI / 2, 0, 0);
-        skyDummy.scale.set((10 + g.seed * 3.8) * (0.88 + 0.18 * Math.sin(t * 2.8 + g.seed)), g.gd, 1);
-        skyDummy.updateMatrix();
-        sunGlintInst.setMatrixAt(i, skyDummy.matrix);
-      }
-      sunGlintInst.instanceMatrix.needsUpdate = true;
+      if (!ultraLow) {
+        glintMat.color.copy(glintDayCol).lerp(glintSunCol, lowSun * 0.85).lerp(glintNightCol, night);
+        glintMat.opacity = Math.max(0.06, (0.36 - rain * 0.28) * (0.85 + 0.15 * Math.sin(t * 3.1)));
+        // Dancing sun/moon reflection glints across the ocean (1 InstancedMesh!)
+        for (let i = 0; i < sunGlints.length; i++) {
+          const g = sunGlints[i];
+          skyDummy.position.set(g.baseX + Math.sin(t * 1.4 + g.seed) * 2.2, SEA_Y + 0.25, g.z);
+          skyDummy.rotation.set(-Math.PI / 2, 0, 0);
+          skyDummy.scale.set((10 + g.seed * 3.8) * (0.88 + 0.18 * Math.sin(t * 2.8 + g.seed)), g.gd, 1);
+          skyDummy.updateMatrix();
+          sunGlintInst.setMatrixAt(i, skyDummy.matrix);
+        }
+        sunGlintInst.instanceMatrix.needsUpdate = true;
 
-      // Rolling whitecap foam wave crests gliding across the sea (1 InstancedMesh!)
-      for (let i = 0; i < waveCrests.length; i++) {
-        const wc = waveCrests[i];
-        const relZ = ((wc.zOff - (state.distance % 280)) + 280) % 280;
-        skyDummy.position.set(
-          wc.side * (wc.xOff + Math.sin(t * 0.9 + wc.seed) * 2.5),
-          SEA_Y + 0.22 + Math.sin(t * 2.2 + wc.seed) * 0.04,
-          10 - relZ
-        );
-        skyDummy.rotation.set(-Math.PI / 2, 0, 0);
-        skyDummy.scale.set(wc.wLen, wc.wDep, 1);
-        skyDummy.updateMatrix();
-        waveCrestInst.setMatrixAt(i, skyDummy.matrix);
+        // Rolling whitecap foam wave crests gliding across the sea (1 InstancedMesh!)
+        for (let i = 0; i < waveCrests.length; i++) {
+          const wc = waveCrests[i];
+          const relZ = ((wc.zOff - (state.distance % 280)) + 280) % 280;
+          skyDummy.position.set(
+            wc.side * (wc.xOff + Math.sin(t * 0.9 + wc.seed) * 2.5),
+            SEA_Y + 0.22 + Math.sin(t * 2.2 + wc.seed) * 0.04,
+            10 - relZ
+          );
+          skyDummy.rotation.set(-Math.PI / 2, 0, 0);
+          skyDummy.scale.set(wc.wLen, wc.wDep, 1);
+          skyDummy.updateMatrix();
+          waveCrestInst.setMatrixAt(i, skyDummy.matrix);
+        }
+        waveCrestInst.instanceMatrix.needsUpdate = true;
       }
-      waveCrestInst.instanceMatrix.needsUpdate = true;
 
       // Cruising Luxury Yachts & Sailboats bobbing naturally on ocean swells
       for (let bi = 0; bi < seaBoats.length; bi++) {
         const bt = seaBoats[bi];
         const bRel = ((bt.offset + t * bt.speed - state.distance * 0.72) % bt.span + bt.span) % bt.span;
+        bt.mesh.visible = !ultraLow || bRel < 165;
+        if (!bt.mesh.visible) continue;
         bt.mesh.position.set(bt.x + Math.sin(t * 0.35 + bi) * 2.4, SEA_Y + 0.08 + Math.sin(t * 2.1 + bi * 1.4) * 0.14, 18 - bRel);
         bt.mesh.rotation.set(Math.sin(t * 1.7 + bi) * 0.04, Math.PI, Math.cos(t * 1.9 + bi) * 0.055);
       }
       // Floating red/green ocean channel buoys bobbing beside the Glass Sea-Bridge
       for (let sbi = 0; sbi < seaBuoys.length; sbi++) {
         const sb = seaBuoys[sbi];
+        sb.mesh.visible = !ultraLow;
+        if (ultraLow) continue;
         const bZ = ((sb.offset - (state.distance % sb.span)) + sb.span) % sb.span;
         sb.mesh.position.set(sb.x, SEA_Y + 0.06 + Math.sin(t * 2.6 + sbi * 2.1) * 0.14, 14 - bZ);
         sb.mesh.rotation.set(Math.sin(t * 2.1 + sbi) * 0.14, 0, Math.cos(t * 1.8 + sbi) * 0.16);
       }
       // Subtle coastal bay parallax on distant islands + rotating warm lighthouse beacon
       const bayProg = onSky ? Math.max(0, Math.min(1, (state.distance - plan.start) / Math.max(1, plan.end - plan.start))) : 0;
-      islandRight.position.z = -165 + bayProg * 25;
-      islandLeft.position.z = -195 + bayProg * 28;
-      lighthouseBeacon.rotation.y = t * 0.85;
+      islandRight.visible = !ultraLow;
+      islandLeft.visible = !ultraLow;
+      if (!ultraLow) {
+        islandRight.position.z = -165 + bayProg * 25;
+        islandLeft.position.z = -195 + bayProg * 28;
+        lighthouseBeacon.rotation.y = t * 0.85;
 
-      // Real wind sway animation for all instanced island trees (throttled on low-end phones to cut matrix uploads by 66%!)
-      if (!scene.userData?.lowEnd || Math.floor(t * 20) % 3 === 0) {
-        for (const batch of islandTreeBatches) {
-          const { inst, specs } = batch;
-          for (let idx = 0; idx < specs.length; idx++) {
-            const sp = specs[idx];
-            const wind = Math.sin(t * 2.2 + sp.seed) * 0.045 + Math.cos(t * 1.5 + sp.seed * 1.8) * 0.022;
-            skyDummy.position.set(sp.x, sp.y, sp.z);
-            skyDummy.rotation.set(Math.sin(t * 1.8 + sp.seed * 1.2) * 0.028, 0, wind);
-            skyDummy.scale.set(sp.width, sp.height, sp.width);
-            skyDummy.updateMatrix();
-            inst.setMatrixAt(idx, skyDummy.matrix);
+        // Real wind sway animation for all instanced island trees (throttled on low-end phones to cut matrix uploads by 66%!)
+        if (!lowEnd || Math.floor(t * 20) % 3 === 0) {
+          for (const batch of islandTreeBatches) {
+            const { inst, specs } = batch;
+            for (let idx = 0; idx < specs.length; idx++) {
+              const sp = specs[idx];
+              const wind = Math.sin(t * 2.2 + sp.seed) * 0.045 + Math.cos(t * 1.5 + sp.seed * 1.8) * 0.022;
+              skyDummy.position.set(sp.x, sp.y, sp.z);
+              skyDummy.rotation.set(Math.sin(t * 1.8 + sp.seed * 1.2) * 0.028, 0, wind);
+              skyDummy.scale.set(sp.width, sp.height, sp.width);
+              skyDummy.updateMatrix();
+              inst.setMatrixAt(idx, skyDummy.matrix);
+            }
+            inst.instanceMatrix.needsUpdate = true;
           }
-          inst.instanceMatrix.needsUpdate = true;
         }
+        // Breathing foam surf along island shorelines
+        const foamPulse = 1 + Math.sin(t * 1.8) * 0.06;
+        if (islandRight.userData.foam) islandRight.userData.foam.scale.set(34 * foamPulse, 26 * foamPulse, 0.45);
+        if (islandLeft.userData.foam) islandLeft.userData.foam.scale.set(36 * foamPulse, 28 * foamPulse, 0.45);
       }
-      // Breathing foam surf along island shorelines
-      const foamPulse = 1 + Math.sin(t * 1.8) * 0.06;
-      if (islandRight.userData.foam) islandRight.userData.foam.scale.set(34 * foamPulse, 26 * foamPulse, 0.45);
-      if (islandLeft.userData.foam) islandLeft.userData.foam.scale.set(36 * foamPulse, 28 * foamPulse, 0.45);
       // Soaring flock of seagulls banking & flapping over the water
       for (const sg of seagulls) {
+        sg.mesh.visible = !ultraLow;
+        if (ultraLow) continue;
         const flap = Math.sin(t * 6.5 + sg.phase) * 0.55;
         sg.wingL.rotation.z = flap;
         sg.wingR.rotation.z = -flap;
@@ -2423,7 +2450,7 @@ export function createRoadEventsScene(scene) {
       }
     }
 
-    skyExitArch.visible = onSky && endRelZ > -14 && endRelZ < 350;
+    skyExitArch.visible = onSky && endRelZ > -14 && endRelZ < farLimit;
     if (skyExitArch.visible) {
       skyExitArch.position.set(curveRelX(plan.end, state), curveRelY(plan.end, state), -endRelZ);
       skyExitArch.rotation.y = -Math.atan(curveSlopeAt(plan.end, state));
@@ -2433,13 +2460,13 @@ export function createRoadEventsScene(scene) {
     const onTun = (running || ['paused','falling','captured','crashed'].includes(state.mode)) && chosen === 'underpass' && state.distance >= plan.start - 1 && state.distance <= plan.end + 4;
     tunLoop.visible = onTun;
     if (onTun) positionTunnel(state, plan);
-    tunExitPortal.visible = onTun && endRelZ > -14 && endRelZ < 350;
+    tunExitPortal.visible = onTun && endRelZ > -14 && endRelZ < farLimit;
     if (tunExitPortal.visible) {
       tunExitPortal.position.set(curveRelX(plan.end, state), curveRelY(plan.end, state), -endRelZ);
       tunExitPortal.rotation.y = -Math.atan(curveSlopeAt(plan.end, state));
     }
 
-    // 2. Update 3 Pooled Overhead Metro Viaduct Bridges + Speeding Trains (emerge cleanly from 350m beyond fog!)
+    // 2. Update 3 Pooled Overhead Metro Viaduct Bridges + Speeding Trains
     const baseMetroIdx = Math.max(0, Math.ceil((state.distance - 28 - METRO_FIRST) / METRO_STRIDE));
     for (let k = 0; k < metroBridges.length; k++) {
       const mIdx = baseMetroIdx + k;
@@ -2449,7 +2476,7 @@ export function createRoadEventsScene(scene) {
       const nearPortal = Math.abs(metroWorldZ - mPlan.start) < 55 || Math.abs(metroWorldZ - mPlan.end) < 40;
       const clearOfCave = !onTun || metroWorldZ > plan.end + 35;
       const mb = metroBridges[k];
-      mb.bridge.visible = isPark && clearOfCave && !nearPortal && metroRelZ > -28 && metroRelZ < 350;
+      mb.bridge.visible = isPark && clearOfCave && !nearPortal && metroRelZ > -28 && metroRelZ < farLimit;
       if (mb.bridge.visible) {
         mb.bridge.position.set(curveRelX(metroWorldZ, state), curveRelY(metroWorldZ, state), -metroRelZ);
         mb.bridge.rotation.y = -Math.atan(curveSlopeAt(metroWorldZ, state));
@@ -2460,41 +2487,48 @@ export function createRoadEventsScene(scene) {
 
     // 3. Sky Ambient Helicopter & Futuristic "SKYLINE" Blimp (Exact Reference Image!)
     const showSkyCraft = (isPark || onSky || onTun) && night < 0.7 && rain < 0.65;
-    helicopter.visible = showSkyCraft;
-    blimp.visible = showSkyCraft;
     if (showSkyCraft) {
       const t = state.time || 0;
       if (isBridgePreview) {
-        // Showcase Map Selection Preview: stable hero framing matching Reference Image!
+        helicopter.visible = true;
+        blimp.visible = true;
         helicopter.position.set(-11.2, 15.2, -45);
         helicopter.rotation.set(0.05, 0.22, 0.08);
         blimp.position.set(15.8, 17.2, -68);
         blimp.rotation.set(0, Math.PI + 0.12, 0);
       } else {
-        // Running Gameplay: Continuous cinematic flight crossing the entire sky from screen edge to screen edge!
-        // Red AS350 Helicopter sweeps continuously from off-screen left (x = -190) to off-screen right (x = +190)
         const heliSpan = 380;
         const heliX = ((t * 16.5 + 190) % heliSpan) - 190;
         const heliZ = onSky ? -65 : -130;
         const heliY = onSky ? (17.5 + Math.sin(t * 1.4) * 0.5) : (22.5 + Math.sin(t * 1.4) * 0.5);
-        helicopter.position.set(heliX, heliY, heliZ);
-        helicopter.rotation.set(0.04, Math.PI / 2 + 0.05, -0.05);
+        helicopter.visible = !lowEnd || Math.abs(heliX) < 92;
+        if (helicopter.visible) {
+          helicopter.position.set(heliX, heliY, heliZ);
+          helicopter.rotation.set(0.04, Math.PI / 2 + 0.05, -0.05);
+        }
 
-        // Futuristic "SKYLINE" Blimp cruises majestically in the opposite direction from off-screen right to off-screen left
         const blimpSpan = 420;
         const blimpX = 210 - ((t * 6.2) % blimpSpan);
         const blimpZ = onSky ? -85 : -155;
         const blimpY = onSky ? (21.5 + Math.sin(t * 0.6) * 0.4) : (27.5 + Math.sin(t * 0.6) * 0.4);
-        blimp.position.set(blimpX, blimpY, blimpZ);
-        blimp.rotation.set(0, -Math.PI / 2 - 0.04, 0);
+        blimp.visible = !lowEnd || Math.abs(blimpX) < 105;
+        if (blimp.visible) {
+          blimp.position.set(blimpX, blimpY, blimpZ);
+          blimp.rotation.set(0, -Math.PI / 2 - 0.04, 0);
+        }
       }
-      heliRotor.rotation.y = t * 44;
-      tailRotor.rotation.z = t * 58;
+      if (helicopter.visible) {
+        heliRotor.rotation.y = t * 44;
+        tailRotor.rotation.z = t * 58;
+      }
+    } else {
+      helicopter.visible = false;
+      blimp.visible = false;
     }
 
     // Dynamic Glass Floor Helicopter Reflection (Exact Reference Image!)
-    const isHeliOverBridge = onSky && Math.abs(helicopter.position.x) < 45;
-    const showHeliReflect = isHeliOverBridge && showSkyCraft;
+    const isHeliOverBridge = onSky && helicopter.visible && Math.abs(helicopter.position.x) < 45;
+    const showHeliReflect = !ultraLow && isHeliOverBridge && showSkyCraft;
     heliFloorReflection.visible = showHeliReflect;
     if (showHeliReflect) {
       const t = state.time || 0;

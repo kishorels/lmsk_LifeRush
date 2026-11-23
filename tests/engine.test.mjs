@@ -149,6 +149,37 @@ test('the middle lane stays clear and a late lane change cannot climb the van si
   assert.equal(height(s), 0);
 });
 
+test('late swipe or jump onto sloped entry ramp climbs cleanly instead of clipping inside the bus', () => {
+  // Swiping onto the middle of the sloped ramp (distance 27 of 22..32) climbs onto the roof without taking a hit
+  const s1 = fresh(0);
+  s1.mode = 'running';
+  s1.next = 10000;
+  while (s1.distance < 27) step(s1, .05);
+  action(s1, 'right');
+  let reachedRoof = false;
+  while (s1.distance < 48) {
+    step(s1, .05);
+    if (s1.distance > 34 && height(s1) === 1.72) reachedRoof = true;
+  }
+  assert.ok(reachedRoof, 'swiping onto mid-ramp climbs cleanly onto the 1.72m roof');
+  assert.equal(s1.damage, 0, 'mid-ramp swipe does not clip into the bus body');
+
+  // Jumping just before the ramp and landing on the rising slope stays above the ramp and climbs to roof
+  const s2 = fresh(0);
+  s2.mode = 'running';
+  s2.next = 10000;
+  action(s2, 'right');
+  while (s2.distance < 10) step(s2, .05);
+  action(s2, 'jump');
+  let landedRoof = false;
+  while (s2.distance < 48) {
+    step(s2, .05);
+    if (s2.distance > 35 && height(s2) === 1.72) landedRoof = true;
+  }
+  assert.ok(landedRoof, 'jumping onto rising ramp climbs cleanly onto roof without falling through');
+  assert.equal(s2.damage, 0, 'jumping onto rising ramp never clips inside bus');
+});
+
 test('quick drop during a roof jump snaps to the roof and leaving the lane drops to ground', () => {
   const s = fresh(0);
   s.mode = 'running';

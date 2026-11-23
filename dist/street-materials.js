@@ -22,12 +22,13 @@ function texture(name, color = true, aniso = 4) {
 
 export function streetSurfaces(scene, box, opts = {}) {
   const lowEnd = Boolean(opts?.lowEnd || scene.userData?.lowEnd);
-  const aniso = lowEnd ? 1 : 4;
+  const isTouch = Boolean(opts?.isTouch);
+  const aniso = lowEnd ? 1 : isTouch ? 2 : 4;
   const environment = texture('campus-light', true, aniso);
   if (environment) {
     environment.mapping = EquirectangularReflectionMapping;
     scene.userData.envMap = environment;
-    if (!lowEnd) scene.environment = environment;
+    if (!lowEnd && !isTouch) scene.environment = environment;
   }
   const scrolling = [];
   const schoolGroup = new Group();
@@ -366,8 +367,9 @@ export function streetSurfaces(scene, box, opts = {}) {
       const lanes = [-3.54, 3.54];
       const baseStart = showAheadExit ? bEnd + 4 : distance - 20;
       const baseD = Math.floor(baseStart / 10) * 10;
+      const pulseSteps = scene.userData?.ultraLow ? 14 : 28;
       let idx = 0;
-      for (let step = 0; step < 28; step++) {
+      for (let step = 0; step < pulseSteps; step++) {
         const worldD = baseD + step * 10;
         const z = (distance - worldD) - exitZShift;
         for (let l = 0; l < 2; l++) {
@@ -376,6 +378,7 @@ export function streetSurfaces(scene, box, opts = {}) {
           pulseInst.setMatrixAt(idx++, pulseXform.matrix);
         }
       }
+      pulseInst.count = idx;
       pulseInst.instanceMatrix.needsUpdate = true;
       techDeckMat.roughness = 0.22 - 0.10 * weather.rain;
       neonCyanMat.emissiveIntensity = 1.35 + weather.night * 0.75;

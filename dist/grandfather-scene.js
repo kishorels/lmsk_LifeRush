@@ -51,7 +51,7 @@ function villageArt() {
         shader.uniforms.elderClock=windClock;
         shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform float elderClock;')
           .replace('#include <begin_vertex>',`#include <begin_vertex>
-            float weight=pow(${cloth?'1.0-uv.y':'uv.y'},1.8);
+            float weight=pow(max(0.0001,${cloth?'1.0-uv.y':'uv.y'}),1.8);
             float phase=elderClock*1.55+position.z*.27+position.x*.35+modelMatrix[3].x*.17;
             float gust=sin(phase)+.38*sin(.63*phase+uv.x*2.9);
             transformed.x+=${bend.toFixed(3)}*weight*gust;
@@ -251,7 +251,13 @@ export function createGrandfatherVillage(scene) {
   ribbon(HOME_YARD_START,GRANDFATHER_GATE+160,-100,100,-.05,verge,46);
   ribbon(HOME_YARD_START,GRANDFATHER_GATE+20,-4.5,4.5,.11,earth,1,true);
   const templates=Array.from({length:4},(_,i)=>section(i));
-  const slots=Array.from({length:8},()=>{const g=new Group();root.add(g);return g;});
+  // Eight slots repeat four templates, so each slot always renders the same village design.
+  const slots=Array.from({length:8},(_,i)=>{
+    const slot=new Group();
+    slot.add(templates[i%templates.length].clone());
+    root.add(slot);
+    return slot;
+  });
   const greetingMat=new MeshBasicMaterial({map:paint(0xffffff,'elder/greeting').map?.clone()||null,alphaTest:.30,side:DoubleSide,toneMapped:false});
   if(greetingMat.map){greetingMat.map.repeat.set(1/8,1/4);greetingMat.map.needsUpdate=true;}
   const host=new Mesh(new PlaneGeometry(.98,1.86),greetingMat);
@@ -274,13 +280,13 @@ export function createGrandfatherVillage(scene) {
     }
     root.position.set(-roadCurveX(d,map),-roadCurveY(d,map),d);
     const first=Math.floor(d/sectionLength)-1;
-    for(let i=first;i<first+slots.length;i++){
+    const activeSlots=scene.userData?.ultraLow?5:scene.userData?.lowEnd?6:slots.length;
+    for(let sIdx=0;sIdx<slots.length;sIdx++)slots[sIdx].visible=false;
+    for(let i=first;i<first+activeSlots;i++){
       const slot=slots[(i%slots.length+slots.length)%slots.length];
       const center=(i+.5)*sectionLength;
       slot.visible=center<SCHOOL_ROAD_START;
       if(!slot.visible||slot.userData.index===i)continue;
-      const kind=(i%templates.length+templates.length)%templates.length;
-      if(slot.userData.kind!==kind){slot.clear();slot.add(templates[kind].clone());slot.userData.kind=kind;}
       slot.userData.index=i;
       slot.position.set(roadCurveX(center,map),roadCurveY(center,map),-center);
       const grade=(roadCurveY(center+1,map)-roadCurveY(center-1,map))*.5;

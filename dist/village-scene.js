@@ -1,6 +1,6 @@
 import {
   Group, Mesh, InstancedMesh, Object3D, PlaneGeometry, MeshBasicMaterial, ShadowMaterial,
-  BufferGeometry, Float32BufferAttribute, Color, TextureLoader, SRGBColorSpace, RepeatWrapping, DoubleSide
+  BufferGeometry, BufferAttribute, DynamicDrawUsage, Color, TextureLoader, SRGBColorSpace, RepeatWrapping, DoubleSide
 } from './vendor/three.module.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 
@@ -29,7 +29,7 @@ export function createVillageRoute(scene) {
         map.repeat.set(...repeat);
       }
     }
-    const mat = new MeshBasicMaterial({map, side: DoubleSide, alphaTest: cutout ? .38 : 0, toneMapped: false});
+    const mat = new MeshBasicMaterial({map, side: DoubleSide, alphaTest: cutout ? .38 : 0, alphaToCoverage: cutout && Boolean(scene.userData.multisampled), toneMapped: false});
     if (movement) {
       mat.onBeforeCompile = shader => {
         shader.uniforms.villageTime = clock;
@@ -97,19 +97,33 @@ export function createVillageRoute(scene) {
     for (const p of planks) p.dispose();
     return merged;
   })();
-  const sharedGeos = new Set([unit, upright, bridgePlanksGeo]);
   const transform = new Object3D();
+  // Each ring slot keeps its own meshes. A new seeded layout only updates their transforms and buffers.
+  function acquire(parent, key, create) {
+    const pools=parent.userData.pools;
+    if(!pools.has(key))pools.set(key,{objects:[],used:0});
+    const pool=pools.get(key);
+    if(pool.used===pool.objects.length){
+      const object=create();
+      parent.add(object);
+      pool.objects.push(object);
+    }
+    const object=pool.objects[pool.used++];
+    object.visible=true;
+    return object;
+  }
   function floor(parent, mat, x, y, z, w, d, tessellate = false) {
-    const mesh = new Mesh(unit, mat);
-    mesh.rotation.x = -Math.PI / 2;
+    const mesh = acquire(parent,mat,()=>new Mesh(unit,mat));
+    mesh.rotation.set(-Math.PI/2,0,0);
     mesh.position.set(x,y,z);
     mesh.scale.set(w,d,1);
     mesh.receiveShadow = true;
     mesh.userData.tessellate = tessellate;
-    parent.add(mesh);return mesh;
+    return mesh;
   }
   function plants(parent, mat, entries) {
-    const mesh = new InstancedMesh(upright, mat, entries.length);
+    const mesh = acquire(parent,mat,()=>new InstancedMesh(upright,mat,Math.max(16,entries.length)));
+    mesh.count=entries.length;
     entries.forEach(([x,z,w,h,angle=0,y=.10], index) => {
       transform.position.set(x,y,z);
       transform.rotation.set(0,angle,0);
@@ -117,8 +131,6 @@ export function createVillageRoute(scene) {
       transform.updateMatrix();
       mesh.setMatrixAt(index,transform.matrix);
     });
-    mesh.computeBoundingSphere();
-    parent.add(mesh);
   }
   const contact = new MeshBasicMaterial({color:0x342f21,opacity:.22,transparent:true,depthWrite:false});
   contact.onBeforeCompile=shader=>{
@@ -128,8 +140,15 @@ export function createVillageRoute(scene) {
   const leafShadow=new MeshBasicMaterial({map:palm.map,alphaTest:.035,color:0x202419,transparent:true,opacity:.22,depthWrite:false,toneMapped:false});
   const tintMaterials=[...Object.values(art),asphalt,grassFloor,rice,pathMaterial,blades,water,...cows];
   const day=new Color(0xffffff),night=new Color(0x73859a);
-  function section(index) {
-    const group=new Group();
+  function section(index, group) {
+    if(!group){
+      group=new Group();
+      group.userData.pools=new Map();
+      root.add(group);
+    }
+    for(const pool of group.userData.pools.values())pool.used=0;
+    for(const child of group.children)child.visible=false;
+    group.userData.cow=null;
     const {items,random}=villageLayout(index);
     const at=z=>roadCurveX(index*LENGTH-z,'finalrun');
     // Only the 8 long 64m strips need curved Z-tessellation (12 segments matches the gentle bend seamlessly).
@@ -148,30 +167,29 @@ export function createVillageRoute(scene) {
       const path=floor(group,pathMaterial,-3.5-width/2,.195,houseEntry.z+1,width,1.6);
       path.rotation.z=.09;
       // Single merged timber crossing carries the house footpath over the irrigation channel.
-      const bridge=new Mesh(bridgePlanksGeo,timber);
+      const bridge=acquire(group,timber,()=>new Mesh(bridgePlanksGeo,timber));
       bridge.position.set(at(houseEntry.z+1),0,houseEntry.z+1);
       bridge.receiveShadow=true;
       bridge.userData.staticPositioned=true;
-      group.add(bridge);
     }
     const batches=new Map();
     for(const o of items){
       if(houseTypes.includes(o.type)){
-        const home=houseModel(o);
+        const home=acquire(group,o.type,()=>houseModel(o));
+        houseModel(o,home);
         home.userData.villageHouse=true;
-        group.add(home);
         floor(group,contact,o.x,.201,o.z+.3,o.w*1.16,o.h*1.18);
         continue;
       }
       if(o.type==='cow'){
-        const mesh=new Mesh(upright,cows[0]);
+        const mesh=acquire(group,'cow',()=>new Mesh(upright,cows[0]));
+        group.userData.cow=mesh;
         mesh.userData.cow=o;
-        const shade=new Mesh(unit,contact);
+        const shade=acquire(group,'cow-shadow',()=>new Mesh(unit,contact));
         shade.rotation.x=-Math.PI/2;shade.scale.set(o.w*.9,.85,1);
         shade.position.set(o.x,.203,o.z);shade.userData.tracksCow=true;
-        mesh.userData.shade=shade;group.add(shade);
+        mesh.userData.shade=shade;
         mesh.position.set(o.x,.19,o.z);mesh.scale.set(o.w,o.h,1);
-        group.add(mesh);
         continue;
       }
       if(!batches.has(o.type))batches.set(o.type,[]);
@@ -187,8 +205,17 @@ export function createVillageRoute(scene) {
     // Tapered 3-vertex grass blades written directly into typed arrays (17x fewer vertices & zero array GC churn!).
     const MAX_TUFTS = 38 * 6 + 6 * 24;
     const BLADES_PER_TUFT = 3;
-    const posBuf = new Float32Array(MAX_TUFTS * BLADES_PER_TUFT * 9);
-    const colBuf = new Float32Array(MAX_TUFTS * BLADES_PER_TUFT * 9);
+    const grassMesh=acquire(group,blades,()=>{
+      const geometry=new BufferGeometry();
+      for(const key of ['position','color']){
+        const buffer=new Float32Array(MAX_TUFTS * BLADES_PER_TUFT * 9);
+        geometry.setAttribute(key,new BufferAttribute(buffer,3).setUsage(DynamicDrawUsage));
+      }
+      return new Mesh(geometry,blades);
+    });
+    const geom=grassMesh.geometry;
+    const posBuf=geom.attributes.position.array;
+    const colBuf=geom.attributes.color.array;
     let ptr = 0;
     function tuft(x,z,h,width,green){
       const cx = at(z);
@@ -218,15 +245,17 @@ export function createVillageRoute(scene) {
     for(let row=0;row<6;row++)for(let col=0;col<24;col++){
       tuft(8.4+row*1.04+random()*.18,-(col+random()*.45)*2.66,.25+random()*.24,.021,.43);
     }
-    const geom=new BufferGeometry();
-    geom.setAttribute('position',new Float32BufferAttribute(posBuf.subarray(0, ptr),3));
-    geom.setAttribute('color',new Float32BufferAttribute(colBuf.subarray(0, ptr),3));
-    const grassMesh = new Mesh(geom,blades);
+    geom.setDrawRange(0,ptr/3);
+    for(const attr of [geom.attributes.position,geom.attributes.color]){
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0,ptr);
+      attr.needsUpdate=true;
+    }
+    geom.computeBoundingSphere();
     grassMesh.userData.staticPositioned = true;
-    group.add(grassMesh);
 
     for(const child of group.children){
-      if(child.userData.staticPositioned)continue;
+      if(!child.visible||child.userData.staticPositioned)continue;
       if(child.userData.villageHouse){child.position.x+=at(child.position.z);continue;}
       if(child.userData.tracksCow)continue;
       if(child.userData.cow){child.userData.baseCurve=at(child.position.z);continue;}
@@ -239,7 +268,7 @@ export function createVillageRoute(scene) {
         }
         child.instanceMatrix.needsUpdate=true;
         child.computeBoundingSphere();
-      }else if(child.geometry===unit && !child.userData.tessellate){
+      }else if(!child.userData.tessellate){
         // Small decals/bunds/paths keep shared unit PlaneGeometry with 0 geometry allocation!
         child.position.x+=at(child.position.z);
       }else{
@@ -247,15 +276,15 @@ export function createVillageRoute(scene) {
         if(child.geometry===unit){
           child.updateMatrix();
           child.geometry=new PlaneGeometry(1,1,1,12).applyMatrix4(child.matrix);
-          child.position.set(0,0,0);child.rotation.set(0,0,0);child.scale.set(1,1,1);
+          child.userData.stripPositions=child.geometry.attributes.position.array.slice();
         }
+        child.position.set(0,0,0);child.rotation.set(0,0,0);child.scale.set(1,1,1);
         const pos=child.geometry.attributes.position;
-        for(let i=0;i<pos.count;i++)pos.setX(i,pos.getX(i)+at(pos.getZ(i)));
+        for(let i=0;i<pos.count;i++)pos.setX(i,child.userData.stripPositions[i*3]+at(pos.getZ(i)));
         pos.needsUpdate=true;
         child.geometry.computeBoundingSphere();
       }
     }
-    root.add(group);
     return group;
   }
   const sections=Array(VISIBLE_SECTIONS);
@@ -264,7 +293,7 @@ export function createVillageRoute(scene) {
     const distance=homecoming?state.distance-SCHOOL_ROAD_START:state.distance;
     root.visible=state.map==='finalrun'||(homecoming&&distance>-VISIBLE_SECTIONS*LENGTH);
     if(!root.visible)return;
-    const activeCount=scene.userData?.lowEnd?5:VISIBLE_SECTIONS;
+    const activeCount=scene.userData?.ultraLow?4:scene.userData?.lowEnd?5:VISIBLE_SECTIONS;
     clock.value=state.time||0;
     const weather=sceneWeather(state);
     for(const mat of tintMaterials)mat.color.copy(day).lerp(night,weather.night*.75);
@@ -277,21 +306,14 @@ export function createVillageRoute(scene) {
       const slot=((index%VISIBLE_SECTIONS)+VISIBLE_SECTIONS)%VISIBLE_SECTIONS;
       let group=sections[slot];
       if(!group||group.userData.index!==index){
-        if(group){
-          root.remove(group);
-          for(const child of group.children){
-            if(child.isInstancedMesh)child.dispose();
-            if(child.geometry && !sharedGeos.has(child.geometry))child.geometry.dispose();
-          }
-        }
-        group=sections[slot]=section(index);
+        group=sections[slot]=section(index,group);
         group.userData.index=index;
       }
       group.visible=true;
       group.position.set(-roadCurveX(state.distance,state.map),homecoming?-roadCurveY(state.distance,state.map):0,distance-index*LENGTH);
-      for(const mesh of group.children){
+      const mesh=group.userData.cow;
+      if(mesh){
         const cow=mesh.userData.cow;
-        if(!cow)continue;
         const pose=cowPose(clock.value,index);
         mesh.position.x=cow.x+mesh.userData.baseCurve+pose.offset;
         mesh.scale.x=cow.w*pose.flip;

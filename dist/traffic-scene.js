@@ -44,7 +44,20 @@ export function createTraffic(scene) {
   scene.add(g);return g;
  }
  function vanModel(v,map,inCave=false) {
-  const g=inCave?(()=>{const w=buildRailRampWagon(v.front-v.rear,v.roof);scene.add(w);return w;})():vehicle(v.front-v.rear,v.roof,false,map,'van'),run=v.rear-v.ramp;
+  const len=v.front-v.rear;
+  let g;
+  if(inCave){
+   g=buildRailRampWagon(len,v.roof);scene.add(g);
+  }else if(map==='college'){
+   g=new Group();g.userData.captureObstacle=true;
+   const body=buildCollegeVehicle('van',len,v.roof,false);
+   body.rotation.y=Math.PI;body.position.z=-len;
+   g.add(body);g.userData.wheels=body.userData.wheels;
+   scene.add(g);
+  }else{
+   g=vehicle(len,v.roof,false,map,'van');
+  }
+  const run=v.rear-v.ramp;
   g.userData.routeVanId=v.id;
   g.userData.inCave=inCave;
   if(run>0) {
@@ -76,8 +89,12 @@ export function createTraffic(scene) {
     g.userData.inCave=vanInCave;
     parked.set(v.id,g);
    }
-   const g=parked.get(v.id);g.position.set(v.lane*2.2+curveRelX(v.rear,s),.09+curveRelY(v.rear,s),s.distance-v.rear);
-   g.rotation.y=-Math.atan(curveSlopeAt(v.rear,s));
+   const g=parked.get(v.id);
+   const pSampleZ=Math.max(v.ramp,Math.min(v.front,s.distance));
+   const pYaw=-Math.atan(curveSlopeAt(pSampleZ,s));
+   const pShiftU=pSampleZ-v.rear;
+   g.position.set(v.lane*2.2+curveRelX(pSampleZ,s)+pShiftU*Math.sin(pYaw),.09+curveRelY(pSampleZ,s),s.distance-v.rear+pShiftU*(Math.cos(pYaw)-1));
+   g.rotation.y=pYaw;
    g.userData.coins.forEach((c,i)=>{c.visible=!s.collected.includes(v.id+':'+i);spinCoin(c,s.time,i,v.roof+.6);});
   }
   for(const [id,g]of parked)if(!visible.has(id)){releasePool(vanPool,g);parked.delete(id);}
@@ -109,7 +126,14 @@ export function createTraffic(scene) {
      return m;
     });
     moving.set(o,model);
-   }const g=moving.get(o);g.position.set(o.lane*2.2+curveRelX(visZ,s),.09+curveRelY(visZ,s),s.distance-visZ);g.rotation.y=-Math.atan(curveSlopeAt(visZ,s));if(!lowEnd||visZ-s.distance<95)g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);if(c.visible&&(!lowEnd||visZ-s.distance<95))spinCoin(c,s.time,i,o.roof+.6);});}
+   }const g=moving.get(o);
+   const mFront=visZ+(o.length||10);
+   const mSampleZ=o.roofRide?Math.max(visZ,Math.min(mFront,s.distance)):visZ;
+   const mYaw=-Math.atan(curveSlopeAt(mSampleZ,s));
+   const mShiftU=mSampleZ-visZ;
+   g.position.set(o.lane*2.2+curveRelX(mSampleZ,s)+mShiftU*Math.sin(mYaw),.09+curveRelY(mSampleZ,s),s.distance-visZ+mShiftU*(Math.cos(mYaw)-1));
+   g.rotation.y=mYaw;
+   if(!lowEnd||visZ-s.distance<95)g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);if(c.visible&&(!lowEnd||visZ-s.distance<95))spinCoin(c,s.time,i,o.roof+.6);});}
   for(const [o,g]of moving)if(!live.has(o)){releasePool(movingPool,g);moving.delete(o);}
  };
 }
@@ -120,7 +144,11 @@ export function prewarmTrafficTemplates(map, targetGroup) {
    buildBugattiChiron(4.6, false),
    buildDucatiStreetfighter(false, true),
    buildFreightSemiTruck(10.5, 2.8, 0),
+   buildFreightSemiTruck(10.5, 2.8, 1),
+   buildFreightSemiTruck(10.5, 2.8, 2),
    buildFreightSemiTruck(22, 2.8, 0),
+   buildFreightSemiTruck(22, 2.8, 1),
+   buildFreightSemiTruck(22, 2.8, 2),
    buildRedShuttleCart(20, 1.72),
    buildWDP4DTrain({ length: 12, roof: 2.8, lane: 0 }),
    buildWDP4DTrain({ length: 22, roof: 2.8, lane: 0, roofRide: true }),

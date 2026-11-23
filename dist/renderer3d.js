@@ -22,16 +22,36 @@ import {loadRunnerModel} from './runner-model.js?v=3.9.2';
 import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.6.8';
 export function createRenderer(canvas, callbacks = {}){
  const isTouchDevice=typeof navigator!=='undefined'&&(navigator.maxTouchPoints>0||(typeof window!=='undefined'&&'ontouchstart' in window));
- const dpr=typeof window!=='undefined'?(window.devicePixelRatio||1):1;
  const memGb=typeof navigator!=='undefined'?Number(navigator.deviceMemory||0):0;
  const cores=typeof navigator!=='undefined'?Number(navigator.hardwareConcurrency||0):0;
  let gfxPref=callbacks?.graphicsQuality||'auto';
  if(!callbacks?.graphicsQuality&&typeof localStorage!=='undefined'){
    try{const saved=localStorage.getItem('runverse-gfx');if(['auto','low','med','high'].includes(saved))gfxPref=saved;}catch{}
  }
- // On mobile touch screens, disabling 4x MSAA + using mediump (FP16) doubles GPU fragment throughput & slashes bandwidth!
- const wantAntialias=!isTouchDevice||gfxPref==='high';
- const wantPrecision=(!isTouchDevice||gfxPref==='high')?'highp':'mediump';
+ // Probe mobile GPU before WebGLRenderer creation in AUTO mode so flagship GPUs get native 4x MSAA + ultra-sharp 2.25x DPR,
+ // while budget/low-end GPUs disable MSAA to slash tile-memory bandwidth by 4x on Adreno 5xx/6xx & Mali-G5x!
+ let probedGpuName='';
+ if(isTouchDevice&&gfxPref==='auto'&&typeof document!=='undefined'){
+   try{
+     const pc=document.createElement('canvas');pc.width=1;pc.height=1;
+     const pgl=pc.getContext('webgl2',{antialias:false})||pc.getContext('webgl',{antialias:false});
+     if(pgl){
+       const pdbg=pgl.getExtension('WEBGL_debug_renderer_info');
+       if(pdbg)probedGpuName=String(pgl.getParameter(pdbg.UNMASKED_RENDERER_WEBGL)||'');
+       pgl.getExtension('WEBGL_lose_context')?.loseContext();
+     }
+   }catch{}
+ }
+ const classifyGpu=name=>{
+   const ultra=/adreno[^0-9]*(?:[234]\d\d|50\d|51\d|610)|mali-(?:t|g3|g51|g52|g71)|powervr|ge8\d\d\d|swiftshader|llvmpipe/i.test(name);
+   const budget=ultra||/adreno[^0-9]*(?:5\d\d|61\d|62\d|70\d)|mali-(?:g5|g61|g68|g72|g76)|img\b/i.test(name);
+   const flagship=!budget&&(/adreno[^0-9]*(?:65\d|66\d|72\d|73\d|74\d|75\d|8\d\d)|immortalis|mali-g7[12]\d|xclipse|apple gpu/i.test(name)||(memGb>=8&&cores>=8));
+   return {ultra,budget,flagship};
+ };
+ const preClass=classifyGpu(probedGpuName);
+ // Keep WebGL precision at 'highp' because Three.js PBR D_GGX computes roughness^8 which underflows FP16 mediump (< 6.1e-5) into NaN black patches on glossy/wet roads!
+ const wantAntialias=!isTouchDevice||gfxPref==='high'||(gfxPref==='auto'&&preClass.flagship);
+ const wantPrecision='highp';
  let renderer;
  try{
    renderer=new T.WebGLRenderer({
@@ -47,31 +67,47 @@ export function createRenderer(canvas, callbacks = {}){
  }
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
  let contextLost=false;canvas.addEventListener?.('webglcontextlost',()=>{contextLost=true;},false);canvas.addEventListener?.('webglcontextrestored',()=>{contextLost=false;},false);
- // Probe mobile GPU renderer name to auto-detect entry-level / budget Android GPUs (Adreno 610/5xx, Mali-G52/G57/G72/T8xx, PowerVR).
- let isBudgetGpu=false;
- if(isTouchDevice&&gl&&typeof gl.getExtension==='function'){
+ // Probe live WebGL context GPU string to auto-classify entry/budget/mid/flagship hardware.
+ let gpuName=probedGpuName;
+ if(!gpuName&&isTouchDevice&&gl&&typeof gl.getExtension==='function'){
    try{
      const dbg=gl.getExtension('WEBGL_debug_renderer_info');
-     const gpuName=dbg?String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)||''):'';
-     isBudgetGpu=/adreno[^0-9]*(?:[2345]\d\d|61\d|70\d)|mali-(?:t|g3|g5|g61|g71|g72|g76)|powervr|img\b|swiftshader|llvmpipe/i.test(gpuName);
+     gpuName=dbg?String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)||''):'';
    }catch{}
  }
+ const gpuClass=isTouchDevice?classifyGpu(gpuName):{ultra:false,budget:false,flagship:true};
+ const isUltraLowGpu=gpuClass.ultra, isBudgetGpu=gpuClass.budget, isFlagshipGpu=gpuClass.flagship;
  const isLowHardware=isTouchDevice&&(isBudgetGpu||(memGb>0&&memGb<=4)||(cores>0&&cores<=6));
- let activeTier=gfxPref!=='auto'?gfxPref:(isLowHardware?'low':isTouchDevice?'med':'high');
- let obsFar=280,coinFar=175,glintFar=48,coinBurstCount=5,activeDpr=1,camFarDist=375;
+ let activeTier=gfxPref!=='auto'?gfxPref:(isUltraLowGpu?'ultra-low':isLowHardware?'low':isFlagshipGpu?'high':isTouchDevice?'med':'high');
+ let dynamicDprCap=0;
+ let obsFar=280,coinFar=175,glintFar=48,coinBurstCount=5,camFarDist=375;
+ // Local Three.js image and GLTF loads share this manager, including secondary textures.
+ let filesReady=Promise.resolve(), finishFiles;
+ const manager=T.DefaultLoadingManager;
+ const priorStart=manager.onStart, priorLoad=manager.onLoad;
+ manager.onStart=(...args)=>{
+   filesReady=new Promise(resolve=>{finishFiles=resolve;});
+   priorStart?.(...args);
+ };
+ manager.onLoad=()=>{
+   finishFiles?.();
+   priorLoad?.();
+ };
  const scene=new T.Scene();scene.background=new T.Color('#64d6ff');scene.fog=new T.Fog('#78dcff',150,325);
- scene.userData.lowEnd=(activeTier==='low');
- scene.userData.trafficFar=(activeTier==='low'?175:activeTier==='med'?230:295);
- renderer.shadowMap.enabled=(activeTier!=='low');
- renderer.shadowMap.type=(activeTier==='high'?T.PCFShadowMap:T.BasicShadowMap);
+ const initLow=activeTier==='ultra-low'||activeTier==='low';
+ scene.userData.ultraLow=(activeTier==='ultra-low');
+ scene.userData.lowEnd=initLow;
+ scene.userData.maxAniso=initLow?1:activeTier==='med'?2:4;
+ scene.userData.trafficFar=(activeTier==='ultra-low'?135:activeTier==='low'?165:activeTier==='med'?225:295);
+ renderer.shadowMap.enabled=!initLow;
+ scene.userData.multisampled=Boolean(gl?.getContextAttributes?.()?.antialias);
  renderer.outputColorSpace=T.SRGBColorSpace;
- renderer.toneMapping=T.ACESFilmicToneMapping;
- renderer.toneMappingExposure=1.22;
+ renderer.toneMapping=initLow?T.NoToneMapping:T.ACESFilmicToneMapping;
+ renderer.toneMappingExposure=initLow?1.0:1.22;
  const camera=new T.PerspectiveCamera(57,1,.1,375);camera.position.set(0,1.52,3.65);camera.lookAt(0,.98,0);
  const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);
- const sun=new T.DirectionalLight(0xfff4d6,3.65);sun.position.set(-15,26,15);sun.castShadow=(activeTier!=='low');
- const smSize = isTouchDevice ? 512 : 1024;
- sun.shadow.mapSize.set(smSize, smSize);
+ const sun=new T.DirectionalLight(0xfff4d6,3.65);sun.position.set(-15,26,15);sun.castShadow=!initLow;
+
  Object.assign(sun.shadow.camera,{left:-12,right:12,top:14,bottom:-18,near:4,far:52});
  sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
  const mats=new Map();function mat(c){if(!mats.has(c))mats.set(c,new T.MeshStandardMaterial({color:c,roughness:.78}));return mats.get(c);}
@@ -79,7 +115,7 @@ export function createRenderer(canvas, callbacks = {}){
  function mesh(g,c,parent,x,y,z,sx=1,sy=1,sz=1,shadow=false){const m=new T.Mesh(g,mat(c));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=shadow;m.receiveShadow=true;parent.add(m);return m;}
  const box=(p,c,x,y,z,sx,sy,sz,sh=false)=>mesh(cube,c,p,x,y,z,sx,sy,sz,sh);
  const ball=(p,c,x,y,z,sx,sy=sx,sz=sx,sh=false)=>mesh(sphere,c,p,x,y,z,sx,sy,sz,sh);
- const updateStreet=streetSurfaces(scene,box,{lowEnd:activeTier==='low'});
+ const updateStreet=streetSurfaces(scene,box,{lowEnd:initLow,isTouch:isTouchDevice});
  // Ultra-fast 1-draw-call soft contact blob shadow under the runner when real-time shadow maps are off on low-end phones.
  let blobTex=null;
  if(typeof document!=='undefined'){
@@ -87,27 +123,77 @@ export function createRenderer(canvas, callbacks = {}){
    if(bctx){const gr=bctx.createRadialGradient(32,32,4,32,32,30);gr.addColorStop(0,'rgba(8,16,32,0.55)');gr.addColorStop(0.55,'rgba(8,16,32,0.28)');gr.addColorStop(1,'rgba(8,16,32,0)');bctx.fillStyle=gr;bctx.fillRect(0,0,64,64);blobTex=new T.CanvasTexture(bc);}
  }
  const runnerBlobShadow=new T.Mesh(new T.PlaneGeometry(1.15,1.45),new T.MeshBasicMaterial({map:blobTex,color:0x000000,transparent:true,opacity:0.85,depthWrite:false}));
- runnerBlobShadow.rotation.x=-Math.PI/2;runnerBlobShadow.position.set(0,0.125,0);runnerBlobShadow.visible=(activeTier==='low');
+ runnerBlobShadow.rotation.x=-Math.PI/2;runnerBlobShadow.position.set(0,0.125,0);runnerBlobShadow.visible=initLow;
  scene.add(runnerBlobShadow);
+ const maxBuffer=gl?.getParameter(gl.MAX_RENDERBUFFER_SIZE)??Infinity;
+ const maxViewport=gl?.getParameter(gl.MAX_VIEWPORT_DIMS);
+ let lastWidth=0,lastHeight=0,lastRatio=0,baseFov=64;
+ function getDprCap(){
+   if(dynamicDprCap>0)return dynamicDprCap;
+   if(activeTier==='ultra-low')return isTouchDevice?0.92:0.80;
+   if(activeTier==='low')return isTouchDevice?1.05:0.90;
+   if(activeTier==='med')return isTouchDevice?1.30:1.20;
+   return isTouchDevice?(isFlagshipGpu||gfxPref==='high'?2.25:1.75):2.0;
+ }
+ function resize(){
+   const {width,height}=canvas.getBoundingClientRect();
+   if(width<=0||height<=0)return;
+   const dpr=typeof window==='undefined'?1:(window.devicePixelRatio||1);
+   const cap=getDprCap();
+   const ratio=Math.min(dpr,cap,
+     maxBuffer/width,maxBuffer/height,(maxViewport?.[0]??Infinity)/width,(maxViewport?.[1]??Infinity)/height);
+   if(width===lastWidth&&height===lastHeight&&Math.abs(ratio-lastRatio)<0.005)return;
+   if(typeof renderer.setDrawingBufferSize==='function'){
+     renderer.setDrawingBufferSize(width,height,ratio);
+   }else{
+     renderer.setPixelRatio?.(ratio);
+     renderer.setSize?.(width,height,false);
+   }
+   lastWidth=width;lastHeight=height;lastRatio=ratio;
+   camera.aspect=width/height;
+   baseFov=camera.aspect<.52?72:camera.aspect<.66?68:camera.aspect<.8?64:58;
+   camera.fov=baseFov;
+   camera.updateProjectionMatrix();
+ }
  function applyQualityTier(tier, customDpr = 0){
    activeTier=tier;
-   const low=(tier==='low'), med=(tier==='med');
+   if(customDpr>0)dynamicDprCap=customDpr;
+   else dynamicDprCap=0;
+   const ultra=(tier==='ultra-low'), low=ultra||(tier==='low'), med=(tier==='med');
+   scene.userData.ultraLow=ultra;
    scene.userData.lowEnd=low;
-   scene.userData.trafficFar=low?175:med?230:295;
-   obsFar=low?165:med?215:280;
-   coinFar=low?72:med?92:(isTouchDevice?110:175);
+   scene.userData.maxAniso=low?1:med?2:4;
+   scene.userData.trafficFar=ultra?135:low?165:med?225:295;
+   obsFar=ultra?125:low?155:med?210:280;
+   coinFar=ultra?54:low?68:med?92:(isTouchDevice?110:175);
    glintFar=low?0:med?20:(isTouchDevice?28:48);
-   coinBurstCount=low?2:med?3:5;
-   camFarDist=low?210:med?275:375;
-   const targetDpr=customDpr>0?customDpr:(low?Math.min(dpr,0.85):med?Math.min(dpr,1.10):Math.min(dpr,isTouchDevice?1.45:1.75));
-   if(Math.abs(targetDpr-activeDpr)>0.01){activeDpr=targetDpr;renderer.setPixelRatio(activeDpr);}
+   coinBurstCount=ultra?1:low?2:med?3:5;
+   camFarDist=ultra?168:low?200:med?270:375;
+   resize();
+   renderer.toneMapping=low?T.NoToneMapping:T.ACESFilmicToneMapping;
+   renderer.toneMappingExposure=low?1.0:1.22;
+   renderer.shadowMap.type=low||med?T.BasicShadowMap:T.PCFShadowMap;
+   const shadowSize=Math.min(isTouchDevice&&(low||med)?512:1024,maxBuffer);
+   if(sun.shadow.mapSize.x!==shadowSize){
+     sun.shadow.map?.dispose();
+     sun.shadow.map=null;
+     sun.shadow.mapSize.set(shadowSize,shadowSize);
+   }
    renderer.shadowMap.enabled=!low;
    sun.castShadow=!low;
    runnerBlobShadow.visible=low;
-   if(scene.userData.envMap){scene.environment=low?null:scene.userData.envMap;}
+   if(scene.userData.envMap){scene.environment=(low||(isTouchDevice&&med))?null:scene.userData.envMap;}
    if(camera.far!==camFarDist){camera.far=camFarDist;camera.updateProjectionMatrix();}
  }
  applyQualityTier(activeTier);
+ const levelGroups=new Map();
+ function createLevelScene(create) {
+   const group=new T.Group();
+   group.userData=scene.userData;
+   scene.add(group);
+   levelGroups.set(create,group);
+   return create(group);
+ }
  let updateCampus=null;
  let updateVillage=null;
  let updateGrandfather=null;
@@ -115,7 +201,7 @@ export function createRenderer(canvas, callbacks = {}){
  let updateItPark=null;
  function updatePark(state, weather) {
    if (!updateItPark && state.map === 'itpark') {
-     updateItPark = createItParkCampus(scene);
+     updateItPark = createLevelScene(createItParkCampus);
    }
    if (updateItPark) updateItPark(state, weather);
  }
@@ -136,13 +222,16 @@ export function createRenderer(canvas, callbacks = {}){
  const uploadedTextures = new WeakSet();
  const initObjectTextures = (obj) => {
    if (!obj || !renderer.initTexture) return;
+   const maxA = scene.userData.maxAniso || 4;
    obj.traverse?.(node => {
      const mList = Array.isArray(node.material) ? node.material : (node.material ? [node.material] : []);
      for (const m of mList) {
        if (!m) continue;
        for (const k of ['map', 'emissiveMap', 'bumpMap', 'normalMap', 'roughnessMap', 'metalnessMap']) {
          const tex = m[k];
-         if (!tex || uploadedTextures.has(tex)) continue;
+         if (!tex) continue;
+         if (tex.anisotropy > maxA) tex.anisotropy = maxA;
+         if (uploadedTextures.has(tex)) continue;
          const img = tex.image;
          const ready = tex.isCanvasTexture || tex.isDataTexture || (img && img.complete !== false && (img.width > 0 || img.naturalWidth > 0));
          if (ready) {
@@ -423,24 +512,56 @@ export function createRenderer(canvas, callbacks = {}){
  function obstacle(g,o,map='school',blockKind=0){clear(g);g.userData.waveArm=null;g.userData.rotors=null;g.userData.crate=null;g.userData.spinBadge=null;g.userData.serverScan=null;g.userData.papers=null;g.userData.swivel=null;g.userData.holoPanel=null;if(PICKUP_TYPES.has(o.type)){ensurePickups().add(g,o.type);return;}if(ROAD_EVENT_TYPES.has(o.type)){const ev=buildRoadEventMesh(o.type,o);g.add(ev);g.userData.rotors=ev.userData.rotors||null;g.userData.crate=ev.userData.crate||null;g.userData.spinBadge=ev.userData.spinBadge||null;return;}if(map==='grandfather'){g.add(grandfatherObstacle(o.variant));return;}if(map==='itpark'){itParkObstacle(g,o,blockKind);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
 
  // Use the actual 3D Dark Gold & Crimson-Red coin model (makeCoin / mantis-flip-coin.glb) for collected-coin burst particles
- const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=makeCoin(scene,0,0,0);m.scale.setScalar(.55);m.visible=false;particles.push({m,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(11+i%5*1.8),tilt:(i%3-1)*.16});}let trackCameraY=0,total=0,lastTime=0,burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
- function resize(){const r=canvas.getBoundingClientRect();const rw=Math.round(r.width),rh=Math.round(r.height);if(!rw||!rh||(rw===lastCanvasW&&rh===lastCanvasH))return;lastCanvasW=rw;lastCanvasH=rh;renderer.setSize(rw,rh,false);camera.aspect=rw/rh;const asp=rw/rh;baseFov=asp<.52?72:asp<.66?68:asp<.8?64:58;camera.fov=baseFov;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
- let perfFrames=0,perfTime=0,slowWindows=0;
+ const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=makeCoin(scene,0,0,0);m.scale.setScalar(.55);m.visible=false;particles.push({m,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(11+i%5*1.8),tilt:(i%3-1)*.16});}let trackCameraY=0,total=0,lastTime=0,burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null;
+ const sizeObserver=new ResizeObserver(resize);
+ try{sizeObserver.observe(canvas,{box:'device-pixel-content-box'});}
+ catch{sizeObserver.observe(canvas);}
+ if(typeof window!=='undefined')window.addEventListener('resize',resize);
+ let perfFrames=0,perfTime=0,slowWindows=0,smoothWindows=0;
  const renderFn=function render(s,character,frameDt){if(contextLost||renderer.getContext?.()?.isContextLost?.())return 'context-lost';stage.restore();capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
- // Adaptive FPS Auto-Scaler on mobile ('auto' mode): if FPS drops below ~40 FPS on any phone, automatically step down resolution & shadows!
- if(isTouchDevice&&gfxPref==='auto'&&s.mode==='running'&&frameDt>0.004&&frameDt<0.25){
+ // Fast live bidirectional dynamic GPU auto-scaler in AUTO mode: 2 consecutive slow windows step DOWN cleanly, 5 smooth windows step UP!
+ if(gfxPref==='auto'&&s.mode==='running'&&frameDt>0.004&&frameDt<0.25){
    perfFrames++;perfTime+=frameDt;
-   if(perfFrames>=45){
+   if(perfFrames>=35){
      const avgDt=perfTime/perfFrames;
      perfFrames=0;perfTime=0;
-     if(avgDt>0.025){
+     if(avgDt>0.024){
+       smoothWindows=0;
        slowWindows++;
        if(slowWindows>=2){
          slowWindows=0;
-         if(activeTier!=='low'){applyQualityTier('low');}
-         else if(activeDpr>0.68){applyQualityTier('low',Math.max(0.65,activeDpr-0.12));}
+         if(activeTier==='high'){
+           const curCap=getDprCap();
+           if(isTouchDevice&&curCap>1.75)applyQualityTier('high',1.70);
+           else applyQualityTier('med');
+         }
+         else if(activeTier==='med')applyQualityTier('low');
+         else if(activeTier==='low')applyQualityTier('ultra-low',0.90);
+         else{
+           const curCap=getDprCap();
+           if(curCap>0.66)applyQualityTier('ultra-low',Math.max(0.66,Number((curCap-0.08).toFixed(2))));
+         }
        }
-     }else{slowWindows=0;}
+     }else if(avgDt<0.0176){
+       slowWindows=0;
+       smoothWindows++;
+       if(smoothWindows>=5){
+         smoothWindows=0;
+         if(activeTier==='ultra-low'){
+           const curCap=getDprCap();
+           if(curCap<1.08)applyQualityTier('ultra-low',Math.min(1.08,Number((curCap+0.08).toFixed(2))));
+         }else if(activeTier==='low'&&!isUltraLowGpu){
+           applyQualityTier('med');
+         }else if(activeTier==='med'&&!isLowHardware){
+           applyQualityTier('high');
+         }else if(activeTier==='high'&&isFlagshipGpu&&dynamicDprCap>0&&dynamicDprCap<2.25){
+           applyQualityTier('high',0);
+         }
+       }
+     }else{
+       slowWindows=0;
+       smoothWindows=0;
+     }
    }
  }
  const onPodium=s.mode==='ready'||s.mode==='select';
@@ -448,7 +569,7 @@ export function createRenderer(canvas, callbacks = {}){
  if(podiumChanged){
    lastOnPodium=onPodium;
    // Keep sun.castShadow consistent with active graphics tier so pressing LET'S RUN NEVER forces a shader recompile!
-   sun.castShadow=(activeTier!=='low');
+   sun.castShadow=(activeTier!=='low'&&activeTier!=='ultra-low');
    camera.far=camFarDist;
    camera.updateProjectionMatrix();
    if(onPodium){
@@ -462,7 +583,7 @@ export function createRenderer(canvas, callbacks = {}){
  const branchCovering=(s.map==='itpark'&&s.activeBranch&&s.distance>=s.branchStart+1&&s.distance<=s.branchEnd)?s.activeBranch:null;
  updateStreet(s.distance,weather,s.map,branchCovering,s);
  if(s.map==='itpark'){
-   if(!updateRoadEvents)updateRoadEvents=createRoadEventsScene(scene);
+   if(!updateRoadEvents)updateRoadEvents=createLevelScene(createRoadEventsScene);
    updateRoadEvents(s,weather);
    roadEventsActive=true;
  }else if(roadEventsActive&&updateRoadEvents){
@@ -472,15 +593,15 @@ export function createRenderer(canvas, callbacks = {}){
  updatePark(s,weather);
  if(s.map==='school'){
    if(!onPodium||podiumChanged){
-     if(!updateCampus&&!onPodium)updateCampus=createCampus(scene);
+     if(!updateCampus&&!onPodium)updateCampus=createLevelScene(createCampus);
      if(updateCampus)updateCampus(s,weather);
    }
  }else if(updateCampus)updateCampus(s,weather);
- if(s.map==='finalrun'||s.map==='grandfather'){if(!updateVillage)updateVillage=createVillageRoute(scene);updateVillage(s);}
+ if(s.map==='finalrun'||s.map==='grandfather'){if(!updateVillage)updateVillage=createLevelScene(createVillageRoute);updateVillage(s);}
  else if(updateVillage)updateVillage(s);
- if(s.map==='grandfather' && !updateGrandfather)updateGrandfather=createGrandfatherVillage(scene);
+ if(s.map==='grandfather' && !updateGrandfather)updateGrandfather=createLevelScene(createGrandfatherVillage);
  if(updateGrandfather)updateGrandfather(s);
- if(s.map==='college'){if(!updateCollege)updateCollege=createCollegeCampus(scene);updateCollege(s);}
+ if(s.map==='college'){if(!updateCollege)updateCollege=createLevelScene(createCollegeCampus);updateCollege(s);}
  else if(updateCollege)updateCollege(s);
  updateChaserModel(s);
  podium.position.set(0,.09,s.distance);
@@ -647,6 +768,9 @@ export function createRenderer(canvas, callbacks = {}){
  }
  renderer.render(scene,camera);lastMode=s.mode;lastStateMap=s.map;return selectedModel.failed?'error':selectedVisible?'ready':'loading';};
  function compileWarmupProps(map) {
+   // On School/College/Village low-end, props are lightweight and share already-compiled unshadowed shaders.
+   // On IT Park, always pre-build vehicle/obstacle geometries & CanvasTextures behind the loading veil so mid-run spawns never hitch 300ms!
+   if (scene.userData.lowEnd && map !== 'itpark') return;
    warmupGroup.clear();
    warmupGroup.visible = true;
    if (map === 'itpark') {
@@ -669,34 +793,39 @@ export function createRenderer(canvas, callbacks = {}){
      prewarmTrafficTemplates('school', warmupGroup);
      warmupGroup.add(buildSideVehicle('car'), buildSideVehicle('cycle'));
    }
-   try { renderer.compile?.(warmupGroup, camera, scene); } catch {}
+   if (!scene.userData.lowEnd) {
+     try { renderer.compile?.(warmupGroup, camera, scene); } catch {}
+   }
    initObjectTextures(warmupGroup);
    warmupGroup.clear();
    warmupGroup.visible = false;
  }
  function runWarmStep(id) {
    if (warmedSteps.has(id)) return false;
-   warmedSteps.add(id);
    const dummyWeather = { night: 0, rain: 0, stormDark: 0 };
    if (id === 'base') {
      updateChaserModel.preload?.();
-     try { renderer.compile?.(scene, camera); } catch {}
+     if (!scene.userData.lowEnd) {
+       try { renderer.compile?.(scene, camera); } catch {}
+     }
      initObjectTextures(scene);
    } else if (id === 'itpark:campus') {
-     if (!updateItPark) updateItPark = createItParkCampus(scene);
+     updateSky({map:'itpark',mode:'running',distance:0,time:0,x:0});
+     if (!updateItPark) updateItPark = createLevelScene(createItParkCampus);
      updateItPark({ map: 'itpark', distance: 0, time: 0, activeBranch: null }, dummyWeather);
      try { renderer.compile?.(scene, camera); } catch {}
      initObjectTextures(scene);
      if (lastStateMap !== 'itpark') updateItPark({ map: '__none__', distance: 0, time: 0 }, dummyWeather);
    } else if (id === 'itpark:events') {
-     if (!updateRoadEvents) updateRoadEvents = createRoadEventsScene(scene);
+     if (!updateRoadEvents) updateRoadEvents = createLevelScene(createRoadEventsScene);
      try { renderer.compile?.(scene, camera); } catch {}
      initObjectTextures(scene);
      if (lastStateMap !== 'itpark') updateRoadEvents({ map: '__none__', distance: 0, time: 0 }, dummyWeather);
    } else if (id === 'itpark:props') {
      compileWarmupProps('itpark');
    } else if (id === 'college:campus') {
-     if (!updateCollege) updateCollege = createCollegeCampus(scene);
+     updateSky({map:'college',mode:'running',distance:0,time:0,x:0});
+     if (!updateCollege) updateCollege = createLevelScene(createCollegeCampus);
      updateCollege({ map: 'college', distance: 0, time: 0, activeBranch: null });
      try { renderer.compile?.(scene, camera); } catch {}
      initObjectTextures(scene);
@@ -704,7 +833,7 @@ export function createRenderer(canvas, callbacks = {}){
    } else if (id === 'college:props') {
      compileWarmupProps('college');
    } else if (id === 'school:campus') {
-     if (!updateCampus) updateCampus = createCampus(scene);
+     if (!updateCampus) updateCampus = createLevelScene(createCampus);
      updateCampus({ map: 'school', distance: 0, time: 0, activeBranch: null }, dummyWeather);
      try { renderer.compile?.(scene, camera); } catch {}
      initObjectTextures(scene);
@@ -712,25 +841,28 @@ export function createRenderer(canvas, callbacks = {}){
    } else if (id === 'school:props') {
      compileWarmupProps('school');
    } else if (id === 'grandfather:village') {
-     if (!updateGrandfather) updateGrandfather = createGrandfatherVillage(scene);
+     if (!updateGrandfather) updateGrandfather = createLevelScene(createGrandfatherVillage);
      updateGrandfather({map:'grandfather',distance:0});
      try { renderer.compile?.(scene, camera); } catch {}
      initObjectTextures(scene);
      if (lastStateMap !== 'grandfather') updateGrandfather({map:'__none__'});
+   } else if (id === 'finalrun:village:init') {
+     if (!updateVillage) updateVillage = createLevelScene(createVillageRoute);
    } else if (id === 'finalrun:village') {
-     if (!updateVillage) updateVillage = createVillageRoute(scene);
+     if (!updateVillage) updateVillage = createLevelScene(createVillageRoute);
      updateVillage({ map: 'finalrun', distance: 0, time: 0 });
      try { renderer.compile?.(scene, camera); } catch {}
      initObjectTextures(scene);
      if (lastStateMap !== 'finalrun') updateVillage({ map: '__none__', distance: 0, time: 0 });
    }
+   warmedSteps.add(id);
    return true;
  }
  function stepsForMap(map) {
    if (map === 'itpark') return ['base', 'itpark:campus', 'itpark:events', 'itpark:props'];
    if (map === 'college') return ['base', 'college:campus', 'college:props'];
-   if (map === 'grandfather') return ['base', 'grandfather:village', 'finalrun:village'];
-   if (map === 'finalrun') return ['base', 'finalrun:village', 'school:props'];
+   if (map === 'grandfather') return ['base', 'grandfather:village', 'finalrun:village:init', 'finalrun:village'];
+   if (map === 'finalrun') return ['base', 'finalrun:village:init', 'finalrun:village', 'school:props'];
    return ['base', 'school:campus', 'school:props'];
  }
  renderFn.warmStep = (preferredMap = 'school') => {
@@ -755,11 +887,89 @@ export function createRenderer(canvas, callbacks = {}){
  renderFn.isMapWarm = (map = 'school') => stepsForMap(map).every(id => warmedSteps.has(id));
  renderFn.setGraphicsQuality = (pref = 'auto') => {
    gfxPref = ['auto','low','med','high'].includes(pref) ? pref : 'auto';
-   const nextTier = gfxPref !== 'auto' ? gfxPref : (isLowHardware ? 'low' : isTouchDevice ? 'med' : 'high');
-   slowWindows = 0; perfFrames = 0; perfTime = 0;
-   applyQualityTier(nextTier);
+   perfFrames=0;perfTime=0;slowWindows=0;smoothWindows=0;
+   const nextTier = gfxPref !== 'auto' ? gfxPref : (isUltraLowGpu ? 'ultra-low' : isLowHardware ? 'low' : isFlagshipGpu ? 'high' : isTouchDevice ? 'med' : 'high');
+   applyQualityTier(nextTier, 0);
  };
  renderFn.getGraphicsTier = () => activeTier;
+ renderFn.isAtPerformanceFloor = () => activeTier === 'ultra-low' && getDprCap() <= 0.67;
+ // Release the previous level behind the loading screen. Resources still used by
+ // common scenery or the next level remain live, including shared materials.
+ function resources(root) {
+   const found=new Set();
+   root.traverse(node=>{
+     if(node.geometry)found.add(node.geometry);
+     if(node.skeleton)found.add(node.skeleton);
+     if(node.isInstancedMesh)found.add(node);
+     const materials=Array.isArray(node.material)?node.material:[node.material];
+     for(const material of materials){
+       if(!material)continue;
+       found.add(material);
+       for(const value of Object.values(material))if(value?.isTexture)found.add(value);
+     }
+   });
+   return found;
+ }
+ let preparedMap=null;
+ renderFn.selectLevel=(map,key)=>{
+   const retiring=new T.Group();
+   for(const [id,hero] of Object.entries(heroModels)){
+     if(id!==key && hero.model){
+       retiring.add(hero.model);
+       heroModels[id]=loadRunnerModel(runner,id,null,false,compileLoadedModel);
+     }
+   }
+   if(map!==preparedMap){
+     const wanted=new Set(stepsForMap(map));
+     const release=(factory,step)=>{
+       const group=levelGroups.get(factory);
+       if(!group || wanted.has(step))return false;
+       retiring.add(group);
+       levelGroups.delete(factory);
+       return true;
+     };
+     if(release(createCampus,'school:campus'))updateCampus=null;
+     if(release(createCollegeCampus,'college:campus'))updateCollege=null;
+     if(release(createItParkCampus,'itpark:campus'))updateItPark=null;
+     if(release(createRoadEventsScene,'itpark:events')){updateRoadEvents=null;roadEventsActive=false;}
+     if(release(createVillageRoute,'finalrun:village'))updateVillage=null;
+     if(release(createGrandfatherVillage,'grandfather:village'))updateGrandfather=null;
+     for(const id of warmedSteps)if(!wanted.has(id))warmedSteps.delete(id);
+     if(preparedMap!==null){
+       itemPoolMap.clear();
+       freePool.length=0;
+       for(const slot of pool){
+         while(slot.children.length)retiring.add(slot.children[0]);
+         slot.userData={captureObstacle:true};
+         slot.visible=false;
+         freePool.push(slot);
+       }
+     }
+     preparedMap=map;
+   }
+   if(retiring.children.length){
+     const retained=resources(scene);
+     for(const resource of resources(retiring)){
+       if(!retained.has(resource)){
+         resource.dispose?.();
+         uploadedTextures.delete(resource);
+       }
+     }
+   }
+ };
+ renderFn.waitForCharacters=async key=>{
+   const hero=heroModels[key];
+   await Promise.all([hero.preload(),updateChaserModel.preload()]);
+   if(!hero.model || hero.failed || !updateChaserModel.model)throw new Error('A packaged character could not be loaded.');
+ };
+ renderFn.finishPreparation=async ()=>{
+   // Never hang loading for slow secondary images or redundant async recompiles on low-end CPUs.
+   await Promise.race([filesReady, new Promise(resolve => setTimeout(resolve, 1600))]);
+   initObjectTextures(scene);
+   if(!scene.userData.lowEnd && renderer.compileAsync){
+     await Promise.race([renderer.compileAsync(scene,camera).catch(()=>{}), new Promise(resolve => setTimeout(resolve, 1200))]);
+   }
+ };
  renderFn.isLoaded=key=>Boolean(heroModels[key]?.model);
  renderFn.preload=key=>heroModels[key]?.preload?.();
  return renderFn;

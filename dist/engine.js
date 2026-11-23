@@ -150,6 +150,15 @@ export function vanSurface(distance, lanePosition,seed=0) {
   return surface;
 }
 
+function onVanRamp(distance, lanePosition, seed = 0) {
+  for (const van of routeVans(distance, seed)) {
+    if (van.rear > van.ramp && Math.abs(lanePosition - van.lane) * 2.2 <= van.width / 2 && distance >= van.ramp && distance < van.rear) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function busSurface(s){
  let surface=0;
  for(const bus of s.items){
@@ -168,6 +177,8 @@ function updateElevation(s, dt) {
   s.jump = Math.max(0, s.jump-dt);
   if (dropped) s.drop.remaining = Math.max(0, s.drop.remaining-dt);
   const surface = s.map === 'grandfather' ? 0 : Math.max(vanSurface(s.distance, s.x,s.runSeed),busSurface(s));
+  const rampNow = s.map !== 'grandfather' && onVanRamp(s.distance, s.x, s.runSeed);
+  const prevSurface = rampNow ? vanSurface(Math.max(0, s.distance - s.speed * dt), s.x, s.runSeed) : surface;
   const wasFalling = s.fallSpeed > 0;
   if (wasFalling) {
     s.fallSpeed += 18*dt;
@@ -176,14 +187,19 @@ function updateElevation(s, dt) {
 
   const descending = dropped || wasFalling || (jumped && s.jump <= JUMP_DURATION/2);
   const next = height(s);
-  if (descending && next <= surface && previous >= surface-.045) {
+  const landMin = rampNow ? Math.min(surface, prevSurface) - .12 : surface - .045;
+  if (descending && next <= surface && previous >= landMin) {
+    s.floor = surface;
+    s.jump = s.fallSpeed = 0;
+    s.drop = null;
+  } else if (rampNow && next < surface) {
     s.floor = surface;
     s.jump = s.fallSpeed = 0;
     s.drop = null;
   } else if (dropped && s.drop.remaining === 0) {
     s.floor = 0;
     s.drop = null;
-  } else if (!jumped && !dropped && !wasFalling && Math.abs(surface-s.floor) <= .44) {
+  } else if (!jumped && !dropped && !wasFalling && (Math.abs(surface-s.floor) <= .44 || (rampNow && surface >= s.floor))) {
     s.floor = surface;
   } else if (!s.jump && !s.drop && s.floor > surface && !s.fallSpeed) {
     s.fallSpeed = .6;

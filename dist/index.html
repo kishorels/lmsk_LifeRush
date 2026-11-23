@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.10.0">
+  <link rel="stylesheet" href="style.css?v=3.10.11">
 </head>
 <body>
 <header>
@@ -258,7 +258,7 @@
         <div class="gfx-settings">
           <div class="gfx-settings-head">
             <strong>Graphics Quality</strong>
-            <small id="gfx-quality-hint">Auto · Smooth 60 FPS for your phone</small>
+            <small id="gfx-quality-hint">Auto · Dynamic 60 FPS for your phone</small>
           </div>
           <div class="gfx-pills" role="group" aria-label="Graphics quality">
             <button type="button" class="gfx-pill selected" data-gfx="auto" aria-pressed="true">AUTO</button>
@@ -396,8 +396,8 @@
       <div class="power-actions"><button id="cancel-powers" type="button">Back</button><button id="confirm-powers" type="button" disabled>Start run</button></div>
     </dialog>
     <div id="run-powers" hidden>
-      <button type="button" class="power-direction above" aria-label="Use Power Slot 1 (or swipe up)"></button>
-      <button type="button" class="power-direction left" aria-label="Use Power Slot 2 (or swipe left)"></button>
+      <button type="button" class="power-direction above" tabindex="-1" aria-label="Power Slot 1 (hold POWER and swipe up)"></button>
+      <button type="button" class="power-direction left" tabindex="-1" aria-label="Power Slot 2 (hold POWER and swipe left)"></button>
       <button id="power-trigger" type="button" aria-label="Hold and swipe up or left to use a power. Keyboard: 1 or 2.">
         <svg class="power-trigger-icon" viewBox="0 0 24 24" width="26" height="26" fill="none" aria-hidden="true">
           <path d="M13 2L3 14h8l-2 8 11-13h-8l3-7z" fill="url(#coreVolt)" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>
@@ -427,6 +427,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.10.0"></script>
+<script type="module" src="boot.js?v=3.10.11"></script>
 </body>
 </html>

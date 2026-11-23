@@ -1,11 +1,19 @@
 import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
-import {createPowerControls} from './power-controls.js?v=3.3.0';
+import {createPowerControls} from './power-controls.js?v=3.10.11';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.9.2';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.9.2';
-import {createRenderer} from './renderer3d.js?v=3.9.2';
+import {createFramePacer} from './frame-pacing.js';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
+
+let rendererModulePromise = null;
+function loadRendererModule() {
+  if (!rendererModulePromise) {
+    rendererModulePromise = import('./renderer3d.js?v=3.10.11');
+  }
+  return rendererModulePromise;
+}
 
 import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
 import {initializeBuildProfile} from './build-profile.js';
@@ -318,13 +326,15 @@ function switchToLiteRenderer(reason) {
   onAllAssetsReady();
 }
 
+const framePacer = createFramePacer();
+let lastDrawnRun=null, lastDrawnRunTime=0;
 let graphicsQuality = 'auto';
 try {
   const savedGfx = localStorage.getItem('runverse-gfx');
   if (['auto', 'low', 'med', 'high'].includes(savedGfx)) graphicsQuality = savedGfx;
 } catch {}
 const GFX_HINTS = {
-  auto: 'Auto · Smooth 60 FPS for your phone',
+  auto: 'Auto · Dynamic 60 FPS for your phone',
   low: 'Low · Max 60 FPS for low-end phones',
   med: 'Medium · Balanced shadows & speed',
   high: 'High · Full detail for flagship devices'
@@ -343,16 +353,19 @@ document.querySelectorAll('[data-gfx]').forEach(btn => {
     const next = btn.dataset.gfx;
     if (!['auto', 'low', 'med', 'high'].includes(next)) return;
     graphicsQuality = next;
+    framePacer.reset();
     try { localStorage.setItem('runverse-gfx', graphicsQuality); } catch {}
     syncGraphicsUI();
     draw?.setGraphicsQuality?.(graphicsQuality);
   };
 });
 
-function ensureRenderer(targetCharKey = equippedCharId) {
+async function ensureRenderer(targetCharKey = equippedCharId) {
   if (rendererStarted || draw) return;
   rendererStarted = true;
   try{
+    const {createRenderer} = await loadRendererModule();
+    if (draw) return;
     draw=createRenderer(canvas, {
       initialModelKey: targetCharKey || initialModelKey,
       graphicsQuality,
@@ -1208,19 +1221,30 @@ function scheduleCutscenePrewarm(targetMap, targetStage, targetCharId, chosen, v
     started = true;
     if (cutscenePrewarmTimer) { clearTimeout(cutscenePrewarmTimer); cutscenePrewarmTimer = 0; }
 
-    // Wait 450ms after video playback stabilizes before doing any WebGL work so opening frames stay silky-smooth.
-    cutscenePrewarmTimer = setTimeout(() => {
+    // Wait 600ms after video playback stabilizes before doing lightweight async preloading.
+    // Never run synchronous 3D mesh/shader construction during cutscene video on mobile so playback has 0ms freeze!
+    cutscenePrewarmTimer = setTimeout(async () => {
       if (nonce !== cutscenePrewarmNonce) return;
       if (targetStage === 'grandfather') effects.preloadBgm?.('grandfather');
-      ensureRenderer(targetCharId);
+      const isMobileTouch = typeof navigator !== 'undefined' && (navigator.maxTouchPoints > 0 || 'ontouchstart' in window);
+      if (isMobileTouch) {
+        // On mobile, never initialize WebGL or run synchronous 3D scene building during video playback so H.264 stays 100% smooth.
+        if (draw) draw.preload?.(targetCharId);
+        cutscenePrewarmDone = false;
+        return;
+      }
+      await ensureRenderer(targetCharId);
+      if (nonce !== cutscenePrewarmNonce) return;
+      draw?.selectLevel?.(targetMap,targetCharId);
       draw?.preload?.(targetCharId);
 
       const nextStep = () => {
         if (nonce !== cutscenePrewarmNonce) return;
-        const ran = draw?.warmMapStep ? draw.warmMapStep(targetMap) : null;
+        let ran;
+        try { ran=draw?.warmMapStep?.(targetMap); }
+        catch(error){console.warn('Deferring cutscene preparation until launch.',error);return;}
         if (ran) {
-          // Space each shader/mesh warmup chunk by 420ms so the H.264 video decoder never stutters.
-          cutscenePrewarmTimer = setTimeout(nextStep, 420);
+          cutscenePrewarmTimer = setTimeout(nextStep, 580);
           return;
         }
         cutscenePrewarmDone = true;
@@ -1228,11 +1252,11 @@ function scheduleCutscenePrewarm(targetMap, targetStage, targetCharId, chosen, v
         cutscenePrewarmTimer = setTimeout(() => {
           if (nonce !== cutscenePrewarmNonce) return;
           cutsceneWarmupFrames = 1;
-        }, 350);
+        }, 420);
       };
 
-      cutscenePrewarmTimer = setTimeout(nextStep, 420);
-    }, 450);
+      cutscenePrewarmTimer = setTimeout(nextStep, 580);
+    }, 600);
   };
 
   if (videoEl && !videoEl.paused && videoEl.readyState >= 2 && (videoEl.currentTime || 0) > 0.05) {
@@ -1244,25 +1268,12 @@ function scheduleCutscenePrewarm(targetMap, targetStage, targetCharId, chosen, v
   }
 }
 
-function prewarmFinalRunStage(targetMap, targetStage, targetCharId, chosen) {
-  initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
-  ensureRenderer(targetCharId);
-  draw?.preload?.(targetCharId);
-  draw?.warmMapNow?.(targetMap);
-  cutscenePrewarmDone = true;
-  cutsceneWarmupFrames = 1;
-  cutscenePrewarmedCharLoaded = Boolean(draw?.isLoaded?.(targetCharId));
-}
-
-function launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chosen) {
+async function launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chosen) {
   cancelCutscenePrewarm();
   if (!s?.isFinalRun || s.finalRunStage !== targetStage || s.map !== targetMap) {
     initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
   }
-  ensureRenderer(targetCharId);
-  draw?.preload?.(targetCharId);
-  // No-op if chunked prewarm already finished during the cutscene; safely completes any remaining step if skipped early.
-  draw?.warmMapNow?.(targetMap);
+  if (!await prepareLevelRun(targetMap,targetCharId)) return false;
   finalRunActiveCharId = targetCharId;
   character = 'male';
   s.distance = 0;
@@ -1302,6 +1313,7 @@ function launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chos
     else effects.setBgmTrack?.('default');
     effects.play('bell');
   }
+  return true;
 }
 
 function stopCollegeIntroOverlay() {
@@ -1466,7 +1478,7 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
     }
   }
 
-  function finishTransitionAndLaunch() {
+  async function finishTransitionAndLaunch() {
     if (launched || !collegeIntroActive) return;
     launched = true;
     if (collegeIntroRaf) { cancelAnimationFrame(collegeIntroRaf); collegeIntroRaf = 0; }
@@ -1498,8 +1510,8 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
       }, 450);
       return;
     }
+    if (!await launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chosen)) return;
     showCountdownStep('START');
-    launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chosen);
     collegeIntroTimer = setTimeout(() => {
       overlay.classList.add('is-fading-out');
       collegeIntroTimer = setTimeout(() => {
@@ -1703,13 +1715,13 @@ function playFinalRunIntro(chosen) {
     }
   }
 
-  function finishIntroAndLaunch() {
+  async function finishIntroAndLaunch() {
     if (launched || !finalIntroActive) return;
     launched = true;
     if (finalIntroRaf) { cancelAnimationFrame(finalIntroRaf); finalIntroRaf = 0; }
     gamePauseVideo(video);
+    if (!await launchPrewarmedFinalRunStage('finalrun', 'village', 'male', chosen)) return;
     showCountdownStep('START');
-    launchPrewarmedFinalRunStage('finalrun', 'village', 'male', chosen);
     finalIntroHideTimer = setTimeout(() => {
       overlay.classList.add('is-fading-out');
       finalIntroHideTimer = setTimeout(() => {
@@ -1803,6 +1815,68 @@ function hideRunLoadingVeilSmooth() {
     veil.classList.remove('is-fading-out');
   }, 290);
 }
+const nextLoadingFrame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
+async function prepareLevelRun(map,key,launchId=++runLaunchNonce) {
+  runLoadingActive=true;
+  framePacer.reset();
+  const veil=$('run-loading-veil');
+  try {
+    setRunLoadingProgress(18,'Loading 3D engine...');
+    await nextLoadingFrame();
+    if(launchId!==runLaunchNonce)return false;
+    await ensureRenderer(key);
+    if(launchId!==runLaunchNonce)return false;
+    draw.selectLevel?.(map,key);
+    draw.preload?.(key);
+    const steps=draw.warmMapSteps?.(map) || [];
+    for(let i=0;i<steps.length;i++){
+      setRunLoadingProgress(32+50*i/steps.length,'Preparing track and effects...');
+      await nextLoadingFrame();
+      if(launchId!==runLaunchNonce)return false;
+      draw.warmMapStep(map);
+    }
+    setRunLoadingProgress(85,'Preparing characters...');
+    await draw.waitForCharacters?.(key);
+    if(launchId!==runLaunchNonce)return false;
+    // Render the first running view under cover. The opening gesture keeps its own state.
+    if(s.mode==='intro'){
+      const preview=fresh();
+      Object.assign(preview,{map,mode:'running',enableForks:s.enableForks,level:s.level});
+      step(preview,.001);
+      draw(preview,key,0);
+    }
+    if(draw(s,key,0)==='context-lost'){
+      switchToLiteRenderer('WebGL context lost');
+      draw(s,key,0);
+    }
+    setRunLoadingProgress(94,'Preparing local textures and lighting...');
+    await draw.finishPreparation?.();
+    await nextLoadingFrame();
+    if(launchId!==runLaunchNonce)return false;
+    draw(s,key,0);
+    setRunLoadingProgress(100,'Ready!');
+    prev=0;
+    runLoadingActive=false;
+    return true;
+  } catch(error) {
+    if(launchId!==runLaunchNonce)return false;
+    console.error('Level preparation failed:',error);
+    runLoadingActive=false;
+    if(collegeIntroActive)stopCollegeIntroOverlay();
+    if(finalIntroActive)stopFinalRunIntroOverlay();
+    if(veil)veil.hidden=true;
+    s=fresh();
+    s.map=selectedMap;
+    finalRunActiveCharId='';
+    setScreenMode('select');
+    if($('selection'))$('selection').hidden=false;
+    if($('overlay'))$('overlay').hidden=true;
+    const start=$('start');
+    start.dataset.loadError='true';
+    start.textContent='Could not load level · Tap to retry';
+    return false;
+  }
+}
 function beginRun(chosen){
   if (!isCollegeUnlocked() && selectedMap !== 'finalrun') {
     selectedMap = 'school';
@@ -1830,114 +1904,57 @@ function beginRun(chosen){
   effects.unlock();
 
   // Let the animated loading veil fade in cleanly BEFORE doing any WebGL/shader work (zero freeze feel!).
-  setTimeout(() => {
+  setTimeout(async () => {
     if (launchId !== runLaunchNonce) return;
     $('start')?.classList.remove('is-launching');
     $('select-screen')?.classList.remove('is-launching-run');
     startBtnLaunching = false;
     setScreenMode('running');
 
-    // Chunk 1: initialize WebGL renderer & kick off ONLY the chosen hero GLB download.
-    ensureRenderer(targetCharId);
-    draw?.preload?.(targetCharId);
-    setRunLoadingProgress(32, 'Loading track & campus...');
+    s = fresh();
+    s.level = playerLevel(profile.xp);
+    equipPowers(s, chosen);
+    s.enableForks = targetMap === 'itpark';
+    s.map = targetMap;
+    if (targetMap === 'finalrun') {
+      finalRunActiveCharId = 'male';
+      character = 'male';
+      s.isFinalRun = true;
+      s.finalRunStage = 'village';
+      s.turnTime = 0;
+      s.mode = 'running';
+      s.styleAction = 0;
+      s.speed = 28;
+    } else {
+      s.turnTime = 0.65;
+      s.mode = 'intro';
+      s.styleAction = SWEEP_SECONDS;
+      s.speed = 0;
+    }
+    step(s, 0.001);
+    s.distance = 0;
+    s.time = 0;
 
-    const pendingSteps = draw?.warmMapSteps ? draw.warmMapSteps(targetMap) : [];
-    const totalSteps = Math.max(1, pendingSteps.length);
-    let doneSteps = 0;
-    const stepLabels = {
-      base: 'Warming core shaders...',
-      'school:campus': 'Building school campus...',
-      'school:props': 'Loading obstacles & buses...',
-      'college:campus': 'Building college hills...',
-      'college:props': 'Loading college vehicles...',
-      'itpark:campus': 'Building IT Park towers...',
-      'itpark:events': 'Preparing Glass Bridge & metro...',
-      'itpark:props': 'Loading supercars & tech props...',
-      'finalrun:village': 'Building village trail...'
-    };
-
-    const runNextWarmChunk = () => {
-      if (launchId !== runLaunchNonce) return;
-      const stepId = draw?.warmMapStep ? draw.warmMapStep(targetMap) : null;
-      if (stepId) {
-        doneSteps++;
-        const pct = 34 + (doneSteps / totalSteps) * 52;
-        setRunLoadingProgress(pct, stepLabels[stepId] || 'Preparing track...');
-        // Yield 24ms between chunks so the spinner & progress bar stay silky-smooth with ZERO struck feel!
-        setTimeout(runNextWarmChunk, 24);
-        return;
-      }
-
-      // All map chunks warmed -> prepare fresh run state & wait for the 1 chosen hero GLB.
-      setRunLoadingProgress(90, 'Getting runner ready...');
-      s = fresh();
-      s.level = playerLevel(profile.xp);
-      equipPowers(s, chosen);
-      s.enableForks = targetMap === 'itpark';
-      s.map = targetMap;
-      if (targetMap === 'finalrun') {
-        finalRunActiveCharId = 'male';
-        character = 'male';
-        s.isFinalRun = true;
-        s.finalRunStage = 'village';
-        s.turnTime = 0;
-        s.mode = 'running';
-        s.styleAction = 0;
-        s.speed = 28;
-      } else {
-        s.turnTime = 0.65;
-        s.mode = 'intro';
-        s.styleAction = SWEEP_SECONDS;
-        s.speed = 0;
-      }
-      step(s, 0.001);
-      s.distance = 0;
-      s.time = 0;
-
-      const startedAt = performance.now();
-      const finishLaunch = () => {
-        if (launchId !== runLaunchNonce) return;
-        setRunLoadingProgress(100, 'Ready — Let’s Run!');
-        // Render 2 warm frames behind the veil so Frame 1 after fade-out has ZERO hitch!
-        try {
-          draw?.(s, targetCharId, 0.016);
-          draw?.(s, targetCharId, 0.016);
-        } catch {}
-        s.distance = 0;
-        s.time = 0;
-        prev = 0;
-        lastNearMissShown = 0;
-        lastEventBannerShown = 0;
-        lastLmskMask = -1;
-        lastFeverOn = false;
-        if ($('fever-veil')) $('fever-veil').hidden = true;
-        runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
-        if ($('btn-revive')) $('btn-revive').hidden = true;
-        if ($('btn-share-score')) $('btn-share-score').hidden = true;
-        if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
-        $('toast').textContent = targetMap === 'finalrun' ? `Village road · Reach the school at ${FINALRUN_GATE.toLocaleString()}m` : targetMap === 'itpark' ? 'IT Park · Follow the shuttle roof ramp' : targetMap === 'college' ? 'College rush · Find the next roof ramp' : 'School rush · Find the next roof ramp';
-        runLoadingActive = false;
-        hideRunLoadingVeilSmooth();
-        if (sound) effects.startBgm?.('default');
-        else effects.setBgmTrack?.('default');
-        if (targetMap !== 'finalrun') effects.play('swag');
-        effects.play('bell');
-      };
-
-      const waitReady = () => {
-        if (launchId !== runLaunchNonce) return;
-        const loaded = usingLiteRenderer || !draw?.isLoaded || draw.isLoaded(targetCharId);
-        if (loaded || (performance.now() - startedAt) > 2200) {
-          requestAnimationFrame(finishLaunch);
-        } else {
-          setTimeout(waitReady, 35);
-        }
-      };
-      waitReady();
-    };
-
-    setTimeout(runNextWarmChunk, 24);
+    if (!await prepareLevelRun(targetMap,targetCharId,launchId)) return;
+    s.distance = 0;
+    s.time = 0;
+    prev = 0;
+    lastNearMissShown = 0;
+    lastEventBannerShown = 0;
+    lastLmskMask = -1;
+    lastFeverOn = false;
+    if ($('fever-veil')) $('fever-veil').hidden = true;
+    runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
+    if ($('btn-revive')) $('btn-revive').hidden = true;
+    if ($('btn-share-score')) $('btn-share-score').hidden = true;
+    if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
+    $('toast').textContent = targetMap === 'finalrun' ? `Village road · Reach the school at ${FINALRUN_GATE.toLocaleString()}m` : targetMap === 'itpark' ? 'IT Park · Follow the shuttle roof ramp' : targetMap === 'college' ? 'College rush · Find the next roof ramp' : 'School rush · Find the next roof ramp';
+    runLoadingActive = false;
+    hideRunLoadingVeilSmooth();
+    if (sound) effects.startBgm?.('default');
+    else effects.setBgmTrack?.('default');
+    if (targetMap !== 'finalrun') effects.play('swag');
+    effects.play('bell');
   }, 150);
 }
 
@@ -2199,6 +2216,7 @@ if($('btn-change-char')) $('btn-change-char').onclick=()=>{
 $('pause').onclick=()=>s.mode==='paused'?resume():pause();
 
 function input(a){
+  if(runLoadingActive || collegeIntroActive || finalIntroActive)return;
   const before=[s.jump,s.slide,s.roll,s.drop,s.lane];
   action(s,a);
   if(s.mode==='running'&&(s.jump!==before[0]||s.slide!==before[1]||s.roll!==before[2]||s.drop!==before[3]||s.lane!==before[4]))
@@ -2233,6 +2251,7 @@ window.addEventListener('keydown',e=>{
 let creditsAudioTakeover = false;
 
 document.addEventListener('visibilitychange',()=>{
+  framePacer.reset();
   if(document.hidden){
     pause();
     effects.pauseBgm?.();
@@ -2424,11 +2443,6 @@ function tick(t) {
   }
 
   // School Bell Milestones & Continuous Speed Tiers
-  if (s.isFinalRun && distanceBefore < 250 && s.distance >= 250) {
-    if (s.finalRunStage === 'village') draw?.preload?.('college-male');
-    else if (s.finalRunStage === 'college') draw?.preload?.('college-man');
-    else if (s.finalRunStage === 'itpark') draw?.preload?.('aged-elder');
-  }
   if (s.map !== 'grandfather') {
     for (const m of [100, 250, 500]) {
       if (distanceBefore < m && s.distance >= m) {
@@ -2584,6 +2598,19 @@ function tick(t) {
     s.previewRain = (s.map === 'college');
   }
 
+  let renderDt = dt;
+  // Let the dynamic GPU resolution/quality auto-scaler reach smooth 60 FPS first;
+  // engage steady 30 FPS pacing only if an entry-level phone is already at its performance floor.
+  if (graphicsQuality === 'auto' && s.mode === 'running' && !usingLiteRenderer && draw?.isAtPerformanceFloor?.()) {
+    if (framePacer.frame(t) === null) return;
+    // Keep the rig in step with the simulated runner even when a display frame is skipped.
+    renderDt=lastDrawnRun===s ? Math.max(0,s.time-lastDrawnRunTime) : Math.min(dt,.05);
+    lastDrawnRun=s;
+    lastDrawnRunTime=s.time;
+  } else {
+    lastDrawnRun=null;
+    framePacer.reset();
+  }
   let status = 'ready';
   const renderCharId = (s.mode === 'ready' && currentHub === 'characters' && !collegeIntroActive)
     ? (activePreviewCharId || CHARACTER_ROSTER[carouselIndex]?.id || equippedCharId)
@@ -2594,7 +2621,7 @@ function tick(t) {
     loadingThrottleAccum = 0;
   }
   try {
-    status = draw(s, renderCharId, dt);
+    status = draw(s, renderCharId, renderDt);
     if (status === 'context-lost') {
       switchToLiteRenderer('WebGL context lost');
       status = draw(s, renderCharId, dt);

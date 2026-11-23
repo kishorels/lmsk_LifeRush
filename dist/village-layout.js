@@ -5,7 +5,7 @@ export const houseTypes=['house','thatched','pink','cottage','veranda','farmhous
 export function cowPose(time,seed){
   const cycle=(time*.65+seed*1.7)%12, returning=cycle>=6;
   const along=returning?12-cycle:cycle;
-  return {offset:2.4-along*.80,flip:returning?-1:1,frame:Math.floor(time*4.8+seed)%4};
+  return {offset:2.4-along*.80,flip:returning?-1:1,frame:((Math.floor(time*4.8+seed)%4)+4)%4};
 }
 function sectionSeed(index) {
   let value=Math.imul(index+731,0x85ebca6b);

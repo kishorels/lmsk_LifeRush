@@ -3,7 +3,7 @@ import {
   Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
   SRGBColorSpace, TorusGeometry
 } from './vendor/three.module.js';
-import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
+import { bakeGroup } from './bake-static-meshes.js';
 import { makeCoin } from './coin.js';
 
 // Authentic Indian Railways WDP4D Diesel Locomotive (No. 45420)
@@ -319,26 +319,10 @@ function normalizeGeo(rawGeo, matrixWorld) {
 }
 
 function bakeStatic(root) {
-  root.updateMatrixWorld(true);
-  const batches = new Map();
-  root.traverse(obj => {
-    if (!obj.isMesh) return;
-    const geo = normalizeGeo(obj.geometry, obj.matrixWorld);
-    if (!batches.has(obj.material)) batches.set(obj.material, []);
-    batches.get(obj.material).push(geo);
-  });
-  const merged = new Group();
-  for (const [mat, list] of batches) {
-    const combined = list.length === 1 ? list[0] : mergeGeometries(list, false);
-    if (!combined) {
-      for (const g of list) g.dispose();
-      continue;
-    }
-    const mesh = new Mesh(combined, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    merged.add(mesh);
-    if (list.length > 1) for (const g of list) g.dispose();
+  const merged = bakeGroup(root);
+  for (const m of merged.children) {
+    m.castShadow = true;
+    m.receiveShadow = true;
   }
   return merged;
 }

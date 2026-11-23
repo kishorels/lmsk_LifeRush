@@ -205,25 +205,68 @@ function normalizeGeo(raw, matrix) {
   return g;
 }
 
+const vcVehicleMats = new Map();
+function canVcMergeVehicle(mat) {
+  if (!mat || !mat.isMeshStandardMaterial) return false;
+  if (mat.map || mat.emissiveMap || mat.bumpMap || mat.normalMap || mat.transparent || mat.opacity < 1 || mat.side !== 0) return false;
+  if (mat.emissive && (mat.emissive.r > 0 || mat.emissive.g > 0 || mat.emissive.b > 0)) return false;
+  return true;
+}
+function getVcVehicleMat(mat) {
+  const isMetal = (mat.metalness ?? 0) >= 0.35;
+  const isGloss = (mat.roughness ?? 0.5) < 0.35;
+  const key = isMetal ? (isGloss ? 'vm-g' : 'vm-s') : (isGloss ? 'vd-g' : 'vd-m');
+  if (!vcVehicleMats.has(key)) {
+    vcVehicleMats.set(key, new MeshStandardMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      roughness: isMetal ? (isGloss ? 0.18 : 0.38) : (isGloss ? 0.22 : 0.78),
+      metalness: isMetal ? 0.72 : 0.08
+    }));
+  }
+  return vcVehicleMats.get(key);
+}
+
 function batchStatic(group, key, castShadow = true) {
   if (!batchCache.has(key)) {
     const buckets = new Map();
+    const vcBuckets = new Map();
     for (const child of group.children.filter(c => c.isMesh)) {
       child.updateMatrix();
+      const mat = child.material;
       const geom = normalizeGeo(child.geometry, child.matrix);
-      if (!buckets.has(child.material)) buckets.set(child.material, []);
-      buckets.get(child.material).push(geom);
+      if (canVcMergeVehicle(mat)) {
+        if (geom.attributes.uv) geom.deleteAttribute('uv');
+        const count = geom.attributes.position.count;
+        const colors = new Float32Array(count * 3);
+        const r = mat.color?.r ?? 1, g = mat.color?.g ?? 1, b = mat.color?.b ?? 1;
+        for (let i = 0; i < count; i++) {
+          const idx = i * 3;
+          colors[idx] = r; colors[idx + 1] = g; colors[idx + 2] = b;
+        }
+        geom.setAttribute('color', new Float32BufferAttribute(colors, 3));
+        const shared = getVcVehicleMat(mat);
+        if (!vcBuckets.has(shared)) vcBuckets.set(shared, []);
+        vcBuckets.get(shared).push(geom);
+      } else {
+        if (!buckets.has(mat)) buckets.set(mat, []);
+        buckets.get(mat).push(geom);
+      }
     }
     const merged = [];
-    for (const [mat, list] of buckets) {
-      const comb = list.length === 1 ? list[0] : mergeGeometries(list, false);
-      if (!comb) { for (const g of list) g.dispose(); continue; }
-      const m = new Mesh(comb, mat);
-      m.castShadow = castShadow;
-      m.receiveShadow = true;
-      merged.push(m);
-      if (list.length > 1) for (const g of list) g.dispose();
-    }
+    const emit = map => {
+      for (const [mat, list] of map) {
+        const comb = list.length === 1 ? list[0] : mergeGeometries(list, false);
+        if (!comb) { for (const g of list) g.dispose(); continue; }
+        const m = new Mesh(comb, mat);
+        m.castShadow = castShadow;
+        m.receiveShadow = true;
+        merged.push(m);
+        if (list.length > 1) for (const g of list) g.dispose();
+      }
+    };
+    emit(vcBuckets);
+    emit(buckets);
     batchCache.set(key, merged);
   }
   for (const child of [...group.children]) if (child.isMesh) group.remove(child);

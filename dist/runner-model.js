@@ -217,7 +217,7 @@ function loadFemaleCollegeAnims() {
   return sharedFemaleCollegeAnimsPromise;
 }
 
-export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = false, onLoaded = null) {
+export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = selected === 'male', onLoaded = null) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   let skirtMeshes = [], clothL = 0.06, clothR = 0.06, clothVelL = 0, clothVelR = 0, stridePhase = 0, scarfMeshes = [];
   function load() {
@@ -233,14 +233,14 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     const progress = xhr => { if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total); };
     const main = loader.loadAsync(new URL(assets[selected], import.meta.url).href, progress);
     if (selected === 'male' && !sharedMaleClipsPromise) {
-      sharedMaleClipsPromise = main;
+      sharedMaleClipsPromise = main.then(({animations})=>({animations}),()=>null);
     }
     const schoolMotion = selected === 'college-male'
-      ? (sharedMaleClipsPromise || (sharedMaleClipsPromise = loader.loadAsync(new URL(assets.male, import.meta.url).href)))
+      ? (sharedMaleClipsPromise || (sharedMaleClipsPromise = loader.loadAsync(new URL(assets.male, import.meta.url).href).then(({animations})=>({animations}))))
       : Promise.resolve(null);
     const collegeIdlePromise = selected === 'college-male' ? loadCollegeIdleData() : Promise.resolve(null);
     const femaleCollegeAnimsPromise = selected === 'female' ? loadFemaleCollegeAnims() : Promise.resolve(null);
-    Promise.all([main, schoolMotion, loadInjuredRunData(), collegeIdlePromise, femaleCollegeAnimsPromise]).then(([gltf, schoolGltf, injuredData, collegeIdleData, femaleCollegeAnims]) => {
+    return Promise.all([main, schoolMotion, loadInjuredRunData(), collegeIdlePromise, femaleCollegeAnimsPromise]).then(([gltf, schoolGltf, injuredData, collegeIdleData, femaleCollegeAnims]) => {
     const clips = new Map(gltf.animations.map(clip => [clip.name, clip]));
     const names = ['Idle', 'Run', 'Jump', 'Slide', 'Roll', 'Stumble', 'HeadHit', 'Fall', 'ShoulderSweep'];
     if (schoolGltf) for (const clip of schoolGltf.animations) if (!clips.has(clip.name)) clips.set(clip.name, clip);
@@ -547,10 +547,11 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
   }).catch(error => { render.failed=true; console.warn('Could not load the runner character.', error); });
 
   }
-  let requested = Boolean(isInitiallyActive || selected === 'male');
-  if (requested) load();
+  let loading;
+  const preload = () => loading ??= load();
+  if (isInitiallyActive) preload();
   function render(state, character, dt) {
-    if (!requested && character === selected) { requested = true; load(); }
+    if (character === selected) preload();
     if (!model) return false;
     model.visible = character === selected;
     if (!model.visible) return false;
@@ -634,14 +635,15 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     pace+=(targetPace-pace)*blend;
     if (name === 'Run' || name === 'InjuredRun') next.setEffectiveTimeScale(pace);
     const stepDt = frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0));
-    mixer.update(stepDt);
+    const motionDt=state.mode==='running'?Math.max(0,dt??0):stepDt;
+    mixer.update(motionDt);
 
     // Spring-damped real-time cloth dynamics for the School Female pleated skirt (wind billow, stride flutter, jump flare, turn swing!)
     if (skirtMeshes.length) {
       let targetL = 0.05, targetR = 0.05;
       const tNow = state.time || 0;
       if (name === 'Run' || name === 'InjuredRun') {
-        stridePhase += stepDt * pace * 12.2;
+        stridePhase += motionDt * pace * 12.2;
         const speedDrag = Math.min(0.56, Math.max(0.26, ((state.speed || 28) - 16) / 62));
         const strideSwing = Math.sin(stridePhase) * 0.42;
         const flutter = Math.sin(stridePhase * 2.3 + 0.7) * 0.09;
@@ -689,6 +691,6 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     }
     return true;
   }
-  render.preload = () => { if (!requested) { requested = true; load(); } };
+  render.preload = preload;
   return render;
 }

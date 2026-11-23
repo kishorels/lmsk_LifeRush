@@ -145,9 +145,10 @@ export function createItParkCampus(scene) {
     return new MeshStandardMaterial({ color: baseColor, roughness: 0.12, metalness });
   }
 
+  const isLowEnd = Boolean(scene.userData?.lowEnd);
   const M = {
     // Ref 1: Neoclassical travertine stone + bright ivory trim
-    limestone: new MeshStandardMaterial({ color: 0xe3dbc7, map: plaster, bumpMap: plaster, bumpScale: 0.012, roughness: 0.86, metalness: 0.02 }),
+    limestone: new MeshStandardMaterial({ color: 0xe3dbc7, map: plaster, bumpMap: isLowEnd ? null : plaster, bumpScale: 0.012, roughness: 0.86, metalness: 0.02 }),
     limestoneDeep: new MeshStandardMaterial({ color: 0xd1c7b0, map: plaster, roughness: 0.88, metalness: 0.02 }),
     ivoryTrim: new MeshStandardMaterial({ color: 0xf6f4ee, roughness: 0.58, metalness: 0.04 }),
     // Ref 2, 3, 5: Crisp white & silver architectural concrete
@@ -166,7 +167,7 @@ export function createItParkCampus(scene) {
     warmGlow: new MeshStandardMaterial({ color: 0xf7dca0, emissive: 0xf5c869, emissiveIntensity: 0.78, roughness: 0.35, metalness: 0.05 }),
     balconyRail: new MeshStandardMaterial({ color: 0xdcebf5, roughness: 0.18, metalness: 0.35, envMapIntensity: 1.3 }),
     // Ref 4: Bauhaus beige concrete + deep petroleum teal glass + navy annex + steel mast
-    sandStucco: new MeshStandardMaterial({ color: 0xcfa97e, map: plaster, bumpMap: plaster, bumpScale: 0.01, roughness: 0.84, metalness: 0.02 }),
+    sandStucco: new MeshStandardMaterial({ color: 0xcfa97e, map: plaster, bumpMap: isLowEnd ? null : plaster, bumpScale: 0.01, roughness: 0.84, metalness: 0.02 }),
     sandDark: new MeshStandardMaterial({ color: 0xb99166, map: plaster, roughness: 0.88, metalness: 0.02 }),
     bauhausGlass: createCurtainWallGlass({ baseColor: '#0e7490', mullionColor: '#164e63', warmLights: false, repeatX: 3.0, repeatY: 3.0, envIntensity: 1.55, metalness: 0.58 }),
     navyAnnex: new MeshStandardMaterial({ color: 0x152f47, roughness: 0.64, metalness: 0.22 }),
@@ -1058,30 +1059,41 @@ export function createItParkCampus(scene) {
   });
   const cache = Array.from({ length: CAMPUS_SLOTS }, () => new Map());
 
+  let lastShimmerTick = -1;
   return (state, weather) => {
     const active = state.map === 'itpark';
+    const ultraLow = Boolean(scene.userData?.ultraLow);
+    const lowEnd = Boolean(scene.userData?.lowEnd);
     if (active) {
       const night = weather?.night || 0;
       const t = state.time || 0;
-      const pulse = Math.sin(t * 2.4) * 0.5 + 0.5;
-      const shimmer = Math.sin(t * 1.35) * 0.5 + 0.5;
-      // Live animated skyline shimmer: glowing cyan guardrails, warm golden interior windows, & rooftop beacons
-      M.skyGlass.emissiveIntensity = 0.16 + shimmer * 0.08 + night * 0.45;
-      M.skyGlassBright.emissiveIntensity = 0.18 + pulse * 0.10 + night * 0.50;
-      M.cyanGlass.emissiveIntensity = 0.16 + pulse * 0.10 + night * 0.48;
-      M.smokedGlass.emissiveIntensity = 0.16 + shimmer * 0.08 + night * 0.50;
-      M.bauhausGlass.emissiveIntensity = 0.14 + shimmer * 0.08 + night * 0.42;
-      M.warmGlow.emissiveIntensity = 0.72 + shimmer * 0.24 + night * 0.55;
-      M.lampGlow.emissiveIntensity = 0.68 + pulse * 0.18 + night * 0.85;
-      M.cyanRailLed.emissiveIntensity = 1.15 + pulse * 0.48 + night * 0.85;
-      M.redBeacon.emissiveIntensity = 0.6 + (Math.sin(t * 4.5) > 0 ? 1.4 : 0.1);
-      blueBannerMat.emissiveIntensity = 0.35 + pulse * 0.20 + night * 0.30;
-      coralBannerMat.emissiveIntensity = 0.35 + (1 - pulse) * 0.20 + night * 0.30;
+      const shimmerBucket = ultraLow ? Math.floor(t * 6) : -1;
+      if (!ultraLow || shimmerBucket !== lastShimmerTick) {
+        lastShimmerTick = shimmerBucket;
+        const pulse = Math.sin(t * 2.4) * 0.5 + 0.5;
+        const shimmer = Math.sin(t * 1.35) * 0.5 + 0.5;
+        // Live animated skyline shimmer: glowing cyan guardrails, warm golden interior windows, & rooftop beacons
+        M.skyGlass.emissiveIntensity = 0.16 + shimmer * 0.08 + night * 0.45;
+        M.skyGlassBright.emissiveIntensity = 0.18 + pulse * 0.10 + night * 0.50;
+        M.cyanGlass.emissiveIntensity = 0.16 + pulse * 0.10 + night * 0.48;
+        M.smokedGlass.emissiveIntensity = 0.16 + shimmer * 0.08 + night * 0.50;
+        M.bauhausGlass.emissiveIntensity = 0.14 + shimmer * 0.08 + night * 0.42;
+        M.warmGlow.emissiveIntensity = 0.72 + shimmer * 0.24 + night * 0.55;
+        M.lampGlow.emissiveIntensity = 0.68 + pulse * 0.18 + night * 0.85;
+        M.cyanRailLed.emissiveIntensity = 1.15 + pulse * 0.48 + night * 0.85;
+        M.redBeacon.emissiveIntensity = 0.6 + (Math.sin(t * 4.5) > 0 ? 1.4 : 0.1);
+        blueBannerMat.emissiveIntensity = 0.35 + pulse * 0.20 + night * 0.30;
+        coralBannerMat.emissiveIntensity = 0.35 + (1 - pulse) * 0.20 + night * 0.30;
+      }
     }
+    const ultraFar = ultraLow ? 142 : lowEnd ? 195 : Infinity;
+    const rearCut = ultraLow ? 20 : Infinity;
+    const insideUnderpass = ultraLow && state.activeBranch === 'underpass' && state.distance >= (state.branchStart || 0) + 10 && state.distance <= (state.branchEnd || 0) - 95;
     for (let slot = 0; slot < slots.length; slot++) {
       const item = slots[slot];
-      if (!active) { item.root.visible = false; continue; }
+      if (!active || insideUnderpass) { item.root.visible = false; continue; }
       const anchor = campusAnchor(slot, state.distance);
+      if (anchor - state.distance > ultraFar || state.distance - anchor > rearCut) { item.root.visible = false; continue; }
       const kind = campusKind(anchor);
       const clr = branchForkClearance(anchor, state);
       if (clr.hide) { item.root.visible = false; continue; }

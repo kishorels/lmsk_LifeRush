@@ -82,8 +82,7 @@ export function createVillageHouses(){
   }
   // Pre-build & pre-load all 6 house templates upfront so mid-run sections never stall on WebP load or bakeGroup.
   for(const type of Object.keys(styles)) getTemplate(type);
-  return (o)=>{
-    const model=getTemplate(o.type).clone();
+  return (o, model=getTemplate(o.type).clone())=>{
     model.scale.set(o.w/REF_W,o.h/REF_H,o.h/REF_H);
     model.position.set(o.x,.19,o.z);
     model.rotation.y=1.03+o.angle*.5;

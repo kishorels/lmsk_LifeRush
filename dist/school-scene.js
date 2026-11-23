@@ -1,5 +1,5 @@
 import {makeCoin,spinCoin} from './coin.js';
-import {campusMaterial, roadsideTree, curveRelX, curveRelY} from './street-materials.js';
+import {campusMaterial, roadsideTree, curveRelX, curveRelY, curveSlopeAt} from './street-materials.js';
 import {buildBus, buildCollegeVehicle} from './bus-model.js';
 import {buildRedShuttleCart} from './itpark-models.js?v=3.8.0';
 import {bakeGroup} from './bake-static-meshes.js';
@@ -175,29 +175,28 @@ export function createSchoolEntrance(scene) {
   sign(campus,'PICKUP ZONE','FIND THE ROOF RAMP',4.54,2.72,-33,2.36,.74);
   part(campus,0x315763,4.54,1.29,-33,.10,2.58,.10);
   const vehicle=new Group();vehicle.name='entry-vehicle';vehicle.userData.captureObstacle=true;campus.add(vehicle);
+  const van = SCHOOL_VAN, length = van.front-van.rear;
+  const run=van.rear-van.ramp, slope=Math.atan2(van.roof,run);
+  const road=.09, roof=road+van.roof;
   for(const mark of [16,18,20]){
     for(const side of [-1,1]){
-      part(vehicle,0xffd663,2.2+side*.23,.111,-mark,.13,.022,.68).rotation.y=side*.65;
+      part(vehicle,0xffd663,side*.23,.111,van.rear-mark,.13,.022,.68).rotation.y=side*.65;
     }
   }
 
-  const van = SCHOOL_VAN, x = van.lane*2.2, length = van.front-van.rear;
-  const mid=-(van.front+van.rear)/2, rear=-van.rear;
-  const road=.09, roof=road+van.roof;
-  const body=buildBus(length,van.roof,false);body.name='entry-bus';body.position.set(x,road,rear);vehicle.add(body);
-  const collegeBody=buildCollegeVehicle('van',length,van.roof,false);collegeBody.name='entry-college-van';collegeBody.position.set(x,road,rear);collegeBody.visible=false;vehicle.add(collegeBody);
-  const parkBody=buildRedShuttleCart(length,van.roof);parkBody.name='entry-itpark-shuttle';parkBody.position.set(x,road,rear);parkBody.visible=false;vehicle.add(parkBody);
+  const body=buildBus(length,van.roof,false);body.name='entry-bus';body.position.set(0,road,0);vehicle.add(body);
+  const collegeBody=buildCollegeVehicle('van',length,van.roof,false);collegeBody.name='entry-college-van';collegeBody.rotation.y=Math.PI;collegeBody.position.set(0,road,-length);collegeBody.visible=false;vehicle.add(collegeBody);
+  const parkBody=buildRedShuttleCart(length,van.roof);parkBody.name='entry-itpark-shuttle';parkBody.position.set(0,road,0);parkBody.visible=false;vehicle.add(parkBody);
 
-  const run=van.rear-van.ramp, slope=Math.atan2(van.roof,run);
-  const ramp=part(vehicle,0x327a75,x,road+van.roof/2-.06,-(van.ramp+van.rear)/2,van.width,.12,Math.hypot(run,van.roof));
+  const ramp=part(vehicle,0x327a75,0,road+van.roof/2-.06,run/2,van.width,.12,Math.hypot(run,van.roof));
   ramp.name='entry-ramp';
   ramp.rotation.x=slope;
   for(let j=1;j<=7;j++){
     const t=j/8;
-    const stripe=part(vehicle,j%2?0xf8db79:0xe6f5db,x,road+van.roof*t+.019,-(van.ramp+run*t),van.width-.19,.034,.088);
+    const stripe=part(vehicle,j%2?0xf8db79:0xe6f5db,0,road+van.roof*t+.019,run*(1-t),van.width-.19,.034,.088);
     stripe.rotation.x=slope;
   }
-  const coins=ROOF_COINS.map(distance=>makeCoin(vehicle,x,roof+.58,-distance));
+  const coins=ROOF_COINS.map(distance=>makeCoin(vehicle,0,roof+.58,van.rear-distance));
   return state=>{
     if (state.map === 'grandfather') { campus.visible = false; return; }
     const isCollege=state.map==='college';
@@ -215,7 +214,17 @@ export function createSchoolEntrance(scene) {
     const entry=state.entryVan??SCHOOL_VAN;
     const hideEndVehicle=(isFinalVillage||isFinalCollegeToItPark)&&state.distance>120;
     vehicle.visible=!hideEndVehicle;
-    vehicle.position.set((entry.lane-SCHOOL_VAN.lane)*2.2,0,SCHOOL_VAN.rear-entry.rear+(mapGate>SCHOOL_GATE?mapGate-SCHOOL_GATE:0));
+    // Keep the game-start entry ramp & bus locked cleanly onto the curved road right under the runner's feet!
+    const vSampleZ=Math.max(entry.ramp,Math.min(entry.front,state.distance));
+    const vYaw=-Math.atan(curveSlopeAt(vSampleZ,state));
+    const vShiftU=vSampleZ-entry.rear;
+    const gateShiftZ=mapGate-SCHOOL_GATE;
+    vehicle.position.set(
+      entry.lane*2.2+(curveRelX(vSampleZ,state)-curveRelX(mapGate,state))+vShiftU*Math.sin(vYaw),
+      curveRelY(vSampleZ,state)-curveRelY(mapGate,state),
+      gateShiftZ-entry.rear+vShiftU*(Math.cos(vYaw)-1)
+    );
+    vehicle.rotation.y=vYaw;
     const onPodium=state.mode==='ready'||state.mode==='select';
     campus.visible=state.distance<entry.front+28+(mapGate-SCHOOL_GATE) && !(isPark && onPodium);
     coins.forEach((coin,i)=>{

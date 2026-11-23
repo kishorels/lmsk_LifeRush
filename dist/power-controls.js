@@ -33,16 +33,12 @@ export function createPowerControls(state,activate) {
   const labels = [...wheel.querySelectorAll('.power-direction')];
   let pointer = null;
 
-  // Direct tap on individual power slot buttons
-  labels.forEach((label, i) => {
-    label.addEventListener('click', event => {
-      event.preventDefault();
-      event.stopPropagation();
-      activate(i);
-    });
-    label.addEventListener('pointerdown', event => {
-      event.stopPropagation();
-    });
+  // Slots are reveal-only while holding #power-trigger and activated strictly by swiping.
+  labels.forEach(label => {
+    label.tabIndex = -1;
+  });
+  wheel.addEventListener('pointerdown', event => {
+    event.stopPropagation();
   });
 
   // Current default pair (the first 2 picked are kept until changed in Settings).
@@ -119,44 +115,83 @@ export function createPowerControls(state,activate) {
   }
 
   function direction(event) {
+    if (!pointer) return -1;
     const up = pointer.y-event.clientY, left = pointer.x-event.clientX;
     if (Math.max(up,left) < 24) return -1;
-    return up > left ? 0 : 1;
+    const target = up > left ? 0 : 1;
+    if (!labels[target] || labels[target].hidden) return -1;
+    return target;
   }
   function release() {
+    const activePointerId = pointer?.id;
     pointer = null;
     wheel.classList.remove('open');
     labels.forEach(label => label.classList.remove('aim'));
+    if (activePointerId != null && typeof trigger.releasePointerCapture === 'function') {
+      try { trigger.releasePointerCapture(activePointerId); } catch {}
+    }
+    if (typeof trigger.blur === 'function') {
+      try { trigger.blur(); } catch {}
+    }
   }
   trigger.oncontextmenu = event => event.preventDefault();
+  trigger.onclick = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!pointer) release();
+  };
   trigger.onpointerdown = event => {
     if (pointer || state().mode !== 'running') return;
     event.preventDefault();
+    event.stopPropagation();
     pointer = {id:event.pointerId,x:event.clientX,y:event.clientY};
-    trigger.setPointerCapture(event.pointerId);
+    if (typeof trigger.setPointerCapture === 'function') {
+      try { trigger.setPointerCapture(event.pointerId); } catch {}
+    }
     wheel.classList.add('open');
   };
-  trigger.onpointermove = event => {
+  const handleMove = event => {
     if (pointer?.id !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
     const target = direction(event);
     labels.forEach((label,i) => label.classList.toggle('aim',i === target));
   };
-  trigger.onpointerup = event => {
+  const handleUp = event => {
     if (pointer?.id !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
     const target = direction(event);
     release();
     if (target >= 0) activate(target);
   };
-  trigger.onpointercancel = trigger.onlostpointercapture = release;
-  window.addEventListener('keydown',event => {
-    if (state().mode !== 'running' || event.repeat || !['1','2'].includes(event.key)) return;
-    activate(Number(event.key)-1);
-  });
+  const handleCancel = event => {
+    if (event && pointer && event.pointerId != null && pointer.id !== event.pointerId) return;
+    release();
+  };
+  trigger.onpointermove = handleMove;
+  trigger.onpointerup = handleUp;
+  trigger.onpointercancel = trigger.onlostpointercapture = handleCancel;
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleCancel);
+    window.addEventListener('blur', release);
+    window.addEventListener('keydown',event => {
+      if (state().mode !== 'running' || event.repeat || !['1','2'].includes(event.key)) return;
+      activate(Number(event.key)-1);
+    });
+  }
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) release();
+    });
+  }
 
   function update() {
     const s = state();
     wheel.hidden = s.mode !== 'running' || !s.slots?.length;
-    if (wheel.hidden) { if (pointer) release(); return; }
+    if (wheel.hidden) { if (pointer || wheel.classList.contains('open')) release(); return; }
 
     let anyReady = false;
     labels.forEach((label,i) => {
@@ -177,15 +212,17 @@ export function createPowerControls(state,activate) {
       const renderKey = `${slot.id}:${status}:${isReady ? '1' : '0'}:${isActive ? '1' : '0'}`;
       if (label.dataset.renderKey !== renderKey) {
         label.dataset.renderKey = renderKey;
-        const ariaText = (i === 0 ? '↑ ' : '← ') + nameOf(slot.id) + ' · ' + status;
+        const slotName = nameOf(slot.id);
+        const ariaText = (i === 0 ? '↑ ' : '← ') + slotName + ' · ' + status;
         label.setAttribute('aria-label', ariaText);
-        label.title = nameOf(slot.id) + ' (' + status + ')';
+        label.removeAttribute('title');
         if (label.dataset.slotId !== slot.id || !label._statusEl) {
           label.dataset.slotId = slot.id;
           label.innerHTML = `
             <span class="power-slot-icon">${POWER_ICONS[slot.id] || ''}</span>
             <span class="power-slot-status">${status}</span>
             <span class="power-slot-arrow">${i === 0 ? '↑' : '←'}</span>
+            <span class="power-slot-name">${slotName}</span>
           `;
           label._statusEl = label.querySelector('.power-slot-status');
         } else {

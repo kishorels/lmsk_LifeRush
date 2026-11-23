@@ -42,6 +42,17 @@ test('entry bus, ramp, coins and parked traffic match seeded physics after every
       }
       previous=parked;
     }
+    // Verify entry bus stays aligned directly under the runner on curved roads (College & Final One)
+    for(const map of ['college','finalrun']){
+      const s=fresh(7);s.map=map;s.mode='running';
+      for(const dist of [s.entryVan.ramp+4, s.entryVan.rear+10, s.entryVan.front-2]){
+        s.distance=dist;school(s);scene.updateMatrixWorld(true);
+        const veh=scene.getObjectByName('entry-vehicle');
+        const pt=new Vector3(0,0,s.entryVan.rear-dist).applyMatrix4(veh.matrixWorld);
+        assert.ok(Math.abs(pt.x-s.entryVan.lane*2.2)<1e-5,`${map} entry bus drifts at ${dist}m: x=${pt.x} vs ${s.entryVan.lane*2.2}`);
+        assert.ok(Math.abs(pt.z)<1e-5,`${map} entry bus z drifts at ${dist}m: z=${pt.z}`);
+      }
+    }
     assert.ok(await preloadCoinModel());
   }finally{globalThis.fetch=nativeFetch;}
 });

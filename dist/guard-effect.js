@@ -32,8 +32,10 @@ export function createGuardEffect(runner) {
         float hex=smoothstep(0.465-aa,0.495,d);
         float edge=min(min(panelUv.x,1.0-panelUv.x),min(panelUv.y,1.0-panelUv.y));
         float rim=1.0-smoothstep(0.02,0.14,edge);
-        float fresnel=pow(1.0-abs(dot(normalize(panelNormal),normalize(panelView))),2.0);
-        float reflection=pow(max(0.0,1.0-abs(panelUv.x-.3)*3.0),10.0);
+        float frBase=clamp(1.0-abs(dot(normalize(panelNormal),normalize(panelView))),0.0,1.0);
+        float fresnel=frBase*frBase;
+        float rBase=clamp(1.0-abs(panelUv.x-.3)*3.0,0.0,1.0);
+        float r2=rBase*rBase, r4=r2*r2, reflection=r4*r4*r2;
         vec3 amber=mix(vec3(0.42,0.12,0.006),vec3(1.6,0.56,0.015),rim*.65+fresnel*.35);
         amber+=hex*vec3(.65,0.20,0.005)+reflection*vec3(.45,.24,.05)+flash;
         gl_FragColor=vec4(amber,(.34+hex*.18+rim*.24+flash*.2)*fade);
@@ -52,7 +54,8 @@ export function createGuardEffect(runner) {
       void main(){
         vec2 q=abs((panelUv-.5)*vec2(1.3184,.56))-vec2(.6592,.28);
         float distanceToEdge=abs(length(max(q,0.0))+min(max(q.x,q.y),0.0));
-        float glow=exp(-pow(distanceToEdge/.065,2.0))*.48+exp(-pow(distanceToEdge/.14,2.0))*.12;
+        float d1=distanceToEdge/.065, d2=distanceToEdge/.14;
+        float glow=exp(-min(40.0,d1*d1))*.48+exp(-min(40.0,d2*d2))*.12;
         gl_FragColor=vec4(vec3(1.0,.30,.008),glow*fade*(1.0+flash));
         #include <colorspace_fragment>
       }`
@@ -150,8 +153,9 @@ export function createGuardEffect(runner) {
     uniforms:{fade:{value:1}},
     vertexShader:`varying vec2 trailUv;void main(){trailUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
     fragmentShader:`varying vec2 trailUv;uniform float fade;void main(){
-      float head=pow(trailUv.x,12.0);
-      gl_FragColor=vec4(mix(vec3(1.0,.25,.005),vec3(1.0,.85,.42),head),(.06+pow(trailUv.x,3.0)*.55)*fade);
+      float tx=clamp(trailUv.x,0.0,1.0);
+      float t3=tx*tx*tx, t6=t3*t3, head=t6*t6;
+      gl_FragColor=vec4(mix(vec3(1.0,.25,.005),vec3(1.0,.85,.42),head),(.06+t3*.55)*fade);
       #include <colorspace_fragment>
     }`});
   const trails=new T.Group();trails.name='guard-orbit-trails';root.add(trails);

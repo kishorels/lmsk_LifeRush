@@ -10,12 +10,14 @@ export function loadChaserModel(scene, onProgress, defer = false, onLoaded = nul
   chaser.visible = false;
   scene.add(chaser);
 
-  let mixer, run, idle, started = false;
+  let mixer, run, idle, loading;
   function ensureLoaded() {
-    if (started) return;
-    started = true;
+    if (loading) return loading;
     const url = new URL('./assets/villain.glb', import.meta.url).href;
-    new GLTFLoader().load(url, ({scene: model, animations}) => {
+    const progress = xhr => {
+      if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
+    };
+    loading = new GLTFLoader().loadAsync(url, progress).then(({scene: model, animations}) => {
       const clip = animations.find(animation => animation.name === 'Run') || animations[0];
       const rest = animations.find(animation => animation.name === 'Idle') || clip;
       if (!clip || !rest) return;
@@ -34,9 +36,8 @@ export function loadChaserModel(scene, onProgress, defer = false, onLoaded = nul
       idle = mixer.clipAction(rest).play();
       if (onLoaded) onLoaded(model);
       if (onProgress) onProgress(1.0);
-    }, xhr => {
-      if (onProgress && xhr.lengthComputable) onProgress(xhr.loaded / xhr.total);
-    }, error => console.warn('Could not load the villain chaser.', error));
+    }).catch(error => console.warn('Could not load the villain chaser.', error));
+    return loading;
   }
   if (!defer) ensureLoaded();
 
