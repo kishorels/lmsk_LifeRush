@@ -1,3 +1,5 @@
+import {GRANDFATHER_GATE} from './grandfather-route.js';
+import {planting,greeterStart,greeterSpacing,greetingFrame,propSizes} from './elder-landscape.js';
 import {SECTION_LENGTH,villageLayout,houseTypes,cowPose} from './village-layout.js';
 const streetImage = name => {
   const image = new Image();
@@ -146,8 +148,20 @@ export function createLiteScenery(ctx, project, polygon, box) {
   }
 
   const villageImages = {};
+  const elderImages={};
+  function elderImage(name){
+    if(!elderImages[name]){
+      const img=new Image();img.src=new URL('./assets/elder/'+name+'.webp',import.meta.url).href;
+      elderImages[name]=img;
+    }
+    return elderImages[name];
+  }
+  function groundShade(x,z,width){
+    const shade=elderImage('shadow'),p=project(x,z);
+    if(shade.naturalWidth)ctx.drawImage(shade,p.x-width*p.k*.55,p.y-width*p.k*.085,width*p.k*1.1,width*p.k*.17);
+  }
   const layouts=new Map();
-  function village(distance,time) {
+  function village(distance,time,elder=false) {
     if(!villageImages.plaster){
       for(const name of [...houseTypes.map((_,i)=>'front-'+i),'plaster','tile','thatch','cow0','cow1','cow2','cow3','canal-clear','banana','haycart','well','palm','goat','grass','paddy','verge','lane','earth','neem']){
         const image=new Image();
@@ -171,7 +185,7 @@ export function createLiteScenery(ctx, project, polygon, box) {
     function house(o,z){
       if(z<0 || z>170)return;
       entries.push({z,draw:()=>{
-        const yaw=1.03+o.angle*.5,cs=Math.cos(yaw),sn=Math.sin(yaw);
+        const yaw=o.yaw??(1.03+o.angle*.5),cs=Math.cos(yaw),sn=Math.sin(yaw);
         const w=o.w*(o.type==='veranda'?1.15:1)/2,d=o.h*.475,h=o.h*.59;
         const point=(x,y,depth)=>project(o.x+x*cs+depth*sn,z+x*sn-depth*cs,y+.19);
         function face(points,name,color){
@@ -202,6 +216,85 @@ export function createLiteScenery(ctx, project, polygon, box) {
         for(const x of [-w*.82,w*.82])face([[x-.08,h*.83,d+1],[x+.08,h*.83,d+1],[x+.08,.30,d+1],[x-.08,.30,d+1]],null,'#62412b');
         face([[-w-.14,h*.88,d],[w+.14,h*.88,d],[w+.14,h*.81,d+1.3],[-w-.14,h*.81,d+1.3]],roof,'#936448');
       }});
+    }
+    if(elder){
+      const verge=elderImage('verge'),earth=elderImage('path');
+      const surfaces=[[-15,-3.66,verge,'#80834f'],[-3.68,3.68,earth,'#bd9169'],[3.66,15,verge,'#80834f']];
+      const step=1.5,period=8;
+      for(let row=Math.floor((distance+172)/step);row>=Math.floor((distance-2)/step);row--){
+        const near=Math.max(-2,row*step-distance),far=(row+1)*step-distance;
+        if(far<=near)continue;
+        for(const [left,right,img,color] of surfaces){
+          const a=project(left,near),b=project(right,near),c=project(right,far),d=project(left,far);
+          ctx.save();ctx.beginPath();ctx.moveTo(a.x,a.y+.5);ctx.lineTo(b.x,b.y+.5);
+          ctx.lineTo(c.x,c.y-.5);ctx.lineTo(d.x,d.y-.5);ctx.closePath();
+          ctx.fillStyle=color;ctx.fill();
+          if(img.naturalWidth){
+            ctx.clip();
+            const crop=img.height/period,sy=(period-1-(row%period+period)%period)*crop;
+            const hh=a.y-d.y,sourceH=crop*(far-near)/step;
+            // Match the road width at both ends of the slice, especially underfoot.
+            const strips=Math.max(1,Math.ceil(hh/7));
+            for(let band=0;band<strips;band++){
+              const t=(band+.5)/strips;
+              const l=d.x+(a.x-d.x)*t,r=c.x+(b.x-c.x)*t;
+              ctx.drawImage(img,0,sy+sourceH*band/strips,img.width,sourceH/strips,l-.6,d.y+hh*band/strips-.5,r-l+1.2,hh/strips+1);
+            }
+          }
+          ctx.restore();
+        }
+      }
+      const first=Math.floor(distance/6)-1;
+      for(let i=first;i<first+30;i++){
+        const z=i*6-distance+3;
+        if(z<0||z>170)continue;
+        for(const side of [-1,1]){
+          const x=side*3.98;
+          entries.push({z,draw:()=>{
+            for(const y of [.38,.77])box(x,z,.14,.13,6,'#b18252','#926337','#cd9d62',y);
+            box(x,z,.19,1.04,.22,'#99643b','#805634','#d19c61');
+          }});
+          const n=Math.abs(i+(side===1?2:0));
+          if(n%4===0)house({type:houseTypes[n/4%6],x:side*8.7,h:4.8,w:6.8,yaw:-side*.65},z);
+          const name=n%3?'wildflowers':'jasmine';
+          villageImages[name]=elderImage(name);
+          add(name,side*(4.5+.63*Math.sin(i*3.8)),z,1.1+.4*Math.cos(i),.68,.035*Math.sin(time*1.5+i));
+
+        }
+      }
+      const firstSection=Math.floor(distance/28)-1;
+      for(let index=firstSection;index<firstSection+8;index++){
+        const centre=(index+.5)*28;
+        for(const side of [-1,1])for(const tree of planting((index%4+4)%4,side)){
+          const z=centre-tree.z-distance+3;
+          if(z<0||z>165)continue;
+          entries.push({z,draw:()=>{
+            const img=tree.name==='neem'?villageImages.neem:elderImage(tree.name);
+            if(!img.naturalWidth)return;
+            groundShade(tree.x+.45,z,tree.w);
+            const p=project(tree.x,z),w=tree.w*p.k,h=tree.h*p.k;
+            // Shear connected strips continuously. Root stays planted while the crown catches the gust.
+            const phase=time*1.55+centre*.021+tree.z*.27+tree.x*.35;
+            const shift=u=>tree.bend*p.k*u*u*(Math.sin(phase)+.37*Math.sin(phase*.63+u*3.5));
+            const bands=z<50?8:3;
+            for(let j=0;j<bands;j++){
+              const u=1-j/bands,v=1-(j+1)/bands,dy=h/bands,top=p.y-u*h;
+              ctx.save();ctx.translate(p.x-w/2+shift(u),top);
+              ctx.transform(1,0,(shift(v)-shift(u))/Math.max(.01,dy),1,0,0);
+              ctx.drawImage(img,0,img.height*j/bands,img.width,img.height/bands,0,0,w,dy+.5);
+              ctx.restore();
+            }
+          }});
+        }
+      }
+      const visit=Math.max(0,Math.ceil((distance-greeterStart-6)/greeterSpacing)),at=greeterStart+visit*greeterSpacing,z=at-distance+3;
+      if(at<=GRANDFATHER_GATE&&z>0&&z<98)entries.push({z,draw:()=>{
+        const img=elderImage('greeting'),x=visit%2?4.52:-4.52,p=project(x,z),f=greetingFrame(at-distance);
+        if(!img.naturalWidth)return;
+        groundShade(x,z,.9);
+        ctx.drawImage(img,(f%8)*img.width/8,Math.floor(f/8)*img.height/4,img.width/8,img.height/4,p.x-.49*p.k,p.y-1.86*p.k,.98*p.k,1.86*p.k);
+      }});
+      return entries;
     }
     roadStrip(-36,-11.95,villageImages.verge,8,distance,'#708249');
     roadStrip(-11.95,-6.45,villageImages['canal-clear'],32,distance+time*.045,'#438a98');
@@ -236,7 +329,60 @@ export function createLiteScenery(ctx, project, polygon, box) {
     return entries;
   }
 
-  return {cloudLayer,tree,road,bus,village};
+  function villageProp(variant,x,z){
+    const size=propSizes[variant],img=size&&elderImage(variant);
+    if(img?.naturalWidth){
+      const p=project(x,z),left=project(x-size[0]/2,z).x,right=project(x+size[0]/2,z).x;
+      groundShade(x,z,size[0]);
+      ctx.drawImage(img,left,p.y-size[1]*p.k,right-left,size[1]*p.k);
+      return;
+    }
+    const timber=(dx,y,w,h,d)=>box(x+dx,z,w,h,d,'#955c34','#704329','#c99051',y);
+    const oval=(dx,y,w,h,color)=>{
+      const p=project(x+dx,z,y);
+      ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(p.x,p.y,w*p.k,h*p.k,0,0,Math.PI*2);ctx.fill();
+    };
+    switch(variant){
+      case 'logs':
+        for(const y of [0,.34,.65])timber(0,y,6.4,.29,.48);
+        break;
+      case 'fence':
+        for(const y of [.32,.75])timber(0,y,6.1,.17,.19);
+        for(const dx of [-2.9,0,2.9])timber(dx,0,.23,1.05,.22);
+        break;
+      case 'cloth':
+        for(const dx of [-3,3])timber(dx,0,.30,2.9,.38);
+        timber(0,2.55,6.5,.37,.44);
+        for(let i=0;i<7;i++)box(x+(i-3)*.84,z-.05,.76,.75,.06,['#bb4141','#e5af43','#3d799c'][i%3],undefined,undefined,1.8);
+        break;
+      case 'haycart':
+        for(const dx of [-.82,.82])oval(dx,.42,.25,.4,'#4c3b2b');
+        timber(0,.48,1.95,.68,2.38);oval(0,1.34,.92,.52,'#ddb148');
+        break;
+      case 'arch':
+      case 'temple':
+        for(const dx of [-2.9,2.9])box(x+dx,z,.8,2.45,1.3,'#aa9673');
+        for(let i=0;i<15;i++){
+          const a=i*Math.PI/14,dx=2.9*Math.cos(a),y=2.38+2.9*Math.sin(a);
+          box(x+dx,z,.8,.65,1.32,i%2?'#b19e80':'#bcaa8c');
+        }
+        if(variant==='temple')for(let i=0;i<5;i++)box(x,z,8.4-i*1.35,.89,3.1,'#edd396','#b99565','#b8693f',5.55+i*.88);
+        break;
+      case 'pot':
+        oval(0,.4,.56,.42,'#b8653a');oval(0,.79,.29,.09,'#713b29');break;
+      case 'rock':
+        oval(0,.57,.85,.68,'#9b8e7b');break;
+      case 'crate':
+        timber(0,0,1.65,1.05,1.1);for(const dx of [-.66,.66])timber(dx,0,.14,1.08,.13);break;
+    }
+  }
+  function elderHorizon(w,h,distance){
+    const img=elderImage('horizon');
+    if(!img.naturalWidth)return;
+    const height=h*.43,width=Math.max(w*1.18,height*img.width/img.height);
+    ctx.drawImage(img,(w-width)*(.5+.12*Math.sin(distance/78)),0,width,height);
+  }
+  return {cloudLayer,tree,road,bus,village,villageProp,elderHorizon};
 }
 
 function cloudImage(variant) {

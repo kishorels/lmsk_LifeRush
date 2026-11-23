@@ -6,6 +6,7 @@ import {createSideTraffic,buildSideVehicle} from './side-vehicles.js?v=3.8.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
 import {createSky} from './sky-scene.js?v=3.9.0';
 import {createCampus} from './campus-scene.js?v=3.8.0';
+import {createGrandfatherVillage,grandfatherObstacle} from './grandfather-scene.js';
 import {createVillageRoute} from './village-scene.js?v=3.9.0';
 import {createCollegeCampus} from './college-scene.js?v=3.8.0';
 import {createItParkCampus} from './itpark-scene.js?v=3.8.0';
@@ -109,6 +110,7 @@ export function createRenderer(canvas, callbacks = {}){
  applyQualityTier(activeTier);
  let updateCampus=null;
  let updateVillage=null;
+ let updateGrandfather=null;
  let updateCollege=null;
  let updateItPark=null;
  function updatePark(state, weather) {
@@ -418,7 +420,7 @@ export function createRenderer(canvas, callbacks = {}){
    else{const bike=buildDucatiStreetfighter(true,false);bike.rotation.y=Math.PI/2.6;g.add(bike);}
   }
  }
- function obstacle(g,o,map='school',blockKind=0){clear(g);g.userData.waveArm=null;g.userData.rotors=null;g.userData.crate=null;g.userData.spinBadge=null;g.userData.serverScan=null;g.userData.papers=null;g.userData.swivel=null;g.userData.holoPanel=null;if(PICKUP_TYPES.has(o.type)){ensurePickups().add(g,o.type);return;}if(ROAD_EVENT_TYPES.has(o.type)){const ev=buildRoadEventMesh(o.type,o);g.add(ev);g.userData.rotors=ev.userData.rotors||null;g.userData.crate=ev.userData.crate||null;g.userData.spinBadge=ev.userData.spinBadge||null;return;}if(map==='itpark'){itParkObstacle(g,o,blockKind);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
+ function obstacle(g,o,map='school',blockKind=0){clear(g);g.userData.waveArm=null;g.userData.rotors=null;g.userData.crate=null;g.userData.spinBadge=null;g.userData.serverScan=null;g.userData.papers=null;g.userData.swivel=null;g.userData.holoPanel=null;if(PICKUP_TYPES.has(o.type)){ensurePickups().add(g,o.type);return;}if(ROAD_EVENT_TYPES.has(o.type)){const ev=buildRoadEventMesh(o.type,o);g.add(ev);g.userData.rotors=ev.userData.rotors||null;g.userData.crate=ev.userData.crate||null;g.userData.spinBadge=ev.userData.spinBadge||null;return;}if(map==='grandfather'){g.add(grandfatherObstacle(o.variant));return;}if(map==='itpark'){itParkObstacle(g,o,blockKind);return;}if(map==='college'){collegeObstacle(g,o,blockKind);return;}if(o.type==='jump'&&o.variant==='bench'){for(const x of [-.65,.65])box(g,0x244e63,x,.35,0,.12,.7,.55,true);for(let j=0;j<3;j++)box(g,0xe9a33a,0,.73,-.21+j*.21,1.85,.14,.17,true);box(g,0xe9a33a,0,.92,-.27,1.85,.18,.10,true);}else if(o.type==='jump'&&o.variant==='hurdle'){for(const x of [-.77,.77]){box(g,0x215b9b,x,.4,0,.10,.8,.12,true);box(g,0x215b9b,x,.08,0,.24,.12,.75);}box(g,0xfff1ce,0,.8,0,1.85,.25,.16,true);for(const x of [-.6,0,.6])box(g,0xf34c48,x,.8,.09,.25,.25,.02);}else if(o.type==='slide'&&o.variant==='scaffold'){for(const x of [-.88,.88]){box(g,0xfbbd23,x,1.25,0,.14,2.5,.4,true);box(g,0x263a53,x,.08,0,.36,.16,.6);}box(g,0xfbbd23,0,2.1,0,1.94,1,.5,true);for(let j=0;j<5;j++){const b=box(g,0x253e58,-.72+j*.36,2.1,.26,.14,.85,.03);b.rotation.z=-.3;}}else if(o.type==='block'){box(g,0x796348,0,1.15,0,1.45,2.3,1.2,true);box(g,0x9b886b,0,2.32,0,1.55,.12,1.3);for(const x of [-.52,.52])box(g,0xafaa99,x,1.15,.62,.09,2,.04);box(g,0xf5dd6f,0,1.2,.64,.6,.55,.06);const bar=box(g,0x363a37,0,1.2,.69,.42,.09,.03);bar.rotation.z=.78;}else if(o.type==='jump'){box(g,0xff794b,0,.4,0,1.8,.8,.5,true);for(let j=0;j<4;j++){const b=box(g,0xfff4d4,-.65+j*.43,.42,.26,.2,.65,.03);b.rotation.z=-.35;}box(g,0xffc33e,0,.84,0,1.94,.08,.6);}else if(o.type==='slide'){for(const x of [-.88,.88])box(g,0x14b9be,x,1.3,0,.16,2.6,.35,true);box(g,0x18c7be,0,2.1,0,1.93,1,.55,true);box(g,0xe1ffff,0,2.1,.29,.1,.5,.04);for(const x of [-.12,.12]){const b=box(g,0xe1ffff,x,1.93,.29,.1,.32,.04);b.rotation.z=x>0?-.75:.75;}}}
 
  // Use the actual 3D Dark Gold & Crimson-Red coin model (makeCoin / mantis-flip-coin.glb) for collected-coin burst particles
  const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=makeCoin(scene,0,0,0);m.scale.setScalar(.55);m.visible=false;particles.push({m,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(11+i%5*1.8),tilt:(i%3-1)*.16});}let trackCameraY=0,total=0,lastTime=0,burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
@@ -476,6 +478,8 @@ export function createRenderer(canvas, callbacks = {}){
  }else if(updateCampus)updateCampus(s,weather);
  if(s.map==='finalrun'){if(!updateVillage)updateVillage=createVillageRoute(scene);updateVillage(s);}
  else if(updateVillage)updateVillage(s);
+ if(s.map==='grandfather' && !updateGrandfather)updateGrandfather=createGrandfatherVillage(scene);
+ if(updateGrandfather)updateGrandfather(s);
  if(s.map==='college'){if(!updateCollege)updateCollege=createCollegeCampus(scene);updateCollege(s);}
  else if(updateCollege)updateCollege(s);
  updateChaserModel(s);
@@ -525,7 +529,7 @@ export function createRenderer(canvas, callbacks = {}){
    const o=visItems[vi];
    const z=o.z-s.distance;
    const blockKind=Math.abs(Math.floor(o.z)+o.lane)%7;
-   const key=(s.map==='itpark'?'itp:':s.map==='college'?'col:':'sch:')+o.type+':'+(o.letter||o.skill)+':'+o.variant+':'+((o.type==='block'||o.type==='jump'||o.type==='slide')?blockKind:0);
+   const key=(s.map==='itpark'?'itp:':s.map==='college'?'col:':s.map==='grandfather'?'village:':'sch:')+o.type+':'+(o.letter||o.skill)+':'+o.variant+':'+((o.type==='block'||o.type==='jump'||o.type==='slide')?blockKind:0);
    let g=itemPoolMap.get(o);
    if(!g){
     let matchIdx=-1;
@@ -544,7 +548,7 @@ export function createRenderer(canvas, callbacks = {}){
    }
    if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;}
    g.visible=true;const cx=curveRelX(o.z,s),cy=curveRelY(o.z,s);const isFloat=PICKUP_TYPES.has(o.type);
-   g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy,-z);
+   g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy+(o.lift||0),-z);
    g.rotation.y=isFloat?0:-Math.atan(curveSlopeAt(o.z,s));
    if(isFloat){
     pk.animate(g,o.type,s.time,o.z);
@@ -572,7 +576,8 @@ export function createRenderer(canvas, callbacks = {}){
  if(Math.abs(targetFov-camera.fov)>.12){camera.fov+=(targetFov-camera.fov)*Math.min(1,(dt||.016)*6);camera.updateProjectionMatrix();}
  const collegeRun=!inSelect&&s.map==='college'&&!s.activeBranch;
  const branchCurved=!inSelect&&(s.activeBranch==='skybridge'||s.activeBranch==='underpass');
- const curvedRun=collegeRun||branchCurved||s.map==='finalrun';
+ const elderRun=!inSelect&&s.map==='grandfather';
+ const curvedRun=collegeRun||branchCurved||s.map==='finalrun'||elderRun;
  const camCurveX=curvedRun?curveRelX(Math.max(0,s.distance-6.8),s):0;
  const camCurveY=curvedRun?curveRelY(Math.max(0,s.distance-6.8),s):0;
  const bendX=curvedRun?curveRelX(s.distance+(branchCurved?16:12),s)*(branchCurved?.40:.35):0;
@@ -589,7 +594,7 @@ export function createRenderer(canvas, callbacks = {}){
  const targetCamZ=inSelect?3.65:6.8;
  const targetLookX=inSelect?0:s.x*(collegeRun?.42:.37*.65)+bendX;
  const targetLookY=inSelect?.98:(collegeRun?1.02:1.35)+trackCameraY+bendY;
- const targetLookZ=inSelect?0:collegeRun?-7.5:-12;
+ const targetLookZ=inSelect?0:collegeRun||elderRun?-7.5:-12;
  const camBlend=1-Math.exp(-(curvedRun?7.5:5.5)*Math.min(.05,dt||.016));
  camera.position.x+=(targetCamX-camera.position.x)*camBlend;
  camera.position.y+=(targetCamY-camera.position.y)*camBlend;
@@ -687,6 +692,12 @@ export function createRenderer(canvas, callbacks = {}){
      if (lastStateMap !== 'school') updateCampus({ map: '__none__', distance: 0, time: 0 }, dummyWeather);
    } else if (id === 'school:props') {
      compileWarmupProps('school');
+   } else if (id === 'grandfather:village') {
+     if (!updateGrandfather) updateGrandfather = createGrandfatherVillage(scene);
+     updateGrandfather({map:'grandfather',distance:0});
+     try { renderer.compile?.(scene, camera); } catch {}
+     initObjectTextures(scene);
+     if (lastStateMap !== 'grandfather') updateGrandfather({map:'__none__'});
    } else if (id === 'finalrun:village') {
      if (!updateVillage) updateVillage = createVillageRoute(scene);
      updateVillage({ map: 'finalrun', distance: 0, time: 0 });
@@ -699,6 +710,7 @@ export function createRenderer(canvas, callbacks = {}){
  function stepsForMap(map) {
    if (map === 'itpark') return ['base', 'itpark:campus', 'itpark:events', 'itpark:props'];
    if (map === 'college') return ['base', 'college:campus', 'college:props'];
+   if (map === 'grandfather') return ['base', 'grandfather:village'];
    if (map === 'finalrun') return ['base', 'finalrun:village', 'school:props'];
    return ['base', 'school:campus', 'school:props'];
  }
