@@ -16,10 +16,17 @@ function loadRendererModule() {
   return rendererModulePromise;
 }
 
-import {MAX_LEVEL,POWER_BASE_SECONDS,POWER_UPGRADE_STEP_SECONDS,POWER_UPGRADE_COSTS,powers,powerById,powerDuration,playerLevel,xpForLevel,parkOpen} from './progression.js';
+import {
+  MAX_LEVEL, POWER_BASE_SECONDS, POWER_UPGRADE_STEP_SECONDS, POWER_UPGRADE_COSTS,
+  MAP_ORDER, MAP_UNLOCK_RULES, CHARACTER_COSTS,
+  powers, powerById, powerDuration, playerLevel, xpForLevel,
+  freshProfile, normalizeProfile, mapBestFor, recordMapRunDistance,
+  isMapUnlocked, isMapDistanceMet, canBuyMap, buyMap,
+  isCharacterUnlocked, canBuyCharacter, buyCharacter
+} from './progression.js';
 import {initializeBuildProfile} from './build-profile.js';
 initializeBuildProfile();
-const profile = {xp:0,collegeBest:0,collegeCoins:0,introduced:0,itParkUnlocked:true};
+const profile = freshProfile();
 const $=id=>document.getElementById(id);
 
 const IC_COIN = '<img class="ui-coin-ic" width="14" height="14" src="assets/icons/coin.svg" alt="">';
@@ -204,82 +211,44 @@ function onAllAssetsReady() {
   assetsReady = true;
 }
 
-const COLLEGE_UNLOCK_DISTANCE = 10000;
-const COLLEGE_UNLOCK_COINS = 20000;
 const CHARACTER_ROSTER = [
-  { id: 'male', name: 'SCHOOL BOY', outfit: 'School Uniform · School Campus', map: 'school', gender: 'male', lockedByCollege: false },
-  { id: 'female', name: 'SCHOOL GIRL', outfit: 'Original Outfit · School Campus', map: 'school', gender: 'female', lockedByCollege: false },
-  { id: 'college-male', name: 'COLLEGE BOY', outfit: 'Casual Outfit · College Campus', map: 'college', gender: 'male', lockedByCollege: true },
-  { id: 'college-woman', name: 'COLLEGE WOMAN', outfit: 'Blue Style · College Campus', map: 'college', gender: 'female', lockedByCollege: true },
-  { id: 'college-man', name: 'COLLEGE MAN', outfit: 'Jacket Style · College Campus', map: 'college', gender: 'male', lockedByCollege: true },
-  { id: 'aged-elder', name: 'GRANDFATHER', outfit: 'Village Elder · The Final Run', gender: 'male', lockedByCollege: false }
+  { id: 'male', name: 'SCHOOL BOY', outfit: 'School Uniform · Starter Hero', gender: 'male', cost: CHARACTER_COSTS.male },
+  { id: 'female', name: 'SCHOOL GIRL', outfit: 'School Uniform · Any Map', gender: 'female', cost: CHARACTER_COSTS.female },
+  { id: 'college-male', name: 'COLLEGE BOY', outfit: 'Casual Outfit · Any Map', gender: 'male', cost: CHARACTER_COSTS['college-male'] },
+  { id: 'college-woman', name: 'COLLEGE WOMAN', outfit: 'Blue Style · Any Map', gender: 'female', cost: CHARACTER_COSTS['college-woman'] },
+  { id: 'college-man', name: 'COLLEGE MAN', outfit: 'Jacket Style · Any Map', gender: 'male', cost: CHARACTER_COSTS['college-man'] },
+  { id: 'aged-elder', name: 'GRANDFATHER', outfit: 'Village Elder · Any Map', gender: 'male', cost: CHARACTER_COSTS['aged-elder'] }
 ];
 
 const game = canvas.closest('.game');
-let s=fresh(),best=0,totalCoins=0,collegeDistDone=false,collegeCoinsDone=false,
-    equippedCharId='male',character='male',selectedMap='school',carouselIndex=0,currentHub='home',
+let s=fresh(),best=0,totalCoins=0,
+    equippedCharId='male',character='male',selectedMap='school',inspectedLockedMap='college',carouselIndex=0,currentHub='home',
     sound=true,prev=0,w=600,h=700;
 
 export const isLocalTest = typeof window !== 'undefined' && Boolean(
-  (window.location?.hostname === 'localhost' ||
-   window.location?.hostname === '127.0.0.1' ||
-   window.location?.hostname === '[::1]' ||
-   window.location?.hostname?.startsWith('192.168.') ||
-   window.location?.hostname?.startsWith('10.') ||
-   window.location?.port === '3000' ||
-   window.location?.port === '8080' ||
-   window.location?.port === '5173' ||
-   window.location?.protocol === 'file:' ||
-   window.location?.search?.includes('unlock=all') ||
+  (window.location?.search?.includes('unlock=all') ||
    window.location?.search?.includes('test=1')) &&
   !window.Capacitor?.isNativePlatform?.()
 );
 
-const isDistGoalMet = () => isLocalTest || collegeDistDone || best >= COLLEGE_UNLOCK_DISTANCE;
-const isCoinsGoalMet = () => isLocalTest || collegeCoinsDone || totalCoins >= COLLEGE_UNLOCK_COINS;
-const isCollegeUnlocked = () => isLocalTest || (isDistGoalMet() && isCoinsGoalMet());
-const isCharUnlocked = entry => isLocalTest || !entry?.lockedByCollege || isCollegeUnlocked();
+const isMapOpen = mapId => isLocalTest || isMapUnlocked(profile, mapId);
+const isCharUnlocked = entry => isLocalTest || isCharacterUnlocked(profile, typeof entry === 'string' ? entry : entry?.id);
 
 try{
-  best=Number(localStorage.getItem('runverse-best'))||0;
+  best=Math.max(0,Math.floor(Number(localStorage.getItem('runverse-best'))||0));
   totalCoins=Math.max(0,Math.floor(Number(localStorage.getItem('runverse-total-coins'))||0));
-  collegeDistDone=localStorage.getItem('runverse-college-dist-done')==='1' || best >= COLLEGE_UNLOCK_DISTANCE;
-  collegeCoinsDone=localStorage.getItem('runverse-college-coins-done')==='1' || totalCoins >= COLLEGE_UNLOCK_COINS;
   try {
     const stored = JSON.parse(localStorage.getItem('runverse-progression'));
-    for (const key of Object.keys(profile)) {
-      if (Number.isSafeInteger(stored?.[key]) && stored[key] >= 0) profile[key] = stored[key];
-    }
+    Object.assign(profile, normalizeProfile(stored));
   } catch {}
-  if (isLocalTest) {
-    profile.itParkUnlocked = true;
-  }
-  const savedChar=localStorage.getItem('runverse-character')||'male';
-  const rawSavedMap = localStorage.getItem('runverse-map');
-  const canAccessPark = isLocalTest || parkOpen(profile);
-  const canAccessCollege = isCollegeUnlocked();
-  let savedMap = 'school';
-  if (rawSavedMap === 'finalrun') savedMap = 'finalrun';
-  else if (rawSavedMap === 'itpark' && canAccessPark) savedMap = 'itpark';
-  else if (rawSavedMap === 'college' && canAccessCollege) savedMap = 'college';
-  else if (rawSavedMap === 'school') savedMap = 'school';
-  else if (canAccessCollege) savedMap = 'college';
-
-  if (!canAccessCollege && !isLocalTest) {
-    selectedMap = savedMap === 'finalrun' ? 'finalrun' : 'school';
-    equippedCharId = savedChar === 'aged-elder' ? savedChar : (savedChar === 'female' || savedChar === 'college-woman') ? 'female' : 'male';
-  } else {
-    selectedMap = savedMap;
-    if (CHARACTER_ROSTER.some(c => c.id === savedChar) && (isLocalTest || isCharUnlocked(CHARACTER_ROSTER.find(c => c.id === savedChar)))) {
-      equippedCharId = savedChar;
-    } else {
-      equippedCharId = savedChar === 'female'
-        ? (selectedMap === 'college' ? 'college-woman' : 'female')
-        : (selectedMap === 'college' ? 'college-man' : 'male');
-    }
-  }
+  const savedChar = localStorage.getItem('runverse-character') || 'male';
+  const rawSavedMap = localStorage.getItem('runverse-map') || 'school';
+  selectedMap = (MAP_ORDER.includes(rawSavedMap) && isMapOpen(rawSavedMap)) ? rawSavedMap : 'school';
+  const savedCharEntry = CHARACTER_ROSTER.find(c => c.id === savedChar);
+  equippedCharId = (savedCharEntry && isCharUnlocked(savedCharEntry)) ? savedCharEntry.id : 'male';
   character = (equippedCharId.includes('female') || equippedCharId.includes('woman')) ? 'female' : 'male';
   carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
+  inspectedLockedMap = MAP_ORDER.find(id => !isMapOpen(id)) || '';
 }catch{}
 s.map=selectedMap;
 
@@ -385,8 +354,6 @@ const flushSave = () => {
     localStorage.setItem('runverse-progression',JSON.stringify(profile));
     localStorage.setItem('runverse-best',best);
     localStorage.setItem('runverse-total-coins',totalCoins);
-    localStorage.setItem('runverse-college-dist-done',isDistGoalMet()?'1':'0');
-    localStorage.setItem('runverse-college-coins-done',isCoinsGoalMet()?'1':'0');
     localStorage.setItem('runverse-character',equippedCharId);
     localStorage.setItem('runverse-map',selectedMap);
   }catch{}
@@ -527,28 +494,67 @@ function triggerSwag(){
   effects.play('swag');
 }
 
-function renderChecklistHtml() {
-  const distMet = isDistGoalMet();
-  const coinsMet = isCoinsGoalMet();
-  const bestClamped = Math.min(COLLEGE_UNLOCK_DISTANCE, Math.floor(best));
-  const distPct = distMet ? 100 : Math.min(100, Math.round((bestClamped / COLLEGE_UNLOCK_DISTANCE) * 100));
-  const coinsClamped = Math.min(COLLEGE_UNLOCK_COINS, Math.floor(totalCoins));
-  const coinsPct = coinsMet ? 100 : Math.min(100, Math.round((coinsClamped / COLLEGE_UNLOCK_COINS) * 100));
+const MAP_SUBTITLES = {
+  school: 'Unlocked · Starter campus',
+  college: 'Winding hills · scooties & cars',
+  itpark: 'Glass towers · Office shuttles',
+  finalrun: 'Village road · School story'
+};
+
+function renderMapUnlockPanel(mapId) {
+  const rule = MAP_UNLOCK_RULES[mapId];
+  if (!rule || rule.free) return '';
+  const bestDist = mapBestFor(profile, rule.reqMap);
+  const distMet = isMapDistanceMet(profile, mapId);
+  const distClamped = Math.min(rule.reqDistance, bestDist);
+  const distPct = distMet ? 100 : Math.min(100, Math.round((distClamped / rule.reqDistance) * 100));
+  const coinsMet = totalCoins >= rule.cost;
+  const coinsClamped = Math.min(rule.cost, Math.floor(totalCoins));
+  const coinsPct = coinsMet ? 100 : Math.min(100, Math.round((coinsClamped / rule.cost) * 100));
+  const readyToBuy = canBuyMap(profile, mapId, totalCoins);
+  const btnText = readyToBuy
+    ? `UNLOCK ${rule.name.toUpperCase()} · ${rule.cost.toLocaleString()} ${IC_COIN}`
+    : !distMet
+      ? `REACH ${rule.reqDistance.toLocaleString()}m IN ${rule.reqMapName.toUpperCase()} FIRST`
+      : `NEED ${(rule.cost - Math.floor(totalCoins)).toLocaleString()} MORE COINS`;
   return `
+    <div class="unlock-panel-head">
+      <span class="unlock-panel-title">UNLOCK ${rule.name}</span>
+      <span class="unlock-panel-wallet">${IC_COIN} ${Math.floor(totalCoins).toLocaleString()}</span>
+    </div>
     <div class="unlock-goal ${distMet ? 'is-done' : ''}">
       <div class="unlock-goal-top">
-        <span>${IC_RUN} 10,000m in 1 Play</span>
-        <span class="unlock-goal-status">${distMet ? `${IC_CHECK} OPEN` : `${bestClamped.toLocaleString()} / 10,000m`}</span>
+        <span>${IC_RUN} ${rule.reqLabel}</span>
+        <span class="unlock-goal-status">${distMet ? `${IC_CHECK} DONE` : `${distClamped.toLocaleString()} / ${rule.reqDistance.toLocaleString()}m`}</span>
       </div>
       <div class="unlock-bar-track"><div class="unlock-bar-fill" style="width:${distPct}%"></div></div>
     </div>
     <div class="unlock-goal ${coinsMet ? 'is-done' : ''}">
       <div class="unlock-goal-top">
-        <span>${IC_COIN} 20,000 Coins Bank</span>
-        <span class="unlock-goal-status">${coinsMet ? `${IC_CHECK} OPEN` : `${coinsClamped.toLocaleString()} / 20,000`}</span>
+        <span>${IC_COIN} Spend ${rule.cost.toLocaleString()} Coins</span>
+        <span class="unlock-goal-status">${coinsMet ? `${IC_CHECK} READY` : `${coinsClamped.toLocaleString()} / ${rule.cost.toLocaleString()}`}</span>
       </div>
       <div class="unlock-bar-track"><div class="unlock-bar-fill" style="width:${coinsPct}%"></div></div>
     </div>
+    <button type="button" id="btn-unlock-map" class="unlock-buy-btn" data-unlock-map="${mapId}" ${readyToBuy ? '' : 'disabled'}>${btnText}</button>
+  `;
+}
+
+function renderCharUnlockPanel(entry) {
+  if (!entry || isCharUnlocked(entry)) return '';
+  const cost = entry.cost || 0;
+  const coinsMet = totalCoins >= cost;
+  const coinsClamped = Math.min(cost, Math.floor(totalCoins));
+  const coinsPct = cost > 0 ? Math.min(100, Math.round((coinsClamped / cost) * 100)) : 100;
+  return `
+    <div class="unlock-goal ${coinsMet ? 'is-done' : ''}">
+      <div class="unlock-goal-top">
+        <span>${IC_COIN} Unlock ${entry.name} (${cost.toLocaleString()} Coins)</span>
+        <span class="unlock-goal-status">${coinsMet ? `${IC_CHECK} READY TO BUY` : `${coinsClamped.toLocaleString()} / ${cost.toLocaleString()}`}</span>
+      </div>
+      <div class="unlock-bar-track"><div class="unlock-bar-fill" style="width:${coinsPct}%"></div></div>
+    </div>
+    <div class="unlock-panel-note">Playable on any unlocked map once bought.</div>
   `;
 }
 
@@ -559,58 +565,114 @@ function pulseChecklist(el) {
   el.classList.add('is-shake');
 }
 
+function purchaseMap(mapId) {
+  const rule = MAP_UNLOCK_RULES[mapId];
+  const res = buyMap(profile, mapId, totalCoins);
+  if (!res.ok) {
+    pulseChecklist($('map-unlock-checklist'));
+    effects.unlock?.();
+    return false;
+  }
+  totalCoins = res.coins;
+  selectedMap = mapId;
+  s.map = selectedMap;
+  inspectedLockedMap = MAP_ORDER.find(id => !isMapOpen(id)) || '';
+  lastUnlockUiKey = '';
+  save(true);
+  effects.unlock?.();
+  effects.play('upgrade');
+  effects.play('bell');
+  syncMapHeaderUI();
+  updateUnlockUI();
+  updateCarouselUI();
+  updateMenuPreviewImages();
+  showCloseCallBanner(`${rule.name.toUpperCase()} UNLOCKED!`, true);
+  return true;
+}
+
+function purchaseCharacter(entry) {
+  if (!entry) return false;
+  const res = buyCharacter(profile, entry.id, totalCoins);
+  if (!res.ok) {
+    pulseChecklist($('char-unlock-checklist'));
+    effects.unlock?.();
+    return false;
+  }
+  totalCoins = res.coins;
+  lastUnlockUiKey = '';
+  effects.unlock?.();
+  effects.play('upgrade');
+  selectUnlockedCharacter(entry.id);
+  save(true);
+  updateUnlockUI();
+  showCloseCallBanner(`${entry.name} UNLOCKED!`, true);
+  return true;
+}
+
 function updateUnlockUI() {
-  const unlocked = isCollegeUnlocked();
-  const key = `${profile.xp}/${profile.collegeBest}/${profile.collegeCoins}:${Math.floor(best)}:${Math.floor(totalCoins)}:${unlocked ? 1 : 0}`;
+  const lockedList = MAP_ORDER.filter(id => !isMapOpen(id));
+  if (!inspectedLockedMap || isMapOpen(inspectedLockedMap)) {
+    inspectedLockedMap = lockedList[0] || '';
+  }
+  const charEntry = CHARACTER_ROSTER[carouselIndex] || CHARACTER_ROSTER[0];
+  const key = `${profile.xp}/${profile.schoolBest}/${profile.collegeBest}/${profile.itParkBest}:${profile.unlockedMaps.join(',')}:${profile.unlockedChars.join(',')}:${Math.floor(totalCoins)}:${inspectedLockedMap}:${charEntry.id}`;
   if (key === lastUnlockUiKey) return;
   lastUnlockUiKey = key;
   const level = playerLevel(profile.xp);
   const next = powers.find(power => power.level > level);
   if ($('player-progress')) {
-    $('player-progress').textContent = 'Level ' + level + ' · ' + profile.xp + (level < MAX_LEVEL ? '/' + xpForLevel(level+1) + ' XP' : ' XP (MAX)') +
-      (next ? ' · Next: ' + next.name + ' (Lv ' + next.level + ')' : ' · All 4 powers open');
+    $('player-progress').textContent = 'Lv ' + level + ' · ' + profile.xp + (level < MAX_LEVEL ? '/' + xpForLevel(level+1) + ' XP' : ' XP MAX') +
+      (next ? ' · ' + next.name + ' (Lv ' + next.level + ')' : ' · 4/4 Powers');
   }
-  const park = document.querySelector('[data-map="itpark"]');
-  const open = isLocalTest || parkOpen(profile);
-  if (park) {
-    park.classList.toggle('is-locked',!open);
-    park.setAttribute('aria-disabled',String(!open));
-  }
-  if ($('park-goals')) $('park-goals').textContent = open ? 'Glass towers · Office shuttles' : 'College goals';
-  if ($('park-badge')) $('park-badge').innerHTML = open ? IC_CHECK : IC_LOCK;
-  if ($('park-distance')) $('park-distance').value = profile.collegeBest;
-  if ($('park-coins')) $('park-coins').value = profile.collegeCoins;
-  if ($('park-distance-value')) $('park-distance-value').textContent = Math.min(15000,profile.collegeBest).toLocaleString();
-  if ($('park-coins-value')) $('park-coins-value').textContent = Math.min(40000,profile.collegeCoins).toLocaleString();
   const bankEl = $('hub-coin-bank');
   if (bankEl) {
-    bankEl.innerHTML = unlocked
-      ? `${IC_COIN} ${totalCoins.toLocaleString()} Coins · College Open`
-      : `${IC_COIN} ${totalCoins.toLocaleString()} / 20,000`;
+    bankEl.innerHTML = `${IC_COIN} ${Math.floor(totalCoins).toLocaleString()} Coins`;
   }
-  const collegeCard = document.querySelector('[data-map="college"]');
-  if (collegeCard) {
-    collegeCard.classList.toggle('is-locked', !unlocked);
-    collegeCard.setAttribute('aria-disabled', String(!unlocked));
+  const mapSubIds = { school: 'school-map-sub', college: 'college-map-sub', itpark: 'park-goals', finalrun: 'finalrun-map-sub' };
+  const mapBadgeIds = { school: 'school-map-badge', college: 'college-map-badge', itpark: 'park-badge', finalrun: 'finalrun-map-badge' };
+  for (const mapId of MAP_ORDER) {
+    const open = isMapOpen(mapId);
+    const rule = MAP_UNLOCK_RULES[mapId];
+    const card = document.querySelector(`[data-map="${mapId}"]`);
+    if (card) {
+      card.classList.toggle('is-locked', !open);
+      card.classList.toggle('is-inspecting', !open && inspectedLockedMap === mapId);
+      card.setAttribute('aria-disabled', String(!open));
+    }
+    const subEl = $(mapSubIds[mapId]);
+    if (subEl) {
+      if (open) {
+        subEl.textContent = MAP_SUBTITLES[mapId];
+      } else if (canBuyMap(profile, mapId, totalCoins)) {
+        subEl.textContent = `Ready · Tap to unlock (${rule.cost.toLocaleString()} Coins)`;
+      } else if (isMapDistanceMet(profile, mapId)) {
+        subEl.textContent = `Distance met · Need ${rule.cost.toLocaleString()} Coins`;
+      } else {
+        subEl.textContent = `${rule.reqDistance.toLocaleString()}m ${rule.reqMapName} + ${rule.cost.toLocaleString()} Coins`;
+      }
+    }
+    const badgeEl = $(mapBadgeIds[mapId]);
+    if (badgeEl) {
+      badgeEl.innerHTML = open ? IC_CHECK : IC_LOCK;
+    }
   }
-  if ($('college-map-sub')) {
-    $('college-map-sub').textContent = unlocked ? 'Winding hills · scooties & cars' : 'Complete 2 goals';
+  const mapPanel = $('map-unlock-checklist');
+  if (mapPanel) {
+    if (inspectedLockedMap && !isMapOpen(inspectedLockedMap)) {
+      mapPanel.innerHTML = renderMapUnlockPanel(inspectedLockedMap);
+      mapPanel.hidden = false;
+      const buyBtn = $('btn-unlock-map');
+      if (buyBtn) buyBtn.onclick = () => purchaseMap(inspectedLockedMap);
+    } else {
+      mapPanel.innerHTML = '';
+      mapPanel.hidden = true;
+    }
   }
-  if ($('college-map-badge')) {
-    $('college-map-badge').innerHTML = unlocked ? IC_CHECK : IC_LOCK;
-  }
-  const checklistHtml = renderChecklistHtml();
-  if ($('map-unlock-checklist')) {
-    $('map-unlock-checklist').innerHTML = checklistHtml;
-    $('map-unlock-checklist').hidden = unlocked;
-  }
-  if ($('park-checklist')) {
-    $('park-checklist').hidden = open;
-  }
-  if ($('char-unlock-checklist')) {
-    $('char-unlock-checklist').innerHTML = checklistHtml;
-    const entry = CHARACTER_ROSTER[carouselIndex] || CHARACTER_ROSTER[0];
-    $('char-unlock-checklist').hidden = !entry.lockedByCollege || isCharUnlocked(entry);
+  const charPanel = $('char-unlock-checklist');
+  if (charPanel) {
+    const unlockedChar = isCharUnlocked(charEntry);
+    charPanel.innerHTML = unlockedChar ? '' : renderCharUnlockPanel(charEntry);
+    charPanel.hidden = unlockedChar;
   }
 }
 
@@ -621,8 +683,10 @@ function syncMapHeaderUI() {
     button.setAttribute('aria-pressed',String(active));
   });
   const school=selectedMap==='school', finalRun=selectedMap==='finalrun';
+  const equippedEntry = CHARACTER_ROSTER.find(c => c.id === equippedCharId) || CHARACTER_ROSTER[0];
+  const heroTitle = equippedEntry.name.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
   if($('hub-map-name')) $('hub-map-name').textContent=selectedMap==='itpark'?'IT PARK':school?'SCHOOL CAMPUS':finalRun?'THE FINAL RUN':'COLLEGE CAMPUS';
-  if($('hub-outfit-name')) $('hub-outfit-name').textContent=equippedCharId==='aged-elder'?'Village elder':(school||finalRun)?'School uniform':'Casual outfit';
+  if($('hub-outfit-name')) $('hub-outfit-name').textContent=heroTitle;
   const loc = document.querySelector('.hud-top-bar .location');
   if(loc) loc.innerHTML=selectedMap==='itpark'?(IC_ITPARK+' IT PARK'):school?(IC_SCHOOL+' RUNVERSE SCHOOL'):finalRun?(IC_SCHOOL+' THE FINAL RUN'):(IC_COLLEGE+' RUNVERSE COLLEGE');
 }
@@ -631,11 +695,14 @@ function updateCarouselUI() {
   const entry = CHARACTER_ROSTER[carouselIndex] || CHARACTER_ROSTER[0];
   const unlocked = isCharUnlocked(entry);
   const equipped = entry.id === equippedCharId;
+  const affordable = !unlocked && canBuyCharacter(profile, entry.id, totalCoins);
   if ($('char-step-badge')) $('char-step-badge').textContent = `CHARACTER ${carouselIndex + 1} / ${CHARACTER_ROSTER.length}`;
   const lockPill = $('char-lock-pill');
   if (lockPill) {
     lockPill.classList.toggle('is-locked', !unlocked);
-    lockPill.innerHTML = unlocked ? `${IC_CHECK} UNLOCKED` : `${IC_LOCK} LOCKED`;
+    lockPill.innerHTML = unlocked
+      ? `${IC_CHECK} UNLOCKED`
+      : `${IC_LOCK} ${(entry.cost || 0).toLocaleString()} ${IC_COIN}`;
   }
   if ($('char-carousel-name')) $('char-carousel-name').textContent = entry.name;
   if ($('char-carousel-outfit')) $('char-carousel-outfit').textContent = entry.outfit;
@@ -646,10 +713,15 @@ function updateCarouselUI() {
   });
   const equipBtn = $('char-equip-btn');
   if (equipBtn) {
-    equipBtn.classList.remove('is-selected', 'is-locked');
+    equipBtn.classList.remove('is-selected', 'is-locked', 'is-buyable');
     if (!unlocked) {
-      equipBtn.classList.add('is-locked');
-      equipBtn.innerHTML = `${IC_LOCK} LOCKED`;
+      if (affordable) {
+        equipBtn.classList.add('is-buyable');
+        equipBtn.innerHTML = `BUY · ${entry.cost.toLocaleString()} ${IC_COIN}`;
+      } else {
+        equipBtn.classList.add('is-locked');
+        equipBtn.innerHTML = `${IC_LOCK} ${entry.cost.toLocaleString()} ${IC_COIN}`;
+      }
     } else if (equipped) {
       equipBtn.classList.add('is-selected');
       equipBtn.innerHTML = `${IC_CHECK} SELECTED`;
@@ -668,7 +740,10 @@ function updateCarouselUI() {
   if ($('char-side-prev-lock')) $('char-side-prev-lock').hidden = isCharUnlocked(prevEntry);
   if ($('char-side-next-lock')) $('char-side-next-lock').hidden = isCharUnlocked(nextEntry);
   const checklist = $('char-unlock-checklist');
-  if (checklist) checklist.hidden = !entry.lockedByCollege || unlocked;
+  if (checklist) {
+    checklist.innerHTML = unlocked ? '' : renderCharUnlockPanel(entry);
+    checklist.hidden = unlocked;
+  }
   updateUnlockUI();
 }
 
@@ -691,10 +766,6 @@ function selectUnlockedCharacter(id) {
   equippedCharId = entry.id;
   activePreviewCharId = entry.id;
   character = entry.gender;
-  if (!isLocalTest) {
-    if (entry.map && selectedMap !== 'finalrun' && (selectedMap !== 'itpark' || entry.map === 'school')) selectedMap = entry.map;
-  }
-  s.map = selectedMap;
   carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === entry.id));
   syncMapHeaderUI();
   updateCarouselUI();
@@ -731,8 +802,7 @@ if ($('char-equip-btn')) {
   $('char-equip-btn').onclick = () => {
     const entry = CHARACTER_ROSTER[carouselIndex];
     if (!isCharUnlocked(entry)) {
-      pulseChecklist($('char-unlock-checklist'));
-      effects.unlock?.();
+      purchaseCharacter(entry);
       return;
     }
     selectUnlockedCharacter(entry.id);
@@ -740,33 +810,25 @@ if ($('char-equip-btn')) {
 }
 
 function selectMap(map, fromUser = false){
-  if (map === 'itpark' && !(isLocalTest || parkOpen(profile))) { pulseChecklist($('park-checklist')); return; }
-  if (map === 'college' && !isCollegeUnlocked()) {
+  const target = MAP_ORDER.includes(map) ? map : 'school';
+  if (!isMapOpen(target)) {
+    inspectedLockedMap = target;
+    lastUnlockUiKey = '';
+    updateUnlockUI();
     if (fromUser) {
       pulseChecklist($('map-unlock-checklist'));
       effects.unlock?.();
     }
-    return;
+    return false;
   }
-  selectedMap=map==='finalrun'?'finalrun':map==='itpark'?'itpark':map==='college'?'college':'school';
-  if (!isLocalTest) {
-    if (selectedMap === 'college' || selectedMap === 'itpark') {
-      if (equippedCharId !== 'aged-elder' && !equippedCharId.startsWith('college-')) {
-        equippedCharId = character === 'female' ? 'college-woman' : 'college-man';
-      }
-    } else {
-      if (equippedCharId.startsWith('college-')) {
-        equippedCharId = character === 'female' ? 'female' : 'male';
-      }
-    }
-  }
-  carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
-  activePreviewCharId = equippedCharId;
+  selectedMap = target;
+  s.map = selectedMap;
   syncMapHeaderUI();
   updateCarouselUI();
   updateMenuPreviewImages();
   if (fromUser) saveDeferred();
-  else { s.map = selectedMap; save(); }
+  else save();
+  return true;
 }
 syncMapHeaderUI();
 updateCarouselUI();
@@ -774,8 +836,7 @@ updateMenuPreviewImages();
 document.querySelectorAll('[data-map]').forEach(button=>button.onclick=()=>{
   lastUserTapAt = performance.now();
   const targetMap = button.dataset.map;
-  selectMap(targetMap, true);
-  s.map = selectedMap;
+  if (!selectMap(targetMap, true)) return;
   if (targetMap === 'finalrun' && selectedMap === 'finalrun') {
     s.previewRain = false;
     playFinalRunIntro(defaultChosenPowers());
@@ -1015,11 +1076,12 @@ function renderShopModal() {
         if (!m || m.claimed || m.progress < m.target) return;
         m.claimed = true;
         totalCoins += m.reward;
-        if (!collegeCoinsDone && totalCoins >= COLLEGE_UNLOCK_COINS) collegeCoinsDone = true;
+        lastUnlockUiKey = '';
         save();
         saveMissionsAndUpgrades();
         effects.play('upgrade');
         updateUnlockUI();
+        updateCarouselUI();
         updateShopBadge();
         renderShopModal();
       };
@@ -1052,10 +1114,12 @@ function renderShopModal() {
         totalCoins -= cost;
         upgrades[def.id] = lv + 1;
         if (s?.powerUpgrades) s.powerUpgrades[def.id] = upgrades[def.id];
+        lastUnlockUiKey = '';
         save();
         saveMissionsAndUpgrades();
         effects.play('upgrade');
         updateUnlockUI();
+        updateCarouselUI();
         renderShopModal();
       };
     });
@@ -1900,10 +1964,14 @@ async function prepareLevelRun(map,key,launchId=++runLaunchNonce) {
   }
 }
 function beginRun(chosen){
-  if (!isCollegeUnlocked() && selectedMap !== 'finalrun') {
+  if (!isMapOpen(selectedMap)) {
     selectedMap = 'school';
-    if (equippedCharId !== 'aged-elder') equippedCharId = character === 'female' ? 'female' : 'male';
-    carouselIndex = Math.max(0, CHARACTER_ROSTER.findIndex(c => c.id === equippedCharId));
+    syncMapHeaderUI();
+  }
+  if (!isCharUnlocked(equippedCharId)) {
+    equippedCharId = 'male';
+    character = 'male';
+    carouselIndex = 0;
     syncMapHeaderUI();
   }
   finalRunActiveCharId = '';
@@ -2033,7 +2101,8 @@ function completeFinalRun() {
   const isCollegeStage = stage === 'college';
   const isItParkStage = stage === 'itpark';
   const runDist = Math.floor(s.distance);
-  if (isCollegeStage) profile.collegeBest = Math.max(profile.collegeBest, runDist);
+  if (isCollegeStage) recordMapRunDistance(profile, 'college', runDist);
+  if (isItParkStage) recordMapRunDistance(profile, 'itpark', runDist);
   const deltaDist = Math.max(0, runDist - runReported.dist);
   const deltaCoins = Math.max(0, s.coins - runReported.coins);
   const deltaNear = Math.max(0, (s.nearMissCount || 0) - runReported.nearMiss);
@@ -2041,8 +2110,6 @@ function completeFinalRun() {
   const bonusCoins = runReported.bonus + deltaBonus;
   runReported = { dist: runDist, coins: s.coins, nearMiss: s.nearMissCount || 0, bonus: bonusCoins };
   best = Math.max(best, runDist);
-  if (runDist >= COLLEGE_UNLOCK_DISTANCE) collegeDistDone = true;
-  if (totalCoins >= COLLEGE_UNLOCK_COINS) collegeCoinsDone = true;
   save(true);
   recordRunMissions(deltaDist, deltaCoins + deltaBonus, deltaNear);
   updateUnlockUI();
@@ -2063,7 +2130,9 @@ function crash(completed=false){
     completeFinalRun();
     return;
   }
-  if (s.map === 'college') profile.collegeBest = Math.max(profile.collegeBest,Math.floor(s.distance));
+  if (['school', 'college', 'itpark'].includes(s.map)) {
+    recordMapRunDistance(profile, s.map, Math.floor(s.distance));
+  }
   const previousBest = best;
   const runDist = Math.floor(s.distance);
   const deltaDist = Math.max(0, runDist - runReported.dist);
@@ -2073,9 +2142,8 @@ function crash(completed=false){
   const bonusCoins = runReported.bonus + deltaBonus;
   runReported = { dist: runDist, coins: s.coins, nearMiss: s.nearMissCount || 0, bonus: bonusCoins };
   best=Math.max(best, runDist);
-  if (runDist >= COLLEGE_UNLOCK_DISTANCE) collegeDistDone = true;
-  if (totalCoins >= COLLEGE_UNLOCK_COINS) collegeCoinsDone = true;
   save();
+  updateUnlockUI();
   recordRunMissions(deltaDist, deltaCoins + deltaBonus, deltaNear);
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
   if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
@@ -2381,11 +2449,15 @@ function tick(t) {
 
   const metresXP = Math.floor(s.distance / 100) - Math.floor(distanceBefore / 100);
   const earnedCoins = Math.max(0,s.coins - coinsBefore);
-  if (metresXP > 0 || earnedCoins || (s.map === 'college' && profile.collegeBest < 15000 && s.distance >= 15000)) {
+  const reachedMapGoal =
+    (s.map === 'school' && profile.schoolBest < MAP_UNLOCK_RULES.college.reqDistance && s.distance >= MAP_UNLOCK_RULES.college.reqDistance) ||
+    (s.map === 'college' && profile.collegeBest < MAP_UNLOCK_RULES.itpark.reqDistance && s.distance >= MAP_UNLOCK_RULES.itpark.reqDistance) ||
+    (s.map === 'itpark' && profile.itParkBest < MAP_UNLOCK_RULES.finalrun.reqDistance && s.distance >= MAP_UNLOCK_RULES.finalrun.reqDistance);
+  if (metresXP > 0 || earnedCoins || reachedMapGoal) {
     profile.xp += Math.max(0,metresXP) + earnedCoins;
-    if (s.map === 'college') {
-      profile.collegeBest = Math.max(profile.collegeBest,Math.floor(s.distance));
-      profile.collegeCoins += earnedCoins;
+    if (['school', 'college', 'itpark'].includes(s.map)) {
+      recordMapRunDistance(profile, s.map, s.distance);
+      if (s.map === 'college') profile.collegeCoins += earnedCoins;
     }
     const level = playerLevel(profile.xp);
     if (level > s.level) showCloseCallBanner('LEVEL ' + level,true);
@@ -2394,17 +2466,8 @@ function tick(t) {
   }
   if (s.coins > coinsBefore) {
     const gained = s.coins - coinsBefore;
-    const wasUnlocked = isCollegeUnlocked();
     totalCoins += gained;
-    if (!collegeCoinsDone && totalCoins >= COLLEGE_UNLOCK_COINS) {
-      collegeCoinsDone = true;
-      effects.play('bell');
-      $('toast').textContent = isCollegeUnlocked()
-        ? '20,000 COINS SAVED · COLLEGE CAMPUS & CHARACTERS UNLOCKED!'
-        : 'Goal 2 Complete: 20,000 Coins Saved! Reach 10,000m in 1 run to unlock College!';
-    }
     save();
-    if (!wasUnlocked && isCollegeUnlocked()) updateUnlockUI();
     if (s.y > 1.2 || s.roofRide) effects.play('roofCoin');
     else effects.play('coin');
     if (!prefersReducedMotion && (t - lastCoinAnimTime) > 220) {
@@ -2492,15 +2555,29 @@ function tick(t) {
     $('toast').textContent = '8,000m · MORE MORE SPEED! 2X HYPER MODE!';
   }
   if (distanceBefore < 10000 && s.distance >= 10000 && s.map !== 'finalrun' && !s.isFinalRun) {
-    if (!collegeDistDone) {
-      collegeDistDone = true;
-      save();
-      if (isCollegeUnlocked()) updateUnlockUI();
-    }
+    recordMapRunDistance(profile, s.map, s.distance);
+    save();
     effects.play('bell');
-    $('toast').textContent = isCollegeUnlocked()
-      ? '10,000m REACHED · COLLEGE CAMPUS & CHARACTERS UNLOCKED!'
-      : '10,000m · 10k Goal Open! Collect 20,000 Coins to unlock College!';
+    if (s.map === 'college' && !isMapOpen('itpark')) {
+      showCloseCallBanner('10,000m · IT PARK GOAL MET!', true);
+      $('toast').textContent = '10,000m College Goal Done! Spend 20,000 Coins in Maps to unlock IT Park!';
+    } else if (s.map === 'itpark' && !isMapOpen('finalrun')) {
+      showCloseCallBanner('10,000m · FINAL RUN GOAL MET!', true);
+      $('toast').textContent = '10,000m IT Park Goal Done! Spend 30,000 Coins in Maps to unlock The Final Run!';
+    } else {
+      $('toast').textContent = '10,000m REACHED · LEGENDARY RUN!';
+    }
+  }
+  if (distanceBefore < 15000 && s.distance >= 15000 && s.map === 'school') {
+    recordMapRunDistance(profile, 'school', s.distance);
+    save();
+    effects.play('bell');
+    if (!isMapOpen('college')) {
+      showCloseCallBanner('15,000m · COLLEGE GOAL MET!', true);
+      $('toast').textContent = '15,000m School Goal Done! Spend 20,000 Coins in Maps to unlock College Campus!';
+    } else {
+      $('toast').textContent = '15,000m SCHOOL LEGEND!';
+    }
   }
 
   if (s.mode === 'running' && s.map === 'school' && distanceBefore < SCHOOL_GATE && s.distance >= SCHOOL_GATE) {

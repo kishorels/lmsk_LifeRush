@@ -97,15 +97,20 @@ assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&
  assert.ok(moveFn && !moveFn.includes('selectUnlockedCharacter'),
    'Left/Right arrows only preview characters and never auto-select unlocked characters until SELECT CHARACTER is clicked');
 
- // Two-step College unlock thresholds: 10,000m in 1 run + 20,000 cumulative coins
- assert.ok(gameSrc.includes('COLLEGE_UNLOCK_DISTANCE = 10000')&&gameSrc.includes('COLLEGE_UNLOCK_COINS = 20000'),
-   'College unlock defines 10,000m single-run and 20,000 cumulative coin targets');
- assert.ok(gameSrc.includes('runverse-total-coins')&&gameSrc.includes('runverse-college-dist-done')&&gameSrc.includes('runverse-college-coins-done'),
-   'single-run 10k milestone and cumulative coin bank persist across runs');
- assert.ok(gameSrc.includes('isDistGoalMet')&&gameSrc.includes('isCoinsGoalMet')&&gameSrc.includes('isCollegeUnlocked'),
-   'both goals must complete before College map and College characters unlock');
+ // Play Store map & character coin-spend unlock system + free cross-map character play
+ const progSrc = await readFile(new URL('../dist/progression.js', import.meta.url), 'utf8');
+ assert.ok(progSrc.includes('reqDistance: 15000') && progSrc.includes('cost: 20000') && progSrc.includes('cost: 30000'),
+   'progression defines College (15k+20k), IT Park (10k+20k), and Final Run (10k+30k) coin-spend map unlocks');
+ assert.ok(gameSrc.includes('buyMap(') && gameSrc.includes('buyCharacter(') && gameSrc.includes('runverse-total-coins'),
+   'game supports spending coins to unlock maps and characters cleanly');
  assert.ok(htmlSrc.includes('id="map-unlock-checklist"')&&htmlSrc.includes('id="char-unlock-checklist"'),
-   'both Maps and Characters tabs render the 2-step unlock checklist');
+   'both Maps and Characters tabs render coin & distance unlock panels');
+ const selectMapFn = gameSrc.match(/function selectMap\([^)]*\)\s*\{[\s\S]*?\n\}/)?.[0] || '';
+ assert.ok(selectMapFn && !selectMapFn.includes('equippedCharId ='),
+   'selecting a map never forces changing the player character (any unlocked character can play on any unlocked map)');
+ const selectCharFn = gameSrc.match(/function selectUnlockedCharacter\([^)]*\)\s*\{[\s\S]*?\n\}/)?.[0] || '';
+ assert.ok(selectCharFn && !selectCharFn.includes('selectedMap ='),
+   'selecting a character never forces changing the selected map');
 
  // 3D and 2D renderers handle all 5 character keys ('college-male', 'college-woman', 'college-man') and Neutral Idle
  assert.ok(r3dSrc.includes("rawChar.startsWith('college-')?rawChar")&&r3dSrc.includes("'college-woman'")&&r3dSrc.includes("'college-man'"),
