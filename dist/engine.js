@@ -1,5 +1,5 @@
 import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase,routeSegment} from './traffic-rules.js';
-import {pickupTypes as PICKUP_TYPES, powerById, runPickup} from './progression.js';
+import {pickupTypes as PICKUP_TYPES, powerById, powerDuration, runPickup} from './progression.js';
 import {ROAD_EVENT_TYPES,updateRoadEvents,triggerRoadEvent,forkPlanAt,branchElevationAt,branchOffsetXAt,roadHillY,LMSK_LETTERS} from './road-events.js';
 import {populateGrandfatherPath,memoryPace,GRANDFATHER_GATE} from './grandfather-route.js?v=3.9.2';
 export {trafficPattern, PICKUP_TYPES, ROAD_EVENT_TYPES, LMSK_LETTERS, powerById, forkPlanAt, branchElevationAt, branchOffsetXAt, roadHillY};
@@ -30,7 +30,7 @@ export function fresh(seed=newRunSeed()) {
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
     level: 1, doubleCoins: 0, doubleJump: 0, slow: 0, ghost: 0, airJumpUsed: false,
-    magnet: 0, shield: false, nitro: 0, shoes: 0,
+    magnet: 0, shield: false, nitro: 0, shoes: 0, powerUpgrades: {},
     magnetDuration: 12, nitroDuration: 4.5, shoesDuration: 9,
     combo: 1, comboTimer: 0, nearMissCount: 0, nearMissEvent: null, nearMissId: 0, jumpsOver: 0, revivedOnce: false,
     turboBoost: 0, launchBoost: 0, feverTimer: 0, lmskMask: 0,
@@ -536,16 +536,17 @@ function pulsePower(s,type) {
 export function usePower(s,index) {
   const slot = s.slots?.[index];
   if (!slot || s.mode !== 'running' || s.distance < slot.readyAt || s.time < slot.until) return false;
-  slot.readyAt = s.distance + 1000;
-  slot.until = s.time + 10;
   const id = slot.id;
+  const duration = powerDuration(id, s.powerUpgrades);
+  slot.readyAt = s.distance + 1000;
+  slot.until = s.time + duration;
   if (id === 'wave' || id === 'trail') {
     pulsePower(s,id);
     slot.nextPulse = s.time + 1;
   } else if (id === 'rush') {
-    s.nitro = s.magnet = 10;
+    s.nitro = s.magnet = duration;
   } else if (id !== 'shield') {
-    s[id] = 10;
+    s[id] = duration;
   }
   s.collectedPowerup = id;
   return true;

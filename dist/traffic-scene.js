@@ -1,7 +1,7 @@
 import {makeCoin,spinCoin} from './coin.js';
 import {buildBus,buildCollegeVehicle} from './bus-model.js';
 import {buildPorscheGT3RS,buildBugattiChiron,buildRedShuttleCart,buildFreightSemiTruck,buildDucatiStreetfighter} from './itpark-models.js?v=3.8.0';
-import {buildWDP4DTrain,buildRailRampWagon} from './wdp4d-train.js?v=3.8.0';
+import {buildWDP4DTrain,buildRailRampWagon} from './wdp4d-train.js?v=3.10.13';
 import {BoxGeometry,Group,Mesh,MeshStandardMaterial} from './vendor/three.module.js';
 import {repeatedVans} from './traffic-rules.js';
 import {FINALRUN_GATE, finalRunGateFor} from './engine.js';
@@ -76,6 +76,7 @@ export function createTraffic(scene) {
   const visible=new Set();
   const trafficFar=scene.userData?.trafficFar||295;
   const lowEnd=Boolean(scene.userData?.lowEnd);
+  const isTouch=Boolean(scene.userData?.isTouch);
   for(const v of (map==='grandfather' ? [] : repeatedVans(s.distance,s.runSeed))) {
    if(v.ramp>s.distance+trafficFar||v.front<s.distance-15)continue;
    if((s.map==='finalrun'||s.isFinalRun)&&v.ramp>=finalRunGateFor(s.map)-85)continue;
@@ -133,7 +134,14 @@ export function createTraffic(scene) {
    const mShiftU=mSampleZ-visZ;
    g.position.set(o.lane*2.2+curveRelX(mSampleZ,s)+mShiftU*Math.sin(mYaw),.09+curveRelY(mSampleZ,s),s.distance-visZ+mShiftU*(Math.cos(mYaw)-1));
    g.rotation.y=mYaw;
-   if(!lowEnd||visZ-s.distance<95)g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);if(c.visible&&(!lowEnd||visZ-s.distance<95))spinCoin(c,s.time,i,o.roof+.6);});}
+   if(isTouch&&!lowEnd){
+    const wantShadow=(visZ-s.distance<46)&&(mFront>s.distance-6);
+    if(g.userData._castSh!==wantShadow){
+     g.userData._castSh=wantShadow;
+     g.traverse(n=>{if(n.isMesh&&n.userData._origCast===undefined)n.userData._origCast=n.castShadow;if(n.isMesh&&n.userData._origCast)n.castShadow=wantShadow;});
+    }
+   }
+   if(!(lowEnd||isTouch)||visZ-s.distance<95)g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);if(c.visible&&(!(lowEnd||isTouch)||visZ-s.distance<95))spinCoin(c,s.time,i,o.roof+.6);});}
   for(const [o,g]of moving)if(!live.has(o)){releasePool(movingPool,g);moving.delete(o);}
  };
 }

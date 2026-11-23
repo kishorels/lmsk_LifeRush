@@ -633,9 +633,10 @@ const axleCache = new Map();
 function createAxleWheelset(ys) {
   const key = ys.toFixed(3);
   if (!axleCache.has(key)) {
-    const steelWheel = getMat('wdpWheel', { color: 0x4b5563, roughness: 0.38, metalness: 0.72 });
-    const rimSteel = getMat('wdpRim', { color: 0x9ca3af, roughness: 0.28, metalness: 0.82 });
-    const ironDark = getMat('wdpIron', { color: 0x1f242a, roughness: 0.55, metalness: 0.58 });
+    // Share roughness/metalness so bakeGroup merges all 3 axle colors into 1 single vertex-colored draw call (cuts 36 -> 12 draws per double train!)
+    const steelWheel = getMat('wdpAxleSteel', { color: 0x4b5563, roughness: 0.42, metalness: 0.68 });
+    const rimSteel = getMat('wdpAxleRim', { color: 0x9ca3af, roughness: 0.42, metalness: 0.68 });
+    const ironDark = getMat('wdpAxleIron', { color: 0x1f242a, roughness: 0.42, metalness: 0.68 });
 
     const raw = new Group();
     const shaft = new Mesh(cyl12, ironDark);

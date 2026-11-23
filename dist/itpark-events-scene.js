@@ -546,6 +546,7 @@ export function createRoadEventsScene(scene) {
       metalness: 0.52,
       transparent: true,
       opacity: 0.58,
+      depthWrite: !scene.userData?.isTouch,
       envMapIntensity: 2.1
     });
   }
@@ -619,6 +620,15 @@ export function createRoadEventsScene(scene) {
     emissiveMap.repeat.set(4, 1);
     emissiveMap.anisotropy = 4;
 
+    if (scene.userData?.isTouch) {
+      return new MeshBasicMaterial({
+        color: 0xffffff,
+        map,
+        transparent: true,
+        opacity: 0.50,
+        depthWrite: false
+      });
+    }
     return new MeshStandardMaterial({
       color: 0xffffff,
       map,
@@ -859,7 +869,17 @@ export function createRoadEventsScene(scene) {
   // Instanced Glass Bridge: drops ~240+ per-bay draw calls down to ~14 total draw calls across all 24 bays!
   function buildSkyBayDeckTemplate() {
     const g = new Group();
-    part(g, skyGlassFloor, 0, 0.06, 0, 7.65, 0.12, BAY_OVERLAP);
+    if (isTouchScene) {
+      // Single top plane eliminates 5 redundant underside/end-cap transparent box faces on mobile GPUs!
+      const deckPlane = new Mesh(planeGeo, skyGlassFloor);
+      deckPlane.rotation.x = -Math.PI / 2;
+      deckPlane.position.set(0, 0.11, 0);
+      deckPlane.scale.set(7.65, BAY_OVERLAP, 1);
+      deckPlane.receiveShadow = true;
+      g.add(deckPlane);
+    } else {
+      part(g, skyGlassFloor, 0, 0.06, 0, 7.65, 0.12, BAY_OVERLAP);
+    }
     for (const gx of [-3.74, -1.25, 1.25, 3.74]) {
       part(g, steel, gx, 0.08, 0, 0.14, 0.14, BAY_OVERLAP);
     }
@@ -1414,13 +1434,15 @@ export function createRoadEventsScene(scene) {
   function getIslandTreeMaterial(species) {
     if (!islandTreeMats.has(species)) {
       const tex = loadTreeTexture(species);
-      islandTreeMats.set(species, new MeshStandardMaterial({
-        map: tex,
-        alphaTest: 0.45,
-        side: DoubleSide,
-        roughness: 0.85,
-        color: 0xf5f3e8
-      }));
+      islandTreeMats.set(species, isTouchScene
+        ? new MeshBasicMaterial({ map: tex, alphaTest: 0.45, side: DoubleSide, color: 0xf5f3e8 })
+        : new MeshStandardMaterial({
+            map: tex,
+            alphaTest: 0.45,
+            side: DoubleSide,
+            roughness: 0.85,
+            color: 0xf5f3e8
+          }));
     }
     return islandTreeMats.get(species);
   }
@@ -2400,7 +2422,7 @@ export function createRoadEventsScene(scene) {
       // Dynamic ocean tinting matching Day / Sunset / Night / Rain
       oceanBaseMat.color.copy(oceanDayCol).lerp(oceanSunsetCol, lowSun * 0.72).lerp(oceanNightCol, night * 0.9).lerp(oceanRainCol, rain * 0.65);
       oceanBaseMat.roughness = 0.07 + rain * 0.16;
-      seaSwellMesh.visible = !lowEnd;
+      seaSwellMesh.visible = !lowEnd && !isTouchScene;
       sunGlintInst.visible = !ultraLow;
       waveCrestInst.visible = !ultraLow;
 
@@ -2408,7 +2430,7 @@ export function createRoadEventsScene(scene) {
       if (oceanTex.colorMap) {
         oceanTex.colorMap.offset.set((t * 0.028) % 1, (state.distance / 18 + t * 0.05) % 1);
       }
-      if (!lowEnd) {
+      if (!lowEnd && !isTouchScene) {
         oceanSwellMat.opacity = Math.max(0.14, 0.36 - night * 0.14 - rain * 0.12);
         if (oceanTex.bumpMap) {
           oceanTex.bumpMap.offset.set((t * 0.028) % 1, (state.distance / 18 + t * 0.05) % 1);

@@ -1,21 +1,21 @@
 import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
-import {createPowerControls} from './power-controls.js?v=3.10.11';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.9.2';
+import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.13';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.13';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.9.2';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.13';
 import {createFramePacer} from './frame-pacing.js';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 
 let rendererModulePromise = null;
 function loadRendererModule() {
   if (!rendererModulePromise) {
-    rendererModulePromise = import('./renderer3d.js?v=3.10.12');
+    rendererModulePromise = import('./renderer3d.js?v=3.10.13');
   }
   return rendererModulePromise;
 }
 
-import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
+import {MAX_LEVEL,POWER_BASE_SECONDS,POWER_UPGRADE_STEP_SECONDS,POWER_UPGRADE_COSTS,powers,powerById,powerDuration,playerLevel,xpForLevel,parkOpen} from './progression.js';
 import {initializeBuildProfile} from './build-profile.js';
 initializeBuildProfile();
 const profile = {xp:0,collegeBest:0,collegeCoins:0,introduced:0,itParkUnlocked:true};
@@ -39,7 +39,7 @@ const IC_CHAR = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14"
 const IC_EXIT = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 const IC_RUSH = '<svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 6 6-6 6"/><path d="m13 6 6 6-6 6"/></svg>';
 let canvas=$('world');
-let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastLmskMask = -1, lastFeverOn = false, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false;
+let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastCoins2xSec = -1, lastGhostSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastLmskMask = -1, lastFeverOn = false, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false;
 const nameModalEl = $('name-modal');
 const shopModalEl = $('shop-modal');
 const speedLinesEl = $('speed-lines');
@@ -566,8 +566,8 @@ function updateUnlockUI() {
   const level = playerLevel(profile.xp);
   const next = powers.find(power => power.level > level);
   if ($('player-progress')) {
-    $('player-progress').textContent = 'Level ' + level + ' · ' + profile.xp + (level < 50 ? '/' + xpForLevel(level+1) : '') + ' XP' +
-      (next ? ' · Next: ' + next.name + ' (Lv ' + next.level + ')' : ' · All powers open');
+    $('player-progress').textContent = 'Level ' + level + ' · ' + profile.xp + (level < MAX_LEVEL ? '/' + xpForLevel(level+1) + ' XP' : ' XP (MAX)') +
+      (next ? ' · Next: ' + next.name + ' (Lv ' + next.level + ')' : ' · All 4 powers open');
   }
   const park = document.querySelector('[data-map="itpark"]');
   const open = isLocalTest || parkOpen(profile);
@@ -931,14 +931,21 @@ if($('splash-screen')){
   });
 }
 
-const UPGRADE_DEFS = [
-  { id: 'magnet', icon: IC_MAGNET, name: 'Magnet Duration', values: [12, 15, 18, 21, 25], unit: 's', costs: [500, 1200, 2500, 5000] },
-  { id: 'nitro', icon: IC_BOLT, name: 'Nitro Rush Boost', values: [4.5, 5.5, 6.5, 7.5, 9], unit: 's', costs: [600, 1400, 2800, 5500] },
-  { id: 'shoes', icon: IC_JUMP, name: 'Super Jump Shoes', values: [9, 11, 13, 15, 18], unit: 's', costs: [500, 1200, 2400, 4800] },
-  { id: 'coinBoost', icon: IC_COIN, name: 'End-of-Run Coin Bonus', values: [0, 15, 30, 50, 75], unit: '%', costs: [800, 1800, 3500, 7000] }
-];
+const POWER_UPGRADE_VALUES = Array.from(
+  { length: POWER_UPGRADE_COSTS.length + 1 },
+  (_, tier) => POWER_BASE_SECONDS + tier * POWER_UPGRADE_STEP_SECONDS
+);
+const UPGRADE_DEFS = powers.map(p => ({
+  id: p.id,
+  icon: POWER_ICONS[p.id] || IC_BOLT,
+  name: p.name,
+  unlockLevel: p.level,
+  values: POWER_UPGRADE_VALUES,
+  unit: 's',
+  costs: POWER_UPGRADE_COSTS
+}));
 const REVIVE_COST = 250;
-let upgrades = { magnet: 0, nitro: 0, shoes: 0, coinBoost: 0 };
+let upgrades = Object.fromEntries(UPGRADE_DEFS.map(def => [def.id, 0]));
 try {
   const savedUpg = JSON.parse(localStorage.getItem('runverse-upgrades') || '{}');
   for (const def of UPGRADE_DEFS) {
@@ -1019,16 +1026,19 @@ function renderShopModal() {
   }
   if (uList) {
     uList.hidden = activeShopTab !== 'upgrades';
-    uList.innerHTML = UPGRADE_DEFS.filter(def => def.id === 'coinBoost').map(def => {
+    const curLevel = playerLevel(profile.xp);
+    uList.innerHTML = UPGRADE_DEFS.map(def => {
       const lv = upgrades[def.id] || 0;
-      const required = powerById[def.id]?.level;
-      if (required > playerLevel(profile.xp)) return '<div class="shop-item-row"><strong>'+def.name+'</strong><small>Unlock at Level '+required+'</small></div>';
+      const required = def.unlockLevel || powerById[def.id]?.level || 1;
+      if (required > curLevel) {
+        return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name}</strong><small>Unlocks at Level ${required} · Base ${POWER_BASE_SECONDS}s (+${POWER_UPGRADE_STEP_SECONDS}s / upgrade)</small></div><button type="button" class="shop-action-btn" disabled>${IC_LOCK} Lv.${required}</button></div>`;
+      }
       const maxed = lv >= def.values.length - 1;
       const cost = maxed ? 0 : def.costs[lv];
       const canBuy = !maxed && totalCoins >= cost;
       const curVal = def.values[lv], nextVal = maxed ? curVal : def.values[lv + 1];
       const pct = Math.round(((lv + 1) / def.values.length) * 100);
-      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name} · Lv.${lv + 1}</strong><small>${maxed ? `MAX (${curVal}${def.unit})` : `${curVal}${def.unit} → ${nextVal}${def.unit}`}</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="shop-action-btn ${maxed ? 'is-done' : ''}" data-buy-upgrade="${def.id}" ${canBuy ? '' : 'disabled'}>${maxed ? 'MAXED' : `${cost.toLocaleString()} ${IC_COIN}`}</button></div>`;
+      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name} · Lv.${lv + 1}/${def.values.length}</strong><small>${maxed ? `MAX (${curVal}${def.unit})` : `${curVal}${def.unit} → ${nextVal}${def.unit} (+${POWER_UPGRADE_STEP_SECONDS}s)`}</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="shop-action-btn ${maxed ? 'is-done' : ''}" data-buy-upgrade="${def.id}" ${canBuy ? '' : 'disabled'}>${maxed ? 'MAXED' : `${cost.toLocaleString()} ${IC_COIN}`}</button></div>`;
     }).join('');
     uList.querySelectorAll('[data-buy-upgrade]').forEach(btn => {
       btn.onclick = () => {
@@ -1040,6 +1050,7 @@ function renderShopModal() {
         if (totalCoins < cost) return;
         totalCoins -= cost;
         upgrades[def.id] = lv + 1;
+        if (s?.powerUpgrades) s.powerUpgrades[def.id] = upgrades[def.id];
         save();
         saveMissionsAndUpgrades();
         effects.play('upgrade');
@@ -1192,6 +1203,7 @@ function initFinalRunStageState(targetMap, targetStage, targetCharId, chosen) {
 
   s = fresh();
   s.level = playerLevel(profile.xp);
+  s.powerUpgrades = { ...upgrades };
   equipPowers(s, powersToEquip);
   s.enableForks = targetMap === 'itpark';
   s.map = targetMap;
@@ -1913,6 +1925,7 @@ function beginRun(chosen){
 
     s = fresh();
     s.level = playerLevel(profile.xp);
+    s.powerUpgrades = { ...upgrades };
     equipPowers(s, chosen);
     s.enableForks = targetMap === 'itpark';
     s.map = targetMap;
@@ -2013,9 +2026,7 @@ function completeFinalRun() {
   const deltaDist = Math.max(0, runDist - runReported.dist);
   const deltaCoins = Math.max(0, s.coins - runReported.coins);
   const deltaNear = Math.max(0, (s.nearMissCount || 0) - runReported.nearMiss);
-  const coinBoostPct = UPGRADE_DEFS[3].values[upgrades.coinBoost] || 0;
-  const deltaBonus = coinBoostPct > 0 ? Math.round(deltaCoins * (coinBoostPct / 100)) : 0;
-  if (deltaBonus > 0) totalCoins += deltaBonus;
+  const deltaBonus = 0;
   const bonusCoins = runReported.bonus + deltaBonus;
   runReported = { dist: runDist, coins: s.coins, nearMiss: s.nearMissCount || 0, bonus: bonusCoins };
   best = Math.max(best, runDist);
@@ -2047,9 +2058,7 @@ function crash(completed=false){
   const deltaDist = Math.max(0, runDist - runReported.dist);
   const deltaCoins = Math.max(0, s.coins - runReported.coins);
   const deltaNear = Math.max(0, (s.nearMissCount || 0) - runReported.nearMiss);
-  const coinBoostPct = UPGRADE_DEFS[3].values[upgrades.coinBoost] || 0;
-  const deltaBonus = coinBoostPct > 0 ? Math.round(deltaCoins * (coinBoostPct / 100)) : 0;
-  if (deltaBonus > 0) totalCoins += deltaBonus;
+  const deltaBonus = 0;
   const bonusCoins = runReported.bonus + deltaBonus;
   runReported = { dist: runDist, coins: s.coins, nearMiss: s.nearMissCount || 0, bonus: bonusCoins };
   best=Math.max(best, runDist);
@@ -2551,6 +2560,20 @@ function tick(t) {
     lastShoesSec = shoesSec;
     shoesPill.hidden = shoesSec <= 0;
     if (shoesSec > 0 && $('shoes-timer')) $('shoes-timer').textContent = shoesSec + 's';
+  }
+  const coins2xSec = s.doubleCoins > 0 ? Math.ceil(s.doubleCoins) : 0;
+  const coins2xPill = $('coins2x-pill');
+  if (coins2xPill && coins2xSec !== lastCoins2xSec) {
+    lastCoins2xSec = coins2xSec;
+    coins2xPill.hidden = coins2xSec <= 0;
+    if (coins2xSec > 0 && $('coins2x-timer')) $('coins2x-timer').textContent = coins2xSec + 's';
+  }
+  const ghostSec = s.ghost > 0 ? Math.ceil(s.ghost) : 0;
+  const ghostPill = $('ghost-pill');
+  if (ghostPill && ghostSec !== lastGhostSec) {
+    lastGhostSec = ghostSec;
+    ghostPill.hidden = ghostSec <= 0;
+    if (ghostSec > 0 && $('ghost-timer')) $('ghost-timer').textContent = ghostSec + 's';
   }
   const curCombo = (s.mode === 'running' && s.combo > 1 && s.comboTimer > 0) ? s.combo : 1;
   const comboPill = $('combo-pill');

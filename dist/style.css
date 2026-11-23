@@ -1194,6 +1194,18 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   border-color: #86efac;
   font-weight: 900;
 }
+.counters .power-pill.coins2x {
+  background: linear-gradient(135deg, #a16207, #eab308);
+  color: #fef9c3;
+  border-color: #fde047;
+  font-weight: 900;
+}
+.counters .power-pill.ghost {
+  background: linear-gradient(135deg, #4338ca, #6366f1);
+  color: #e0e7ff;
+  border-color: #a5b4fc;
+  font-weight: 900;
+}
 
 .hud-distance-box {
   position: static !important;
@@ -1683,7 +1695,8 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   border: 1px solid rgba(123,197,248,0.28);
 }
 .shop-item-meta { flex: 1; min-width: 0; }
-.shop-item-meta strong { display: block; font-size: 12px; font-weight: 900; color: #fff; }
+.shop-item-meta strong { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 900; color: #fff; }
+.shop-item-meta strong svg { flex: none; width: 18px; height: 18px; }
 .shop-item-meta small { display: block; font-size: 10px; color: #9ec8ee; margin-top: 2px; }
 .shop-bar-track { height: 6px; border-radius: 99px; background: #071326; margin-top: 6px; overflow: hidden; }
 .shop-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #38bdf8, #ffd754); }

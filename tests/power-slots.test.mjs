@@ -3,20 +3,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {fresh,availablePowers,equipPowers,usePower,step} from '../dist/engine.js';
 import {createPowerControls} from '../dist/power-controls.js';
-test('owned power slots are capped, independent, and recharge by distance from use',()=>{
+test('owned power slots are capped, independent, recharge by distance, and scale +2s per upgrade',()=>{
   const s=fresh(14);
   s.mode='running';
   assert.deepEqual(availablePowers(1),[]);
-  assert.ok(!availablePowers(50).includes('magnet')&&!availablePowers(50).includes('shield'),'magnet & shield are collectibles, not powers');
-  s.level=50;
+  assert.deepEqual(availablePowers(25),['shoes','doubleCoins','nitro','ghost']);
+  assert.ok(!availablePowers(25).includes('magnet')&&!availablePowers(25).includes('shield'),'magnet & shield are collectibles, not powers');
+  s.level=25;
+  s.powerUpgrades={nitro:2,doubleCoins:3};
   equipPowers(s,['nitro','magnet','nitro','shield','doubleCoins','slow']);
   assert.deepEqual(s.slots.map(slot=>slot.id),['nitro','doubleCoins']);
   s.distance=80;
   assert.ok(usePower(s,0));
-  assert.equal(s.nitro,10);
+  assert.equal(s.nitro,14,'Nitro at upgrade tier 2 lasts 10 + 2*2 = 14s');
   s.distance=250;
   assert.ok(usePower(s,1));
-  s.time+=10;
+  assert.equal(s.doubleCoins,16,'2x Coins at upgrade tier 3 lasts 10 + 3*2 = 16s');
+  s.time+=16;
   s.distance=1079.99;
   assert.equal(usePower(s,0),false);
   s.distance=1080;
@@ -26,15 +29,15 @@ test('owned power slots are capped, independent, and recharge by distance from u
   assert.ok(usePower(s,1));
   assert.equal(usePower(s,2),false);
 });
-test('every selected power lasts ten seconds of simulation; new routes contain coins but no power pickups',()=>{
-  for(const id of availablePowers(50)){
+test('every selected power lasts ten seconds base (and +2s per upgrade); new routes contain coins but no power pickups',()=>{
+  for(const id of availablePowers(25)){
     const s=fresh(14);
-    Object.assign(s,{level:50,mode:'running',next:40});
+    Object.assign(s,{level:25,mode:'running',next:40});
     equipPowers(s,[id]);
     assert.ok(usePower(s,0));
     step(s,.05);
     assert.ok(s.items.some(item=>item.type==='coin'));
-    assert.ok(!s.items.some(item=>availablePowers(50).includes(item.type)));
+    assert.ok(!s.items.some(item=>availablePowers(25).includes(item.type)));
     assert.equal(s.slots[0].until,10);
     const now=s.time;
     s.mode='paused';step(s,.1);
@@ -140,7 +143,7 @@ test('power wheel reveals slots only while holding POWER, activates strictly on 
   };
   try {
     const s = fresh(14);
-    s.level = 50;
+    s.level = 25;
     s.mode = 'running';
     equipPowers(s, ['nitro', 'doubleCoins']);
     const activated = [];
@@ -150,7 +153,7 @@ test('power wheel reveals slots only while holding POWER, activates strictly on 
     assert.equal(wheel.hidden, false);
     assert.equal(wheel.classList.contains('open'), false);
     assert.ok(slot0.innerHTML.includes('Nitro Rush'), 'Slot 1 should render its power name');
-    assert.ok(slot1.innerHTML.includes('Double Coins'), 'Slot 2 should render its power name');
+    assert.ok(slot1.innerHTML.includes('2x Coins'), 'Slot 2 should render its power name');
 
     // 1) Quick tap (down + up with no swipe) opens only while pressed, hides on release, activates nothing
     const downTap = makeEvent({ pointerId: 1, clientX: 300, clientY: 500 });

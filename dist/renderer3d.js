@@ -9,11 +9,11 @@ import {createCampus} from './campus-scene.js?v=3.8.0';
 import {createGrandfatherVillage,grandfatherObstacle} from './grandfather-scene.js?v=3.9.2';
 import {createVillageRoute} from './village-scene.js?v=3.9.2';
 import {createCollegeCampus} from './college-scene.js?v=3.8.0';
-import {createItParkCampus} from './itpark-scene.js?v=3.10.12';
+import {createItParkCampus} from './itpark-scene.js?v=3.10.13';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.8.0';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.8.0';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.10.12';
-import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.10.12';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.10.13';
+import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.10.13';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.8.0';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
@@ -50,7 +50,8 @@ export function createRenderer(canvas, callbacks = {}){
  };
  const preClass=classifyGpu(probedGpuName);
  // Keep WebGL precision at 'highp' because Three.js PBR D_GGX computes roughness^8 which underflows FP16 mediump (< 6.1e-5) into NaN black patches on glossy/wet roads!
- const wantAntialias=!isTouchDevice||gfxPref==='high'||(gfxPref==='auto'&&preClass.flagship);
+ // On mobile tile-based GPUs, render crisp high-DPR pixels (2.0x = 768x1664 on flagships) without 4x MSAA resolve bandwidth stalls!
+ const wantAntialias=!isTouchDevice;
  const wantPrecision='highp';
  let renderer;
  try{
@@ -134,7 +135,7 @@ export function createRenderer(canvas, callbacks = {}){
    if(activeTier==='ultra-low')return isTouchDevice?0.92:0.80;
    if(activeTier==='low')return isTouchDevice?1.05:0.90;
    if(activeTier==='med')return isTouchDevice?1.30:1.20;
-   return isTouchDevice?(isFlagshipGpu||gfxPref==='high'?2.25:1.75):2.0;
+   return isTouchDevice?(isFlagshipGpu||gfxPref==='high'?2.0:1.65):2.0;
  }
  function resize(){
    const {width,height}=canvas.getBoundingClientRect();
@@ -173,8 +174,8 @@ export function createRenderer(canvas, callbacks = {}){
    resize();
    renderer.toneMapping=low?T.NoToneMapping:T.ACESFilmicToneMapping;
    renderer.toneMappingExposure=low?1.0:1.22;
-   renderer.shadowMap.type=low||med?T.BasicShadowMap:T.PCFShadowMap;
-   const shadowSize=Math.min(isTouchDevice&&(low||med)?512:1024,maxBuffer);
+   renderer.shadowMap.type=(low||med||isTouchDevice)?T.BasicShadowMap:T.PCFShadowMap;
+   const shadowSize=Math.min(isTouchDevice?512:1024,maxBuffer);
    if(sun.shadow.mapSize.x!==shadowSize){
      sun.shadow.map?.dispose();
      sun.shadow.map=null;
@@ -556,7 +557,7 @@ export function createRenderer(canvas, callbacks = {}){
            applyQualityTier('med');
          }else if(activeTier==='med'&&!isLowHardware){
            applyQualityTier('high');
-         }else if(activeTier==='high'&&isFlagshipGpu&&dynamicDprCap>0&&dynamicDprCap<2.25){
+         }else if(activeTier==='high'&&isFlagshipGpu&&dynamicDprCap>0&&dynamicDprCap<2.0){
            applyQualityTier('high',0);
          }
        }
@@ -618,6 +619,38 @@ export function createRenderer(canvas, callbacks = {}){
    runnerBlobShadow.material.opacity=Math.max(0.22,0.85-liftH*0.25);
  }const rawChar=String(character||'male');const selectedKey=rawChar==='aged-elder'?'aged-elder':rawChar.startsWith('college-')?rawChar:(rawChar.includes('female')||rawChar.includes('woman'))?'female':'male';const altKey=selectedKey==='aged-elder'?'male':selectedKey==='college-woman'?'female':(selectedKey.startsWith('college-')?'male':`college-${selectedKey}`);const isFemaleMesh=selectedKey.includes('female')||selectedKey.includes('woman'),isCollegeBody=selectedKey.startsWith('college-')||s.map==='college';if(!heroModels[selectedKey]?.model)heroModels[selectedKey]?.(s,selectedKey,frameDt);const modelKey=onPodium?selectedKey:(heroModels[selectedKey]?.model?selectedKey:heroModels[altKey]?.model?altKey:selectedKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleMesh?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleMesh;cap.visible=!isFemaleMesh;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
  updateGuard(s,selectedModel?.model);
+ const ghostVisualRoot = selectedModel?.model || body;
+ if (ghostVisualRoot) {
+  const ghostOn = (s.ghost || 0) > 0 && s.mode === 'running';
+  if (ghostOn) {
+   const ghostAlpha = 0.24 + 0.12 * Math.sin((s.time || 0) * 12);
+   ghostVisualRoot.traverse?.(node => {
+    if (!node.isMesh || !node.material) return;
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    for (const m of mats) {
+     if (m.userData._ghostOrig === undefined) {
+      m.userData._ghostOrig = { transparent: m.transparent, opacity: m.opacity };
+     }
+     m.transparent = true;
+     m.opacity = ghostAlpha;
+    }
+   });
+   ghostVisualRoot.userData._ghostActive = true;
+  } else if (ghostVisualRoot.userData._ghostActive) {
+   ghostVisualRoot.traverse?.(node => {
+    if (!node.isMesh || !node.material) return;
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    for (const m of mats) {
+     if (m.userData._ghostOrig) {
+      m.transparent = m.userData._ghostOrig.transparent;
+      m.opacity = m.userData._ghostOrig.opacity;
+      delete m.userData._ghostOrig;
+     }
+    }
+   });
+   ghostVisualRoot.userData._ghostActive = false;
+  }
+ }
  visItems.length=0;activeItemSet.clear();
  if(!onPodium){
   const pk=ensurePickups();
@@ -669,8 +702,15 @@ export function createRenderer(canvas, callbacks = {}){
     if(!g)continue;
     itemPoolMap.set(o,g);
    }
-   if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;}
+   if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;g.userData._obsShadow=undefined;}
    g.visible=true;const cx=curveRelX(o.z,s),cy=curveRelY(o.z,s);const isFloat=PICKUP_TYPES.has(o.type);
+   if(isTouchDevice&&!scene.userData.lowEnd&&!isFloat){
+    const wantSh=z>-4&&z<42;
+    if(g.userData._obsShadow!==wantSh){
+     g.userData._obsShadow=wantSh;
+     g.traverse(n=>{if(n.isMesh&&n.userData._origCast===undefined)n.userData._origCast=n.castShadow;if(n.isMesh&&n.userData._origCast)n.castShadow=wantSh;});
+    }
+   }
    g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy+(o.lift||0),-z);
    g.rotation.y=isFloat?0:-Math.atan(curveSlopeAt(o.z,s));
    if(isFloat){
