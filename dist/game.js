@@ -1,6 +1,7 @@
 import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
-import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.13';
+import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.14';
+import {createTutorialGuide} from './tutorial-guide.js?v=3.10.14';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.13';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.13';
@@ -1159,7 +1160,16 @@ async function shareReportCard(runDist, runCoins, grade, closeCalls) {
   } catch {}
 }
 
-const powerControls = createPowerControls(() => s, index => usePower(s,index));
+const tutorialGuide = createTutorialGuide({
+  getState: () => s,
+  onNoticeToggle: open => { if (!open) menuNeedsFrame = true; },
+  onToast: msg => showCloseCallBanner(msg, false)
+});
+const powerControls = createPowerControls(
+  () => s,
+  index => { if (usePower(s, index)) tutorialGuide.onPowerInteract(); },
+  () => tutorialGuide.onPowerInteract()
+);
 function refreshPowerSettings(){
   const el=$('settings-powers-current');if(!el)return;
   const ids=availablePowers(playerLevel(profile.xp));
@@ -1964,6 +1974,7 @@ function beginRun(chosen){
     $('toast').textContent = targetMap === 'finalrun' ? `Village road · Reach the school at ${FINALRUN_GATE.toLocaleString()}m` : targetMap === 'itpark' ? 'IT Park · Follow the shuttle roof ramp' : targetMap === 'college' ? 'College rush · Find the next roof ramp' : 'School rush · Find the next roof ramp';
     runLoadingActive = false;
     hideRunLoadingVeilSmooth();
+    tutorialGuide.startRun(s);
     if (sound) effects.startBgm?.('default');
     else effects.setBgmTrack?.('default');
     if (targetMap !== 'finalrun') effects.play('swag');
@@ -2228,8 +2239,11 @@ function input(a){
   if(runLoadingActive || collegeIntroActive || finalIntroActive)return;
   const before=[s.jump,s.slide,s.roll,s.drop,s.lane];
   action(s,a);
-  if(s.mode==='running'&&(s.jump!==before[0]||s.slide!==before[1]||s.roll!==before[2]||s.drop!==before[3]||s.lane!==before[4]))
-    effects.play(a==='jump'?'jump':a==='slide'?'slide':'lane');
+  if(s.mode==='running'){
+    tutorialGuide.onAction(a);
+    if(s.jump!==before[0]||s.slide!==before[1]||s.roll!==before[2]||s.drop!==before[3]||s.lane!==before[4])
+      effects.play(a==='jump'?'jump':a==='slide'?'slide':'lane');
+  }
 }
 
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointerdown',e=>{
@@ -2343,6 +2357,7 @@ function tick(t) {
     s.mode='finished';
   }
   powerControls.update();
+  tutorialGuide.update(s);
   try { effects.update(s, character); } catch (err) { if (!loopErrorLogged) { loopErrorLogged = true; console.error('Sound update error:', err); } }
   
   if(old==='running' && s.mode==='falling') {
@@ -2611,7 +2626,7 @@ function tick(t) {
 
   // Pause 3D WebGL rendering completely while static modal dialogs (Name/Shop modals) are open
   // (after warming up 1 ready frame behind the name modal so clicking Start Adventure is 0ms instant)
-  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden) || (shopModalEl && !shopModalEl.hidden));
+  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden) || (shopModalEl && !shopModalEl.hidden) || tutorialGuide.isNoticeOpen());
   if (staticOverlayOpen && assetsReady && warmedFirstFrame) {
     if (!menuNeedsFrame) return;
     menuNeedsFrame = false;

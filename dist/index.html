@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.10.13">
+  <link rel="stylesheet" href="style.css?v=3.10.14">
 </head>
 <body>
 <header>
@@ -179,10 +179,15 @@
         <div class="select-brand">
           <img src="assets/lmsk-logo.jpg" alt="LMSK LifeRush" class="select-logo-img">
         </div>
-        <button type="button" id="btn-open-shop" class="btn-missions-shop" aria-label="Daily Missions and Upgrades Shop">
-          <span><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v2c0 .55.45 1 1 1s1-.45 1-1V8h2v12z"/></svg> Missions &amp; Shop</span>
-          <span id="shop-badge-dot" class="shop-badge-dot" hidden></span>
-        </button>
+        <div class="select-left-actions">
+          <button type="button" id="btn-open-shop" class="btn-missions-shop" aria-label="Daily Missions and Upgrades Shop">
+            <span><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v2c0 .55.45 1 1 1s1-.45 1-1V8h2v12z"/></svg> Missions &amp; Shop</span>
+            <span id="shop-badge-dot" class="shop-badge-dot" hidden></span>
+          </button>
+          <button type="button" id="btn-open-howto" class="btn-howto-board" aria-label="How to Play Notice Board">
+            <span><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> How to Play</span>
+          </button>
+        </div>
       </div>
 
       <div class="hub-top-right">
@@ -256,6 +261,10 @@
         <div class="power-settings">
           <div class="power-settings-text"><strong><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="#ffd754" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg> Your 2 Powers</strong><small id="settings-powers-current">Pick 2 on your first run</small></div>
           <button type="button" id="btn-change-powers">Change</button>
+        </div>
+        <div class="power-settings">
+          <div class="power-settings-text"><strong><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="#38bdf8" aria-hidden="true"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> How to Play</strong><small>Controls notice board &amp; tutorial</small></div>
+          <button type="button" id="btn-settings-howto">Open</button>
         </div>
         <div class="gfx-settings">
           <div class="gfx-settings-head">
@@ -347,6 +356,69 @@
       </div>
     </div>
 
+    <!-- HOW TO PLAY NOTICE BOARD MODAL -->
+    <div id="howto-modal" class="howto-modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="howto-board-title">
+      <div class="howto-board-card">
+        <span class="notice-pin pin-left" aria-hidden="true"></span>
+        <span class="notice-pin pin-right" aria-hidden="true"></span>
+        <div class="howto-board-head">
+          <div>
+            <div class="howto-board-tag">CAMPUS NOTICE BOARD</div>
+            <h2 id="howto-board-title" class="howto-board-title">HOW TO PLAY</h2>
+          </div>
+          <button type="button" id="btn-close-howto" class="shop-close-btn" aria-label="Close How to Play Notice Board"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="howto-board-scroll">
+          <div class="notice-card">
+            <div class="notice-card-title">CONTROLS &amp; MOVES</div>
+            <div class="notice-controls-grid">
+              <div class="notice-ctrl-item"><b>← / →</b><span>Swipe left or right to switch lanes</span></div>
+              <div class="notice-ctrl-item"><b>↑ JUMP</b><span>Swipe up to jump barriers &amp; climb bus roofs</span></div>
+              <div class="notice-ctrl-item"><b>↓ · 2× ↓</b><span>Swipe down to slide · Double-swipe down to roll</span></div>
+              <div class="notice-ctrl-item"><b>HOLD POWER</b><span>Hold POWER &amp; swipe ↑ or ← · Release to hide</span></div>
+            </div>
+          </div>
+
+          <div class="notice-card">
+            <div class="notice-card-title">4 POWERS · MAX LEVEL 25</div>
+            <div class="notice-powers-list">
+              <div class="notice-power-row"><span class="np-lv">Lv 10</span><strong>Super Jump Shoes</strong><small>Higher jumps</small></div>
+              <div class="notice-power-row"><span class="np-lv">Lv 15</span><strong>2x Coins</strong><small>Double coin gain</small></div>
+              <div class="notice-power-row"><span class="np-lv">Lv 20</span><strong>Nitro Rush</strong><small>Smash through</small></div>
+              <div class="notice-power-row"><span class="np-lv">Lv 25</span><strong>Invisible</strong><small>Phase through all</small></div>
+            </div>
+            <p class="notice-foot-note">Upgrade any power in <b>Missions &amp; Shop</b> with Coins: <b>+2s</b> per upgrade (10s to 20s).</p>
+          </div>
+
+          <div class="notice-card">
+            <div class="notice-card-title">IT PARK ROAD SPLITS &amp; TIPS</div>
+            <ul class="notice-tips-list">
+              <li><b>Road Fork:</b> Steer <b>LEFT</b> for the Glass Bridge over the sea, or <b>RIGHT</b> for the Metro Rail Tunnel (<b>2x Coins</b>).</li>
+              <li><b>Road Pickups:</b> Grab <b>Magnet</b> to pull coins and <b>Shield</b> for 1-hit protection.</li>
+              <li><b>Chase Rule:</b> Survive cleanly after 1 hit to shake the chaser; past 10,000m one hit ends the run.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="howto-board-actions">
+          <button type="button" id="btn-replay-tutorial" class="btn-howto-replay">Replay Tutorial</button>
+          <button type="button" id="btn-howto-gotit" class="btn-howto-gotit">GOT IT!</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIRST-RUN INTERACTIVE GESTURE TUTORIAL CUE (NON-BLOCKING) -->
+    <div id="run-tutorial-banner" class="run-tutorial-banner" hidden aria-live="polite">
+      <div class="tut-icon" id="tut-icon" aria-hidden="true"></div>
+      <div class="tut-copy">
+        <div class="tut-head">
+          <span class="tut-step-badge" id="tut-step-badge">1 / 4</span>
+          <strong id="tut-title">SWIPE LEFT OR RIGHT</strong>
+        </div>
+        <small id="tut-desc">Switch lanes to dodge buses &amp; barriers</small>
+      </div>
+      <button type="button" id="btn-tut-skip" class="btn-tut-skip">Skip</button>
+    </div>
+
     <!-- PAUSE / GAME OVER REPORT CARD OVERLAY -->
     <div id="overlay" class="overlay" hidden>
       <div class="panel">
@@ -429,6 +501,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.10.13"></script>
+<script type="module" src="boot.js?v=3.10.14"></script>
 </body>
 </html>

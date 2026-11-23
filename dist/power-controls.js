@@ -20,7 +20,7 @@ function save(ids) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(ids.slice(0,2))); } catch {}
 }
 
-export function createPowerControls(state,activate) {
+export function createPowerControls(state,activate,onHold) {
   const get = id => document.getElementById(id);
   const dialog = get('power-picker'), options = get('power-options'), confirm = get('confirm-powers');
   const title = get('power-title'), hint = get('power-hint');
@@ -173,6 +173,7 @@ export function createPowerControls(state,activate) {
       window.addEventListener('pointercancel', handleCancel);
     }
     wheel.classList.add('open');
+    onHold?.();
   };
   trigger.onpointermove = handleMove;
   trigger.onpointerup = handleUp;
