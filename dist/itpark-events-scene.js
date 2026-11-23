@@ -2250,7 +2250,7 @@ export function createRoadEventsScene(scene) {
           marker.rotation.set(0, rotY, 0);
           marker.scale.set(1, 1, length / BAY_LEN);
           marker.updateMatrix();
-          if (relZ > 335 || relZ < -42) continue;
+          if (relZ > (scene.userData?.lowEnd ? 205 : 335) || relZ < -42) continue;
           for (const inst of skyDeckInsts) inst.setMatrixAt(deckCount, marker.matrix);
           deckCount++;
           if ((bayCenter <= plan.start + COAST_SHORE_LEN) || (bayCenter >= plan.end - COAST_SHORE_LEN)) {
@@ -2390,19 +2390,21 @@ export function createRoadEventsScene(scene) {
       islandLeft.position.z = -195 + bayProg * 28;
       lighthouseBeacon.rotation.y = t * 0.85;
 
-      // Real wind sway animation for all instanced island trees (4 draw calls total vs 44!)
-      for (const batch of islandTreeBatches) {
-        const { inst, specs } = batch;
-        for (let idx = 0; idx < specs.length; idx++) {
-          const sp = specs[idx];
-          const wind = Math.sin(t * 2.2 + sp.seed) * 0.045 + Math.cos(t * 1.5 + sp.seed * 1.8) * 0.022;
-          skyDummy.position.set(sp.x, sp.y, sp.z);
-          skyDummy.rotation.set(Math.sin(t * 1.8 + sp.seed * 1.2) * 0.028, 0, wind);
-          skyDummy.scale.set(sp.width, sp.height, sp.width);
-          skyDummy.updateMatrix();
-          inst.setMatrixAt(idx, skyDummy.matrix);
+      // Real wind sway animation for all instanced island trees (throttled on low-end phones to cut matrix uploads by 66%!)
+      if (!scene.userData?.lowEnd || Math.floor(t * 20) % 3 === 0) {
+        for (const batch of islandTreeBatches) {
+          const { inst, specs } = batch;
+          for (let idx = 0; idx < specs.length; idx++) {
+            const sp = specs[idx];
+            const wind = Math.sin(t * 2.2 + sp.seed) * 0.045 + Math.cos(t * 1.5 + sp.seed * 1.8) * 0.022;
+            skyDummy.position.set(sp.x, sp.y, sp.z);
+            skyDummy.rotation.set(Math.sin(t * 1.8 + sp.seed * 1.2) * 0.028, 0, wind);
+            skyDummy.scale.set(sp.width, sp.height, sp.width);
+            skyDummy.updateMatrix();
+            inst.setMatrixAt(idx, skyDummy.matrix);
+          }
+          inst.instanceMatrix.needsUpdate = true;
         }
-        inst.instanceMatrix.needsUpdate = true;
       }
       // Breathing foam surf along island shorelines
       const foamPulse = 1 + Math.sin(t * 1.8) * 0.06;

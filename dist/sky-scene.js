@@ -227,7 +227,8 @@ export function createSky(scene,sun,ambient){
   const sunFactor=isPark ? (1 - stormDark * 0.85) : (weather.sun??(1-weather.rain));
   sun.color.copy(white).lerp(warm,lowSun).lerp(moonlight,effNight);
   sun.intensity=isPark ? (flashFlicker ? 4.2 : Math.max(0.35, 3.35 - stormDark * 2.85)) : Math.max(0.8,3.35-night*1.95-(1-sunFactor)*1.95);
-  ambient.intensity=isPark ? (flashFlicker ? 3.6 : Math.max(0.65, 1.85 - stormDark * 1.15)) : (1.82-night*.88+weather.rain*.22+(isCollege&&sunFactor>.5?.2:0));
+  const lowEndGfx = Boolean(scene.userData?.lowEnd);
+  ambient.intensity=(isPark ? (flashFlicker ? 3.6 : Math.max(0.65, 1.85 - stormDark * 1.15)) : (1.82-night*.88+weather.rain*.22+(isCollege&&sunFactor>.5?.2:0))) + (lowEndGfx ? 0.34 : 0);
   const isNight=!isPark&&night>=.45;
   const sunActive=isPark ? (stormDark < 0.85) : (!isNight&&(weather.rain<.65||(weather.sun||0)>.35));
   disc.visible=sunActive;halo.visible=sunActive;
@@ -238,7 +239,13 @@ export function createSky(scene,sun,ambient){
   }else{
     disc.position.set(0,-500,-220);halo.position.set(0,-500,-220);
   }
-  if(scene.fog){scene.fog.near=isPark ? (flashFlicker ? 160 : 120 - stormDark * 40) : (150-50*weather.rain);scene.fog.far=isPark ? (flashFlicker ? 380 : 270 - stormDark * 70) : (325-85*weather.rain);}
+  if(scene.fog){
+    const fogFarMax = lowEndGfx ? 198 : 325;
+    const baseNear = isPark ? (flashFlicker ? 160 : 120 - stormDark * 40) : (150-50*weather.rain);
+    const baseFar = isPark ? (flashFlicker ? 380 : 270 - stormDark * 70) : (325-85*weather.rain);
+    scene.fog.near = lowEndGfx ? Math.min(baseNear, 86) : baseNear;
+    scene.fog.far = lowEndGfx ? Math.min(baseFar, fogFarMax) : baseFar;
+  }
   moon.visible=isNight;
   if(moon.visible){
     moon.position.set(58-phase*90,54,-210);
@@ -248,6 +255,8 @@ export function createSky(scene,sun,ambient){
   }
   stars.visible=isNight;stars.material.opacity=night*.9;stars.rotation.z=-s.time*.002;
   clouds.forEach((g,i)=>{
+    g.visible=!lowEndGfx||i<8;
+    if(!g.visible)return;
     g.position.set(cloudX(i,s.time)*1.45,25+i%4*5,-135-i%3*32);
     const shadowWeight=isPark ? (stormDark * 0.95) : Math.max(night*.75,weather.rain*.8*(1-(weather.rainbow||0)*.75));
     g.material.color.set('#ffffff').lerp(cloudShadow,shadowWeight);

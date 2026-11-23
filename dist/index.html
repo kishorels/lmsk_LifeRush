@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.8.3">
+  <link rel="stylesheet" href="style.css?v=3.9.0">
 </head>
 <body>
 <header>
@@ -254,6 +254,18 @@
           <div class="power-settings-text"><strong><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="#ffd754" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg> Your 2 Powers</strong><small id="settings-powers-current">Pick 2 on your first run</small></div>
           <button type="button" id="btn-change-powers">Change</button>
         </div>
+        <div class="gfx-settings">
+          <div class="gfx-settings-head">
+            <strong>Graphics Quality</strong>
+            <small id="gfx-quality-hint">Auto · Smooth 60 FPS for your phone</small>
+          </div>
+          <div class="gfx-pills" role="group" aria-label="Graphics quality">
+            <button type="button" class="gfx-pill selected" data-gfx="auto" aria-pressed="true">AUTO</button>
+            <button type="button" class="gfx-pill" data-gfx="low" aria-pressed="false">LOW</button>
+            <button type="button" class="gfx-pill" data-gfx="med" aria-pressed="false">MED</button>
+            <button type="button" class="gfx-pill" data-gfx="high" aria-pressed="false">HIGH</button>
+          </div>
+        </div>
         <h2>Sound settings</h2>
         <p>Set each sound to the level you like.</p>
         <div class="sound-sliders">
@@ -414,6 +426,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.8.3"></script>
+<script type="module" src="boot.js?v=3.9.0"></script>
 </body>
 </html>

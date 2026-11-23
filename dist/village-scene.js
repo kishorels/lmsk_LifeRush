@@ -260,12 +260,16 @@ export function createVillageRoute(scene) {
   return state=>{
     root.visible=state.map==='finalrun';
     if(!root.visible)return;
+    const activeCount=scene.userData?.lowEnd?5:VISIBLE_SECTIONS;
     clock.value=state.time;
     const weather=sceneWeather(state);
     for(const mat of tintMaterials)mat.color.copy(day).lerp(night,weather.night*.75);
     const first=Math.floor(state.distance/LENGTH)-1;
-    for(let index=first;index<first+VISIBLE_SECTIONS;index++){
-      const slot=(index+VISIBLE_SECTIONS)%VISIBLE_SECTIONS;
+    for(let sIdx=0;sIdx<VISIBLE_SECTIONS;sIdx++){
+      if(sections[sIdx])sections[sIdx].visible=false;
+    }
+    for(let index=first;index<first+activeCount;index++){
+      const slot=((index%VISIBLE_SECTIONS)+VISIBLE_SECTIONS)%VISIBLE_SECTIONS;
       let group=sections[slot];
       if(!group||group.userData.index!==index){
         if(group){
@@ -278,6 +282,7 @@ export function createVillageRoute(scene) {
         group=sections[slot]=section(index);
         group.userData.index=index;
       }
+      group.visible=true;
       group.position.set(-roadCurveX(state.distance,'finalrun'),0,state.distance-index*LENGTH);
       for(const mesh of group.children){
         const cow=mesh.userData.cow;

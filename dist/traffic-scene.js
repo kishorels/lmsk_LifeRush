@@ -61,8 +61,10 @@ export function createTraffic(scene) {
   const onCave=s.activeBranch==='underpass';
   if(s.runSeed!==lastSeed||lastMap!==map){for(const g of parked.values())scene.remove(g);for(const g of moving.values())scene.remove(g);parked.clear();moving.clear();vanPool.clear();movingPool.clear();lastSeed=s.runSeed;lastMap=map;}
   const visible=new Set();
+  const trafficFar=scene.userData?.trafficFar||295;
+  const lowEnd=Boolean(scene.userData?.lowEnd);
   for(const v of (map==='grandfather' ? [] : repeatedVans(s.distance,s.runSeed))) {
-   if(v.ramp>s.distance+295||v.front<s.distance-15)continue;
+   if(v.ramp>s.distance+trafficFar||v.front<s.distance-15)continue;
    if((s.map==='finalrun'||s.isFinalRun)&&v.ramp>=FINALRUN_GATE-85)continue;
    const vanInCave=onCave&&v.rear>=s.branchStart-4&&v.rear<s.branchEnd;
    const vanKey=`${map}:${vanInCave}:${v.front-v.rear}:${v.roof}:${v.rear-v.ramp}`;
@@ -85,7 +87,7 @@ export function createTraffic(scene) {
    if(o.cleared||o.type!=='bus')continue;
    // Pending encounter buses/trains smoothly drive in from 345m horizon instead of popping in at trigger!
    const visZ=(o.encounter&&!o.started)?(o.trigger+(runSpd+(o.velocity||0))*1.45+(o.velocity||0)*Math.max(0,(o.trigger-s.distance)/runSpd)):o.z;
-   if(visZ-s.distance>295||visZ+(o.length||12)<s.distance-12)continue;
+   if(visZ-s.distance>trafficFar||visZ+(o.length||12)<s.distance-12)continue;
    live.add(o);
    // Pick the paint/model once. Travel changes z every frame, while a fork can
    // legitimately change the same vehicle into a different-sized train.
@@ -107,7 +109,7 @@ export function createTraffic(scene) {
      return m;
     });
     moving.set(o,model);
-   }const g=moving.get(o);g.position.set(o.lane*2.2+curveRelX(visZ,s),.09+curveRelY(visZ,s),s.distance-visZ);g.rotation.y=-Math.atan(curveSlopeAt(visZ,s));g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);spinCoin(c,s.time,i,o.roof+.6);});}
+   }const g=moving.get(o);g.position.set(o.lane*2.2+curveRelX(visZ,s),.09+curveRelY(visZ,s),s.distance-visZ);g.rotation.y=-Math.atan(curveSlopeAt(visZ,s));if(!lowEnd||visZ-s.distance<95)g.userData.wheels.forEach(w=>w.rotation.x=-s.time*(o.velocity||18)/.35);g.userData.coins?.forEach((c,i)=>{c.visible=!s.collected.includes(o.id+':'+i);if(c.visible&&(!lowEnd||visZ-s.distance<95))spinCoin(c,s.time,i,o.roof+.6);});}
   for(const [o,g]of moving)if(!live.has(o)){releasePool(movingPool,g);moving.delete(o);}
  };
 }

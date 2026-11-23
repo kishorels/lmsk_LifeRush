@@ -1,18 +1,18 @@
 import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
 import {createPickupModels,makeCoin} from './pickup-models.js?v=3.8.0';
 import {createGuardEffect} from './guard-effect.js?v=3.4.8';
-import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.8.0';
+import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.9.0';
 import {createSideTraffic,buildSideVehicle} from './side-vehicles.js?v=3.8.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.8.0';
+import {createSky} from './sky-scene.js?v=3.9.0';
 import {createCampus} from './campus-scene.js?v=3.8.0';
-import {createVillageRoute} from './village-scene.js?v=3.8.1';
+import {createVillageRoute} from './village-scene.js?v=3.9.0';
 import {createCollegeCampus} from './college-scene.js?v=3.8.0';
 import {createItParkCampus} from './itpark-scene.js?v=3.8.0';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.8.0';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.8.0';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.8.1';
-import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.8.0';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.9.0';
+import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.9.0';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.8.0';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
@@ -20,14 +20,25 @@ import {loadChaserModel} from './chaser-model.js?v=3.8.0';
 import {loadRunnerModel} from './runner-model.js?v=3.8.0';
 import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.6.8';
 export function createRenderer(canvas, callbacks = {}){
+ const isTouchDevice=typeof navigator!=='undefined'&&(navigator.maxTouchPoints>0||(typeof window!=='undefined'&&'ontouchstart' in window));
+ const dpr=typeof window!=='undefined'?(window.devicePixelRatio||1):1;
+ const memGb=typeof navigator!=='undefined'?Number(navigator.deviceMemory||0):0;
+ const cores=typeof navigator!=='undefined'?Number(navigator.hardwareConcurrency||0):0;
+ let gfxPref=callbacks?.graphicsQuality||'auto';
+ if(!callbacks?.graphicsQuality&&typeof localStorage!=='undefined'){
+   try{const saved=localStorage.getItem('runverse-gfx');if(['auto','low','med','high'].includes(saved))gfxPref=saved;}catch{}
+ }
+ // On mobile touch screens, disabling 4x MSAA + using mediump (FP16) doubles GPU fragment throughput & slashes bandwidth!
+ const wantAntialias=!isTouchDevice||gfxPref==='high';
+ const wantPrecision=(!isTouchDevice||gfxPref==='high')?'highp':'mediump';
  let renderer;
  try{
    renderer=new T.WebGLRenderer({
      canvas,
-     antialias:true,
+     antialias:wantAntialias,
      alpha:false,
      powerPreference:'high-performance',
-     precision:'highp',
+     precision:wantPrecision,
      stencil:false
    });
  }catch{
@@ -35,23 +46,29 @@ export function createRenderer(canvas, callbacks = {}){
  }
  const gl=renderer.getContext?.();if(gl&&typeof gl.isContextLost==='function'&&gl.isContextLost())throw new Error('WebGL context lost');
  let contextLost=false;canvas.addEventListener?.('webglcontextlost',()=>{contextLost=true;},false);canvas.addEventListener?.('webglcontextrestored',()=>{contextLost=false;},false);
- const isTouchDevice=typeof navigator!=='undefined'&&(navigator.maxTouchPoints>0||(typeof window!=='undefined'&&'ontouchstart' in window));
- const dpr=typeof window!=='undefined'?(window.devicePixelRatio||1):1;
- // High-DPI balanced pixel ratio: 1.5 on mobile touch screens, 2.0 on desktop
- // DPR 1.5 renders at ~618x1372 (over 850k pixels) on modern phones with WebGL MSAA (antialias: true).
- // This delivers tack-sharp 1080p Retina clarity with 0 blur, while slashing fragment shading load by 44% compared to DPR 2.0!
- const maxDpr = isTouchDevice ? 1.5 : 1.75;
- renderer.setPixelRatio(Math.min(dpr, maxDpr));
- renderer.shadowMap.enabled=true;
- renderer.shadowMap.type=T.PCFShadowMap;
+ // Probe mobile GPU renderer name to auto-detect entry-level / budget Android GPUs (Adreno 610/5xx, Mali-G52/G57/G72/T8xx, PowerVR).
+ let isBudgetGpu=false;
+ if(isTouchDevice&&gl&&typeof gl.getExtension==='function'){
+   try{
+     const dbg=gl.getExtension('WEBGL_debug_renderer_info');
+     const gpuName=dbg?String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)||''):'';
+     isBudgetGpu=/adreno[^0-9]*(?:[2345]\d\d|61\d|70\d)|mali-(?:t|g3|g5|g61|g71|g72|g76)|powervr|img\b|swiftshader|llvmpipe/i.test(gpuName);
+   }catch{}
+ }
+ const isLowHardware=isTouchDevice&&(isBudgetGpu||(memGb>0&&memGb<=4)||(cores>0&&cores<=6));
+ let activeTier=gfxPref!=='auto'?gfxPref:(isLowHardware?'low':isTouchDevice?'med':'high');
+ let obsFar=280,coinFar=175,glintFar=48,coinBurstCount=5,activeDpr=1,camFarDist=375;
+ const scene=new T.Scene();scene.background=new T.Color('#64d6ff');scene.fog=new T.Fog('#78dcff',150,325);
+ scene.userData.lowEnd=(activeTier==='low');
+ scene.userData.trafficFar=(activeTier==='low'?175:activeTier==='med'?230:295);
+ renderer.shadowMap.enabled=(activeTier!=='low');
+ renderer.shadowMap.type=(activeTier==='high'?T.PCFShadowMap:T.BasicShadowMap);
  renderer.outputColorSpace=T.SRGBColorSpace;
  renderer.toneMapping=T.ACESFilmicToneMapping;
  renderer.toneMappingExposure=1.22;
- const scene=new T.Scene();scene.background=new T.Color('#64d6ff');scene.fog=new T.Fog('#78dcff',150,325);
  const camera=new T.PerspectiveCamera(57,1,.1,375);camera.position.set(0,1.52,3.65);camera.lookAt(0,.98,0);
  const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);
- const sun=new T.DirectionalLight(0xfff4d6,3.65);sun.position.set(-15,26,15);sun.castShadow=true;
- // 512x512 on mobile cuts shadow depth fill-rate by 75% while staying sharp across the tight 24m frustum.
+ const sun=new T.DirectionalLight(0xfff4d6,3.65);sun.position.set(-15,26,15);sun.castShadow=(activeTier!=='low');
  const smSize = isTouchDevice ? 512 : 1024;
  sun.shadow.mapSize.set(smSize, smSize);
  Object.assign(sun.shadow.camera,{left:-12,right:12,top:14,bottom:-18,near:4,far:52});
@@ -61,7 +78,35 @@ export function createRenderer(canvas, callbacks = {}){
  function mesh(g,c,parent,x,y,z,sx=1,sy=1,sz=1,shadow=false){const m=new T.Mesh(g,mat(c));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=shadow;m.receiveShadow=true;parent.add(m);return m;}
  const box=(p,c,x,y,z,sx,sy,sz,sh=false)=>mesh(cube,c,p,x,y,z,sx,sy,sz,sh);
  const ball=(p,c,x,y,z,sx,sy=sx,sz=sx,sh=false)=>mesh(sphere,c,p,x,y,z,sx,sy,sz,sh);
- const updateStreet=streetSurfaces(scene,box);
+ const updateStreet=streetSurfaces(scene,box,{lowEnd:activeTier==='low'});
+ // Ultra-fast 1-draw-call soft contact blob shadow under the runner when real-time shadow maps are off on low-end phones.
+ let blobTex=null;
+ if(typeof document!=='undefined'){
+   const bc=document.createElement('canvas');bc.width=64;bc.height=64;const bctx=bc.getContext('2d');
+   if(bctx){const gr=bctx.createRadialGradient(32,32,4,32,32,30);gr.addColorStop(0,'rgba(8,16,32,0.55)');gr.addColorStop(0.55,'rgba(8,16,32,0.28)');gr.addColorStop(1,'rgba(8,16,32,0)');bctx.fillStyle=gr;bctx.fillRect(0,0,64,64);blobTex=new T.CanvasTexture(bc);}
+ }
+ const runnerBlobShadow=new T.Mesh(new T.PlaneGeometry(1.15,1.45),new T.MeshBasicMaterial({map:blobTex,color:0x000000,transparent:true,opacity:0.85,depthWrite:false}));
+ runnerBlobShadow.rotation.x=-Math.PI/2;runnerBlobShadow.position.set(0,0.125,0);runnerBlobShadow.visible=(activeTier==='low');
+ scene.add(runnerBlobShadow);
+ function applyQualityTier(tier, customDpr = 0){
+   activeTier=tier;
+   const low=(tier==='low'), med=(tier==='med');
+   scene.userData.lowEnd=low;
+   scene.userData.trafficFar=low?175:med?230:295;
+   obsFar=low?165:med?215:280;
+   coinFar=low?72:med?92:(isTouchDevice?110:175);
+   glintFar=low?0:med?20:(isTouchDevice?28:48);
+   coinBurstCount=low?2:med?3:5;
+   camFarDist=low?210:med?275:375;
+   const targetDpr=customDpr>0?customDpr:(low?Math.min(dpr,0.85):med?Math.min(dpr,1.10):Math.min(dpr,isTouchDevice?1.45:1.75));
+   if(Math.abs(targetDpr-activeDpr)>0.01){activeDpr=targetDpr;renderer.setPixelRatio(activeDpr);}
+   renderer.shadowMap.enabled=!low;
+   sun.castShadow=!low;
+   runnerBlobShadow.visible=low;
+   if(scene.userData.envMap){scene.environment=low?null:scene.userData.envMap;}
+   if(camera.far!==camFarDist){camera.far=camFarDist;camera.updateProjectionMatrix();}
+ }
+ applyQualityTier(activeTier);
  let updateCampus=null;
  let updateVillage=null;
  let updateCollege=null;
@@ -378,14 +423,31 @@ export function createRenderer(canvas, callbacks = {}){
  // Use the actual 3D Dark Gold & Crimson-Red coin model (makeCoin / mantis-flip-coin.glb) for collected-coin burst particles
  const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=makeCoin(scene,0,0,0);m.scale.setScalar(.55);m.visible=false;particles.push({m,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(11+i%5*1.8),tilt:(i%3-1)*.16});}let trackCameraY=0,total=0,lastTime=0,burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null,lastCanvasW=0,lastCanvasH=0,baseFov=64;
  function resize(){const r=canvas.getBoundingClientRect();const rw=Math.round(r.width),rh=Math.round(r.height);if(!rw||!rh||(rw===lastCanvasW&&rh===lastCanvasH))return;lastCanvasW=rw;lastCanvasH=rh;renderer.setSize(rw,rh,false);camera.aspect=rw/rh;baseFov=rw/rh<.8?64:58;camera.fov=baseFov;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(canvas);resize();
+ let perfFrames=0,perfTime=0,slowWindows=0;
  const renderFn=function render(s,character,frameDt){if(contextLost||renderer.getContext?.()?.isContextLost?.())return 'context-lost';stage.restore();capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
+ // Adaptive FPS Auto-Scaler on mobile ('auto' mode): if FPS drops below ~40 FPS on any phone, automatically step down resolution & shadows!
+ if(isTouchDevice&&gfxPref==='auto'&&s.mode==='running'&&frameDt>0.004&&frameDt<0.25){
+   perfFrames++;perfTime+=frameDt;
+   if(perfFrames>=45){
+     const avgDt=perfTime/perfFrames;
+     perfFrames=0;perfTime=0;
+     if(avgDt>0.025){
+       slowWindows++;
+       if(slowWindows>=2){
+         slowWindows=0;
+         if(activeTier!=='low'){applyQualityTier('low');}
+         else if(activeDpr>0.68){applyQualityTier('low',Math.max(0.65,activeDpr-0.12));}
+       }
+     }else{slowWindows=0;}
+   }
+ }
  const onPodium=s.mode==='ready'||s.mode==='select';
  const podiumChanged=onPodium!==lastOnPodium;
  if(podiumChanged){
    lastOnPodium=onPodium;
-   // Keep sun.castShadow permanently enabled so pressing LET'S RUN NEVER triggers a scene-wide USE_SHADOWMAP shader recompile!
-   sun.castShadow=true;
-   camera.far=375;
+   // Keep sun.castShadow consistent with active graphics tier so pressing LET'S RUN NEVER forces a shader recompile!
+   sun.castShadow=(activeTier!=='low');
+   camera.far=camFarDist;
    camera.updateProjectionMatrix();
    if(onPodium){
      trackCameraY=0;
@@ -420,19 +482,24 @@ export function createRenderer(canvas, callbacks = {}){
  podium.position.set(0,.09,s.distance);
  podium.visible=onPodium;
  const fallRecoil = s.mode==='falling' ? Math.sin(Math.min(1,(1-s.fall/FALL_DURATION)/.38)*Math.PI)*.45 : 0;
- runner.position.set(s.x*2.2,height(s)+(onPodium?.04:0),fallRecoil);const rawChar=String(character||'male');const selectedKey=rawChar==='aged-elder'?'aged-elder':rawChar.startsWith('college-')?rawChar:(rawChar.includes('female')||rawChar.includes('woman'))?'female':'male';const altKey=selectedKey==='aged-elder'?'male':selectedKey==='college-woman'?'female':(selectedKey.startsWith('college-')?'male':`college-${selectedKey}`);const isFemaleMesh=selectedKey.includes('female')||selectedKey.includes('woman'),isCollegeBody=selectedKey.startsWith('college-')||s.map==='college';if(!heroModels[selectedKey]?.model)heroModels[selectedKey]?.(s,selectedKey,frameDt);const modelKey=onPodium?selectedKey:(heroModels[selectedKey]?.model?selectedKey:heroModels[altKey]?.model?altKey:selectedKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleMesh?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleMesh;cap.visible=!isFemaleMesh;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
+ runner.position.set(s.x*2.2,height(s)+(onPodium?.04:0),fallRecoil);
+ if(runnerBlobShadow.visible){
+   const liftH=Math.max(0,height(s)-s.floor);
+   const bScale=Math.max(0.42,1-liftH*0.24);
+   runnerBlobShadow.position.set(s.x*2.2,s.floor+0.125,fallRecoil);
+   runnerBlobShadow.scale.setScalar(bScale);
+   runnerBlobShadow.material.opacity=Math.max(0.22,0.85-liftH*0.25);
+ }const rawChar=String(character||'male');const selectedKey=rawChar==='aged-elder'?'aged-elder':rawChar.startsWith('college-')?rawChar:(rawChar.includes('female')||rawChar.includes('woman'))?'female':'male';const altKey=selectedKey==='aged-elder'?'male':selectedKey==='college-woman'?'female':(selectedKey.startsWith('college-')?'male':`college-${selectedKey}`);const isFemaleMesh=selectedKey.includes('female')||selectedKey.includes('woman'),isCollegeBody=selectedKey.startsWith('college-')||s.map==='college';if(!heroModels[selectedKey]?.model)heroModels[selectedKey]?.(s,selectedKey,frameDt);const modelKey=onPodium?selectedKey:(heroModels[selectedKey]?.model?selectedKey:heroModels[altKey]?.model?altKey:selectedKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleMesh?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleMesh;cap.visible=!isFemaleMesh;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
  updateGuard(s,selectedModel?.model);
  visItems.length=0;activeItemSet.clear();
  if(!onPodium){
   const pk=ensurePickups();
-  const coinFar=isTouchDevice?110:175;
-  const glintFar=isTouchDevice?28:48;
   // Render solid obstacles & pads FIRST (priority over coins) so pool limits NEVER hide a slide/jump/block barrier!
   // Keep solid obstacles visible even after `o.done` until completely behind the camera (`z < -10`) — ZERO disappearing in front of you!
   for(const o of s.items){
    if(o.type==='bus'||o.type==='sideVehicle'||o.type==='coin')continue;
    const z=o.z-s.distance;
-   if(o.cleared||o.smashed||o.isForkDivider||z<-10||z>280)continue;
+   if(o.cleared||o.smashed||o.isForkDivider||z<-10||z>obsFar)continue;
    const isCollectible=PICKUP_TYPES.has(o.type)||o.type==='mysteryCrate'||o.type==='letter';
    if(o.done&&isCollectible)continue;
    visItems.push(o);activeItemSet.add(o);
@@ -497,7 +564,7 @@ export function createRenderer(canvas, callbacks = {}){
   for(const [,grp] of itemPoolMap){grp.visible=false;freePool.push(grp);}
   itemPoolMap.clear();
  }
- const count=s.coins;if(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0)){burst=(s.nitro>0||s.turboBoost>0)?.07:.14;const emitCount=count>total?5:3;for(let k=0;k<emitCount;k++){const p=particles[particleCursor];particleCursor=(particleCursor+1)%particles.length;const side=(particleCursor%2?1:-1),lat=side*(.08+Math.random()*.12)+(Math.random()-.5)*.05;p.maxLife=.50+k*.055+Math.random()*.08;p.life=p.maxLife;p.m.visible=true;p.angle=Math.random()*Math.PI*2;p.m.rotation.set(-.18,p.angle,p.tilt);p.m.position.set(s.x*2.2+lat,height(s)+.10+k*.03+Math.random()*.05,.08+k*.16+Math.random()*.06);p.v.set(lat*2.2+(Math.random()-.5)*.40,1.65+k*.20+Math.random()*.55,5.5+k*.95+Math.random()*1.8);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*2.1;p.m.position.addScaledVector(p.v,dt);const minFootY=height(s)+.08,maxArcY=height(s)+.64;if(p.m.position.y<minFootY)p.m.position.y=minFootY;else if(p.m.position.y>maxArcY)p.m.position.y=maxArcY;p.angle+=dt*p.spin;p.m.rotation.set(-.18,p.angle,p.tilt);const lifeRatio=Math.max(0,Math.min(1,p.life/(p.maxLife||.52)));p.m.scale.setScalar(.56*Math.pow(lifeRatio,.80));p.m.userData.glints?.forEach((glint,gi)=>glint.scale.setScalar(.012+.075*Math.pow(Math.max(0,Math.sin(p.angle*2+gi*2)),10)));}}if(s.time===0)for(const p of particles)p.m.visible=false;
+ const count=s.coins;if(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0)){burst=(s.nitro>0||s.turboBoost>0)?.07:.14;const emitCount=count>total?coinBurstCount:Math.min(3,coinBurstCount);for(let k=0;k<emitCount;k++){const p=particles[particleCursor];particleCursor=(particleCursor+1)%particles.length;const side=(particleCursor%2?1:-1),lat=side*(.08+Math.random()*.12)+(Math.random()-.5)*.05;p.maxLife=.50+k*.055+Math.random()*.08;p.life=p.maxLife;p.m.visible=true;p.angle=Math.random()*Math.PI*2;p.m.rotation.set(-.18,p.angle,p.tilt);p.m.position.set(s.x*2.2+lat,height(s)+.10+k*.03+Math.random()*.05,.08+k*.16+Math.random()*.06);p.v.set(lat*2.2+(Math.random()-.5)*.40,1.65+k*.20+Math.random()*.55,5.5+k*.95+Math.random()*1.8);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*2.1;p.m.position.addScaledVector(p.v,dt);const minFootY=height(s)+.08,maxArcY=height(s)+.64;if(p.m.position.y<minFootY)p.m.position.y=minFootY;else if(p.m.position.y>maxArcY)p.m.position.y=maxArcY;p.angle+=dt*p.spin;p.m.rotation.set(-.18,p.angle,p.tilt);const lifeRatio=Math.max(0,Math.min(1,p.life/(p.maxLife||.52)));p.m.scale.setScalar(.56*Math.pow(lifeRatio,.80));p.m.userData.glints?.forEach((glint,gi)=>glint.scale.setScalar(.012+.075*Math.pow(Math.max(0,Math.sin(p.angle*2+gi*2)),10)));}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
  const inSelect=s.mode==='ready'||s.mode==='select'||s.mode==='intro';
@@ -648,6 +715,13 @@ export function createRenderer(canvas, callbacks = {}){
    for (const stepId of stepsForMap(map)) runWarmStep(stepId);
  };
  renderFn.isMapWarm = (map = 'school') => stepsForMap(map).every(id => warmedSteps.has(id));
+ renderFn.setGraphicsQuality = (pref = 'auto') => {
+   gfxPref = ['auto','low','med','high'].includes(pref) ? pref : 'auto';
+   const nextTier = gfxPref !== 'auto' ? gfxPref : (isLowHardware ? 'low' : isTouchDevice ? 'med' : 'high');
+   slowWindows = 0; perfFrames = 0; perfTime = 0;
+   applyQualityTier(nextTier);
+ };
+ renderFn.getGraphicsTier = () => activeTier;
  renderFn.isLoaded=key=>Boolean(heroModels[key]?.model);
  renderFn.preload=key=>heroModels[key]?.preload?.();
  return renderFn;

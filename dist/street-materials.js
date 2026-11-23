@@ -8,23 +8,26 @@ import { hasCollegeRain, sceneWeather } from './weather.js';
 export { roadCurveX, roadCurveY, roadCurveSlope, curveSlopeAt, curveRelX, curveRelY };
 
 const textures = new Map();
-function texture(name, color = true) {
+function texture(name, color = true, aniso = 4) {
   if (typeof document === 'undefined') return null;
   if (!textures.has(name)) {
     const map = new TextureLoader().load(new URL('./assets/street/' + name + '.webp', import.meta.url).href);
     if (color) map.colorSpace = SRGBColorSpace;
     map.wrapS = map.wrapT = RepeatWrapping;
-    map.anisotropy = 4;
+    map.anisotropy = aniso;
     textures.set(name, map);
   }
   return textures.get(name);
 }
 
-export function streetSurfaces(scene, box) {
-  const environment = texture('campus-light');
+export function streetSurfaces(scene, box, opts = {}) {
+  const lowEnd = Boolean(opts?.lowEnd || scene.userData?.lowEnd);
+  const aniso = lowEnd ? 1 : 4;
+  const environment = texture('campus-light', true, aniso);
   if (environment) {
     environment.mapping = EquirectangularReflectionMapping;
-    scene.environment = environment;
+    scene.userData.envMap = environment;
+    if (!lowEnd) scene.environment = environment;
   }
   const scrolling = [];
   const schoolGroup = new Group();
@@ -60,13 +63,15 @@ export function streetSurfaces(scene, box) {
   const road = strip('asphalt', 0, .02, 7.1, .14, 16, 1, 0xffffff);
   strip('pavers', -4.4, .06, 1.65, .22, 3.3, 1, 0xffffff);
   strip('pavers', 4.4, .06, 1.65, .22, 3.3, 1, 0xffffff);
-  const patches = texture('road-roughness', false);
+  const patches = texture('road-roughness', false, aniso);
   if (patches) {
     patches.repeat.set(1, STRIP_LEN / 16);
     scrolling.push({map:patches, span:16});
-    road.roughnessMap = patches;
-    road.bumpMap = road.map;
-    road.bumpScale = .018;
+    if (!lowEnd) {
+      road.roughnessMap = patches;
+      road.bumpMap = road.map;
+      road.bumpScale = .018;
+    }
   }
 
   // Subdivided Kodaikanal-style curving road ribbons for College mode
@@ -89,28 +94,31 @@ export function streetSurfaces(scene, box) {
   const railMat = new MeshStandardMaterial({ color: 0x627578, roughness: .48, metalness: .38 });
   const curbMat = new MeshStandardMaterial({ color: 0xc1c7c2, roughness: .75 });
   const paversMat = new MeshStandardMaterial({ color: 0xd0cfc5, map: texture('pavers'), roughness: .9 });
-  const collegeRoadMat = new MeshStandardMaterial({color:0x969b9c,map:road.map,roughness:.95,roughnessMap:patches,bumpMap:road.map,bumpScale:.018});
+  const collegeRoadMat = new MeshStandardMaterial({color:0x969b9c,map:road.map,roughness:.95,roughnessMap:lowEnd?null:patches,bumpMap:lowEnd?null:road.map,bumpScale:.018});
   const roadDistance = {value:0}, stormClock = {value:0}, wetStrength = {value:0}, rainbowStrength = {value:0};
   wetCollegeAsphalt(collegeRoadMat, roadDistance, stormClock, wetStrength, rainbowStrength);
   const soakedAsphalt = new Color(0x626f81);
   const paintMat = new MeshStandardMaterial({color:0xe8e7d8,roughness:.89,emissive:0x11120e,emissiveIntensity:.08});
-  curvedStrip(turfMat, 0, -.20, 240, 36, 4);
-  curvedStrip(gravelMat, 0, -.04, 13.6, 54, 1);
-  curvedStrip(collegeRoadMat, 0, .09, 7.1, 54, 1);
-  curvedStrip(paintMat, -3.36, .104, .075, 54, 1);
-  curvedStrip(paintMat, 3.36, .104, .075, 54, 1);
-  curvedStrip(paversMat, -4.4, .14, 1.65, 54, 1);
-  curvedStrip(paversMat, 4.4, .14, 1.65, 54, 1);
+  const turfSegs = lowEnd ? 18 : 36;
+  const roadSegs = lowEnd ? 24 : 54;
+  curvedStrip(turfMat, 0, -.20, 240, turfSegs, lowEnd ? 2 : 4);
+  curvedStrip(gravelMat, 0, -.04, 13.6, roadSegs, 1);
+  curvedStrip(collegeRoadMat, 0, .09, 7.1, roadSegs, 1);
+  curvedStrip(paintMat, -3.36, .104, .075, roadSegs, 1);
+  curvedStrip(paintMat, 3.36, .104, .075, roadSegs, 1);
+  curvedStrip(paversMat, -4.4, .14, 1.65, roadSegs, 1);
+  curvedStrip(paversMat, 4.4, .14, 1.65, roadSegs, 1);
   // Mountain ghat guardrails & concrete curbs along both edges of the College road
-  curvedStrip(curbMat, -5.28, .22, .28, 54, 1);
-  curvedStrip(curbMat, 5.28, .22, .28, 54, 1);
-  curvedStrip(railMat, -5.32, .48, .18, 54, 1);
-  curvedStrip(railMat, 5.32, .48, .18, 54, 1);
+  curvedStrip(curbMat, -5.28, .22, .28, roadSegs, 1);
+  curvedStrip(curbMat, 5.28, .22, .28, roadSegs, 1);
+  curvedStrip(railMat, -5.32, .48, .18, roadSegs, 1);
+  curvedStrip(railMat, 5.32, .48, .18, roadSegs, 1);
 
   // Two staggered lane dividers follow the same curve as the road.
+  const dashPairs = lowEnd ? 24 : 42;
   const dashGeometry = new PlaneGeometry(.075, 2.45);
   dashGeometry.rotateX(-Math.PI / 2);
-  const dashes = new InstancedMesh(dashGeometry, paintMat, 84);
+  const dashes = new InstancedMesh(dashGeometry, paintMat, dashPairs * 2);
   dashes.instanceMatrix.setUsage(DynamicDrawUsage);
   dashes.frustumCulled = false;
   collegeGroup.add(dashes);
@@ -322,10 +330,10 @@ export function streetSurfaces(scene, box) {
   itParkGroup.add(pulseInst);
   const pulseXform = new Object3D();
 
-  const rowCurveX54 = new Float32Array(55);
-  const rowCurveY54 = new Float32Array(55);
-  const rowCurveX36 = new Float32Array(37);
-  const rowCurveY36 = new Float32Array(37);
+  const rowCurveXRoad = new Float32Array(roadSegs + 1);
+  const rowCurveYRoad = new Float32Array(roadSegs + 1);
+  const rowCurveXTurf = new Float32Array(turfSegs + 1);
+  const rowCurveYTurf = new Float32Array(turfSegs + 1);
 
   return (distance, weather, map = 'school', activeBranch = null, branchState = null) => {
     const isCollege = map === 'college';
@@ -383,7 +391,7 @@ export function streetSurfaces(scene, box) {
       const originX = roadCurveX(refDist, 'college', fin);
       const originY = roadCurveY(refDist, 'college', fin);
       const first = Math.floor((refDist - (showAheadExit ? 0 : 32)) / 7) * 7;
-      for(let n=0;n<42;n++){
+      for(let n=0;n<dashPairs;n++){
         const worldDist=first+n*7,curveX=roadCurveX(worldDist,'college',fin)-originX;
         const curveY=roadCurveY(worldDist,'college',fin)-originY;
         dashTransform.rotation.y=-Math.atan(roadCurveSlope(worldDist,'college',fin));
@@ -394,23 +402,23 @@ export function streetSurfaces(scene, box) {
         }
       }
       dashes.instanceMatrix.needsUpdate=true;
-      // Precompute curve offsets once per Z-row (55 + 37 samples instead of ~2,600 per frame!).
-      for (let r = 0; r <= 54; r++) {
-        const zScene = -265 + (r / 54) * 300;
+      // Precompute curve offsets once per Z-row (only 25+19 rows on low-end mobile!).
+      for (let r = 0; r <= roadSegs; r++) {
+        const zScene = -265 + (r / roadSegs) * 300;
         const worldDist = showAheadExit ? bEnd + (35 - zScene) : distance - zScene;
-        rowCurveX54[r] = roadCurveX(worldDist, 'college', fin) - originX;
-        rowCurveY54[r] = roadCurveY(worldDist, 'college', fin) - originY;
+        rowCurveXRoad[r] = roadCurveX(worldDist, 'college', fin) - originX;
+        rowCurveYRoad[r] = roadCurveY(worldDist, 'college', fin) - originY;
       }
-      for (let r = 0; r <= 36; r++) {
-        const zScene = -265 + (r / 36) * 300;
+      for (let r = 0; r <= turfSegs; r++) {
+        const zScene = -265 + (r / turfSegs) * 300;
         const worldDist = showAheadExit ? bEnd + (35 - zScene) : distance - zScene;
-        rowCurveX36[r] = roadCurveX(worldDist, 'college', fin) - originX;
-        rowCurveY36[r] = roadCurveY(worldDist, 'college', fin) - originY;
+        rowCurveXTurf[r] = roadCurveX(worldDist, 'college', fin) - originX;
+        rowCurveYTurf[r] = roadCurveY(worldDist, 'college', fin) - originY;
       }
       for (const { pos, base, segsZ, cols } of collegeRibbons) {
         const arr = pos.array;
-        const rx = segsZ === 54 ? rowCurveX54 : rowCurveX36;
-        const ry = segsZ === 54 ? rowCurveY54 : rowCurveY36;
+        const rx = segsZ === roadSegs ? rowCurveXRoad : rowCurveXTurf;
+        const ry = segsZ === roadSegs ? rowCurveYRoad : rowCurveYTurf;
         const rows = segsZ + 1;
         let ptr = 0;
         for (let r = 0; r < rows; r++) {

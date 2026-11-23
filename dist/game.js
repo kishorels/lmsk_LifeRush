@@ -3,7 +3,7 @@ import {createPowerControls} from './power-controls.js?v=3.3.0';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.6.8';
 import {createSound,playUiClick,playEnterSound} from './sound.js?v=3.8.2';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE} from './engine.js?v=3.6.8';
-import {createRenderer} from './renderer3d.js?v=3.8.1';
+import {createRenderer} from './renderer3d.js?v=3.9.0';
 import {createLiteRenderer} from './renderer-lite.js?v=3.3.1';
 
 import {powers,powerById,playerLevel,xpForLevel,parkOpen} from './progression.js?v=3.1.7';
@@ -277,12 +277,44 @@ function switchToLiteRenderer(reason) {
   onAllAssetsReady();
 }
 
+let graphicsQuality = 'auto';
+try {
+  const savedGfx = localStorage.getItem('runverse-gfx');
+  if (['auto', 'low', 'med', 'high'].includes(savedGfx)) graphicsQuality = savedGfx;
+} catch {}
+const GFX_HINTS = {
+  auto: 'Auto · Smooth 60 FPS for your phone',
+  low: 'Low · Max 60 FPS for low-end phones',
+  med: 'Medium · Balanced shadows & speed',
+  high: 'High · Full detail for flagship devices'
+};
+function syncGraphicsUI() {
+  document.querySelectorAll('[data-gfx]').forEach(btn => {
+    const active = btn.dataset.gfx === graphicsQuality;
+    btn.classList.toggle('selected', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+  if ($('gfx-quality-hint')) $('gfx-quality-hint').textContent = GFX_HINTS[graphicsQuality] || GFX_HINTS.auto;
+}
+syncGraphicsUI();
+document.querySelectorAll('[data-gfx]').forEach(btn => {
+  btn.onclick = () => {
+    const next = btn.dataset.gfx;
+    if (!['auto', 'low', 'med', 'high'].includes(next)) return;
+    graphicsQuality = next;
+    try { localStorage.setItem('runverse-gfx', graphicsQuality); } catch {}
+    syncGraphicsUI();
+    draw?.setGraphicsQuality?.(graphicsQuality);
+  };
+});
+
 function ensureRenderer(targetCharKey = equippedCharId) {
   if (rendererStarted || draw) return;
   rendererStarted = true;
   try{
     draw=createRenderer(canvas, {
       initialModelKey: targetCharKey || initialModelKey,
+      graphicsQuality,
       onBoyProgress: f => updateAssetProgress('boy', f),
       onChaserProgress: f => updateAssetProgress('chaser', f)
     });
