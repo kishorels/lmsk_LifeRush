@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.10.15">
+  <link rel="stylesheet" href="style.css?v=3.10.17">
 </head>
 <body>
 <header>
@@ -258,9 +258,20 @@
           <div class="power-settings-text"><strong><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="#ffd754" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg> Your 2 Powers</strong><small id="settings-powers-current">Pick 2 on your first run</small></div>
           <button type="button" id="btn-change-powers">Change</button>
         </div>
-        <div class="power-settings">
-          <div class="power-settings-text"><strong><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="#38bdf8" aria-hidden="true"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> How to Play</strong><small>Controls notice board &amp; tutorial</small></div>
-          <button type="button" id="btn-settings-howto">Open</button>
+        <div class="power-settings howto-settings-card">
+          <div class="howto-settings-left">
+            <span class="howto-settings-icon" aria-hidden="true">
+              <svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+            </span>
+            <div class="power-settings-text">
+              <strong class="howto-settings-heading">How to Play <span class="howto-settings-pill">TIPS</span></strong>
+              <small>Controls, 4 powers &amp; tutorial</small>
+            </div>
+          </div>
+          <button type="button" id="btn-settings-howto" class="btn-settings-howto" aria-label="Open How to Play guide">
+            <span>GUIDE</span>
+            <svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
         </div>
         <div class="gfx-settings">
           <div class="gfx-settings-head">
