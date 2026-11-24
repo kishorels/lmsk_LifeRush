@@ -1,17 +1,17 @@
 // Google AdMob controller for LMSK LifeRush (Capacitor 8 + @capacitor-community/admob)
-// IMPORTANT: Keep useTestAds = true during all development & internal device testing.
-// Swap to useTestAds = false and paste your live AdMob Ad Unit IDs (plus live App ID in
-// android/app/src/main/res/values/strings.xml) ONLY for the signed Play Store release build!
+// Release builds automatically use the live AdMob IDs below (useTestAds: false).
+// Debug and level50 builds automatically set window.__LMSK_TEST_ADS__ = true via build-profile.js
+// so local & team testing always uses official Google Test Ads safely.
 
 export const AD_CONFIG = {
-  useTestAds: true,
+  useTestAds: false,
   testIds: {
     rewarded: 'ca-app-pub-3940256099942544/5224354917',
     interstitial: 'ca-app-pub-3940256099942544/1033173712'
   },
   liveIds: {
-    rewarded: 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY',
-    interstitial: 'ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ'
+    rewarded: 'ca-app-pub-6566735355781173/4758626673',
+    interstitial: 'ca-app-pub-6566735355781173/1544985027'
   },
   interstitialEveryRuns: 5,
   shopRewardCoins: 500,
@@ -37,8 +37,12 @@ export function formatCooldown(seconds) {
   return mins > 0 ? `${mins}m ${String(rem).padStart(2, '0')}s` : `${rem}s`;
 }
 
+export function isTestAdsMode(config = AD_CONFIG) {
+  return Boolean(config.useTestAds || (typeof window !== 'undefined' && window.__LMSK_TEST_ADS__));
+}
+
 export function activeAdIds(config = AD_CONFIG) {
-  return config.useTestAds ? config.testIds : config.liveIds;
+  return isTestAdsMode(config) ? config.testIds : config.liveIds;
 }
 
 function defaultStorage() {
@@ -104,7 +108,7 @@ export function createAdManager(opts = {}) {
     initPromise = (async () => {
       try {
         await plugin.initialize({
-          initializeForTesting: Boolean(config.useTestAds)
+          initializeForTesting: isTestAdsMode(config)
         });
       } catch (err) {
         console.warn('AdMob initialize failed:', err);
@@ -155,7 +159,7 @@ export function createAdManager(opts = {}) {
       try {
         await plugin.prepareRewardVideoAd({
           adId: ids().rewarded,
-          isTesting: Boolean(config.useTestAds),
+          isTesting: isTestAdsMode(config),
           immersiveMode: true
         });
         rewardedReady = true;
@@ -179,7 +183,7 @@ export function createAdManager(opts = {}) {
       try {
         await plugin.prepareInterstitial({
           adId: ids().interstitial,
-          isTesting: Boolean(config.useTestAds),
+          isTesting: isTestAdsMode(config),
           immersiveMode: true
         });
         interstitialReady = true;

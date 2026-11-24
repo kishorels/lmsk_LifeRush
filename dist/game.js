@@ -5,7 +5,7 @@ import {createTutorialGuide} from './tutorial-guide.js?v=3.10.14';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.18';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.18';
-import {createAdManager,requiredAdsForRevive,formatCooldown} from './ads.js?v=3.10.18';
+import {createAdManager,requiredAdsForRevive,formatCooldown} from './ads.js?v=3.10.19';
 import {createFramePacer} from './frame-pacing.js';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 
@@ -52,6 +52,7 @@ let canvas=$('world');
 let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastCoins2xSec = -1, lastGhostSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastLmskMask = -1, lastFeverOn = false, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false;
 const nameModalEl = $('name-modal');
 const shopModalEl = $('shop-modal');
+const privacyModalEl = $('privacy-modal');
 const speedLinesEl = $('speed-lines');
 const closeCallEl = $('close-call-pop');
 // Remove controls from a cached older HTML shell as well.
@@ -1335,6 +1336,12 @@ function refreshPowerSettings(){
   const btn=$('btn-change-powers');if(btn)btn.disabled=ids.length<=2;
 }
 if($('btn-change-powers'))$('btn-change-powers').onclick=()=>powerControls.edit(availablePowers(playerLevel(profile.xp)),refreshPowerSettings);
+const openPrivacyModal = () => { if (privacyModalEl) { privacyModalEl.hidden = false; menuNeedsFrame = true; } };
+const closePrivacyModal = () => { if (privacyModalEl) { privacyModalEl.hidden = true; menuNeedsFrame = true; } };
+if ($('btn-privacy-policy')) $('btn-privacy-policy').onclick = openPrivacyModal;
+if ($('btn-close-privacy')) $('btn-close-privacy').onclick = closePrivacyModal;
+if ($('btn-privacy-done')) $('btn-privacy-done').onclick = closePrivacyModal;
+if (privacyModalEl) privacyModalEl.addEventListener('click', ev => { if (ev.target === privacyModalEl) closePrivacyModal(); });
 hubButtons.forEach(button=>button.addEventListener('click',()=>{if(button.dataset.hub==='settings')refreshPowerSettings();}));
 refreshPowerSettings();
 function defaultChosenPowers() {
@@ -2952,7 +2959,7 @@ function tick(t) {
 
   // Pause 3D WebGL rendering completely while static modal dialogs (Name/Shop modals) are open
   // (after warming up 1 ready frame behind the name modal so clicking Start Adventure is 0ms instant)
-  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden) || (shopModalEl && !shopModalEl.hidden) || tutorialGuide.isNoticeOpen());
+  const staticOverlayOpen = s.mode === 'ready' && ((currentHub === 'settings') || (nameModalEl && !nameModalEl.hidden) || (shopModalEl && !shopModalEl.hidden) || (privacyModalEl && !privacyModalEl.hidden) || tutorialGuide.isNoticeOpen());
   if (staticOverlayOpen && assetsReady && warmedFirstFrame) {
     if (!menuNeedsFrame) return;
     menuNeedsFrame = false;

@@ -1,0 +1,20 @@
+{
+  "build": "3.10.19 (1)",
+  "checked_on": "2026-11-24",
+  "enforce": false,
+  "checks": {
+    "demo_account": "n/a",
+    "live_backend": "n/a",
+    "review_notes": "todo",
+    "screenshots_match_build": "todo",
+    "account_deletion_device_test": "n/a",
+    "privacy_labels_match_runtime": "todo",
+    "iap_reachable_by_reviewer": "n/a"
+  },
+  "notes": {
+    "demo_account": "N/A. No login, sign-up, or gated account flow in LMSK LifeRush.",
+    "live_backend": "N/A. 100% offline 3D WebGL runner using Google AdMob SDK only; no custom production backend.",
+    "account_deletion_device_test": "N/A. No user accounts or server-side personal data exist.",
+    "iap_reachable_by_reviewer": "N/A. No in-app purchases or subscriptions; all upgrades and unlocks use earned in-game coins and optional AdMob rewarded ads."
+  }
+}

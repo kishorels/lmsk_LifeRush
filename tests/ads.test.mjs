@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { AD_CONFIG, activeAdIds, createAdManager, formatCooldown, requiredAdsForRevive } from '../dist/ads.js';
+import { AD_CONFIG, activeAdIds, isTestAdsMode, createAdManager, formatCooldown, requiredAdsForRevive } from '../dist/ads.js';
 import { fresh, reviveRun, reviveAdsRequired, MAX_REVIVES_PER_RUN } from '../dist/engine.js';
 
 function createMockStorage() {
@@ -69,10 +69,22 @@ test('escalating Save Me requires 1 ad on 1st crash, 2 ads on 2nd crash, and blo
   assert.equal(s.reviveCount, 2);
 });
 
-test('AdMob manager uses official Google Test IDs, pauses/resumes BGM, enforces 5-game interstitial & 5-min shop cooldown', async () => {
-  assert.equal(AD_CONFIG.useTestAds, true);
-  assert.equal(activeAdIds().rewarded, 'ca-app-pub-3940256099942544/5224354917');
-  assert.equal(activeAdIds().interstitial, 'ca-app-pub-3940256099942544/1033173712');
+test('AdMob manager defaults to live Play Store IDs, switches safely to Google Test IDs when __LMSK_TEST_ADS__ is set, pauses/resumes BGM, enforces 5-game interstitial & 5-min shop cooldown', async () => {
+  assert.equal(AD_CONFIG.useTestAds, false);
+  assert.equal(isTestAdsMode(), false);
+  assert.equal(activeAdIds().rewarded, 'ca-app-pub-6566735355781173/4758626673');
+  assert.equal(activeAdIds().interstitial, 'ca-app-pub-6566735355781173/1544985027');
+
+  // Dev/team build-profile flag forces Google Test IDs safely
+  globalThis.window = { __LMSK_TEST_ADS__: true };
+  try {
+    assert.equal(isTestAdsMode(), true);
+    assert.equal(activeAdIds().rewarded, 'ca-app-pub-3940256099942544/5224354917');
+    assert.equal(activeAdIds().interstitial, 'ca-app-pub-3940256099942544/1033173712');
+  } finally {
+    delete globalThis.window;
+  }
+
   assert.equal(AD_CONFIG.interstitialEveryRuns, 5);
   assert.equal(AD_CONFIG.shopRewardCoins, 500);
   assert.equal(formatCooldown(125), '2m 05s');
@@ -133,9 +145,33 @@ test('AdMob manager uses official Google Test IDs, pauses/resumes BGM, enforces 
   assert.equal(dismissed.reason, 'dismissed');
 });
 
-test('AndroidManifest and strings.xml declare Google AdMob APPLICATION_ID using Test App ID', async () => {
+test('AndroidManifest and strings.xml declare live Play Store AdMob App ID while debug and level50 stay on Test App ID', async () => {
   const manifest = await readFile(new URL('../android/app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
-  const strings = await readFile(new URL('../android/app/src/main/res/values/strings.xml', import.meta.url), 'utf8');
+  const mainStrings = await readFile(new URL('../android/app/src/main/res/values/strings.xml', import.meta.url), 'utf8');
+  const debugStrings = await readFile(new URL('../android/app/src/debug/res/values/strings.xml', import.meta.url), 'utf8');
+  const level50Strings = await readFile(new URL('../android/app/src/level50/res/values/strings.xml', import.meta.url), 'utf8');
+  const debugProfile = await readFile(new URL('../android/app/src/debug/assets/public/build-profile.js', import.meta.url), 'utf8');
+  const level50Profile = await readFile(new URL('../android/app/src/level50/assets/public/build-profile.js', import.meta.url), 'utf8');
   assert.ok(manifest.includes('com.google.android.gms.ads.APPLICATION_ID') && manifest.includes('@string/admob_app_id'));
-  assert.ok(strings.includes('ca-app-pub-3940256099942544~3347511713'));
+  assert.ok(mainStrings.includes('ca-app-pub-6566735355781173~2497220023'));
+  assert.ok(debugStrings.includes('ca-app-pub-3940256099942544~3347511713'));
+  assert.ok(level50Strings.includes('ca-app-pub-3940256099942544~3347511713'));
+  assert.ok(debugProfile.includes('__LMSK_TEST_ADS__ = true'));
+  assert.ok(level50Profile.includes('__LMSK_TEST_ADS__ = true'));
+});
+
+test('Play Store compliance hardening is intact (backup disabled, mixed content off, R8 release enabled, privacy policy & app-ads.txt present)', async () => {
+  const manifest = await readFile(new URL('../android/app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
+  const gradle = await readFile(new URL('../android/app/build.gradle', import.meta.url), 'utf8');
+  const capCfg = JSON.parse(await readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'));
+  const html = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
+  const policyHtml = await readFile(new URL('../docs/privacy-policy.html', import.meta.url), 'utf8');
+  const appAds = await readFile(new URL('../docs/app-ads.txt', import.meta.url), 'utf8');
+  assert.ok(manifest.includes('android:allowBackup="false"'));
+  assert.equal(capCfg.android.allowMixedContent, false);
+  assert.match(gradle, /minifyEnabled\s+true/);
+  assert.match(gradle, /shrinkResources\s+true/);
+  assert.ok(html.includes('id="btn-privacy-policy"') && html.includes('id="privacy-modal"'));
+  assert.ok(policyHtml.includes('com.lmsk.liferush') && policyHtml.includes('Google AdMob'));
+  assert.ok(appAds.includes('pub-6566735355781173'));
 });
