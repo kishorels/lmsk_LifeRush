@@ -311,22 +311,46 @@ test('near-miss close calls award combo bonuses, nitro smashes obstacles, super 
   for (let i = 0; i < 20; i++) { step(s, .04); maxH = Math.max(maxH, height(s)); }
   assert.ok(maxH > 3.1, `Super Shoes jump apex should clear bus roofs, got ${maxH}`);
 
-  // Nitro Rush boosts speed and smashes right through a block without damage
+  // Nitro Rush boosts speed, smashes hits 1-4 safely, ignores cleanly dodged obstacles, and knocks OUT on 5th hit
   s.items = [{ z: s.distance + 0.5, lane: 0, type: 'nitro', done: false }];
   step(s, .05);
   assert.ok(s.nitro > 4);
   assert.ok(s.speed >= 56);
-  s.items = [{ z: s.distance + 0.5, lane: 0, type: 'block', done: false }];
+  assert.equal(s.nitroHits, 0);
   const beforeDamage = s.damage;
+  for (let hitIdx = 1; hitIdx <= 4; hitIdx++) {
+    s.items = [{ z: s.distance + 0.5, lane: 0, type: 'block', done: false }];
+    step(s, .05);
+    assert.equal(s.nitroHits, hitIdx, `Nitro hit ${hitIdx}/5 should increment counter`);
+    assert.equal(s.damage, beforeDamage, `Nitro hit ${hitIdx}/5 smashes obstacle without taking damage`);
+    assert.equal(s.mode, 'running');
+  }
+  // Cleanly dodging a slide obstacle during Nitro does NOT add a Nitro hit
+  action(s, 'slide');
+  s.items = [{ z: s.distance + 0.5, lane: 0, type: 'slide', done: false }];
   step(s, .05);
-  assert.equal(s.damage, beforeDamage, 'Nitro smashes obstacle without taking damage');
+  assert.equal(s.nitroHits, 4, 'Clean slide under obstacle during Nitro does not count as a hit');
+  assert.equal(s.mode, 'running');
 
-  // Revive clears ahead obstacles, restores shield, and enters countdown
-  s.nitro = 0; s.damage = 2; s.mode = 'crashed'; s.injured = true;
+  // 5th hit during Nitro overloads Nitro -> immediate OUT (falling), even with a shield held
+  s.shield = true;
+  s.items = [{ z: s.distance + 0.5, lane: 0, type: 'block', done: false }];
+  step(s, .05);
+  assert.equal(s.nitroHits, 5);
+  assert.equal(s.nitro, 0);
+  assert.equal(s.nitroOverloaded, true);
+  assert.equal(s.cause, 'nitroOverload');
+  assert.equal(s.damage, 2);
+  assert.equal(s.mode, 'falling');
+
+  // Revive clears ahead obstacles, resets nitro overload, restores shield, and enters countdown
+  s.mode = 'crashed'; s.injured = true;
   s.items = [{ z: s.distance + 15, lane: 0, type: 'block', done: false }];
   reviveRun(s);
   assert.equal(s.mode, 'countdown');
   assert.equal(s.damage, 0);
+  assert.equal(s.nitroHits, 0);
+  assert.equal(s.nitroOverloaded, false);
   assert.equal(s.injured, false);
   assert.equal(s.shield, true);
   assert.equal(s.revivedOnce, true);

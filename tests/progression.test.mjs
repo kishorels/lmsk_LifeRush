@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAX_LEVEL, POWER_BASE_SECONDS, POWER_UPGRADE_STEP_SECONDS, POWER_UPGRADE_COSTS,
+  NITRO_MAX_HITS, POWER_BASE_SECONDS, POWER_UPGRADE_STEP_SECONDS, POWER_UPGRADE_COSTS,
   MAP_ORDER, MAP_UNLOCK_RULES, CHARACTER_COSTS, ALL_CHARACTER_IDS,
-  powers, powerDuration, playerLevel, xpForLevel, parkOpen, runPickup,
+  powers, powerDuration, isPowerUnlocked, unlockedPowersForProfile, parkOpen, runPickup,
   freshProfile, normalizeProfile, mapBestFor, recordMapRunDistance,
   isMapUnlocked, isMapDistanceMet, canBuyMap, buyMap,
   characterCost, isCharacterUnlocked, canBuyCharacter, buyCharacter
@@ -120,30 +120,49 @@ test('characters unlock with exact coin spending (10k, 12k, 15k, 20k, 25k) and p
   assert.equal(isCharacterUnlocked(legacy, 'female'), false);
 });
 
-test('max level is 25 and only the 4 powers unlock at Lv 10/15/20/25 with +2s upgrades',()=>{
-  assert.equal(MAX_LEVEL, 25);
+test('powers unlock by map progression (School: 0, College: Shoes + 2x Coins, IT Park: Nitro + Invisible) with +2s upgrades',()=>{
+  assert.equal(NITRO_MAX_HITS, 5);
   assert.deepEqual(
-    powers.map(p => [p.level, p.id, p.name]),
+    powers.map(p => [p.unlockMap, p.id, p.name]),
     [
-      [10, 'shoes', 'Super Jump Shoes'],
-      [15, 'doubleCoins', '2x Coins'],
-      [20, 'nitro', 'Nitro Rush'],
-      [25, 'ghost', 'Invisible'],
+      ['college', 'shoes', 'Super Jump Shoes'],
+      ['college', 'doubleCoins', '2x Coins'],
+      ['itpark', 'nitro', 'Nitro Rush'],
+      ['itpark', 'ghost', 'Invisible'],
     ]
   );
+
+  // Fresh School profile: 0 powers unlocked
+  const p = freshProfile();
+  assert.deepEqual(unlockedPowersForProfile(p), []);
   for (const power of powers) {
-    assert.equal(playerLevel(xpForLevel(power.level)-1),power.level-1);
-    assert.equal(playerLevel(xpForLevel(power.level)),power.level);
-    for(let i=0;i<30;i++) assert.notEqual(runPickup(power.level-1,12,i,power.id),power.id);
-    const s=fresh(12);
-    Object.assign(s,{mode:'running',map:'itpark',level:power.level,featured:power.id,next:30});
-    step(s,.01);
-    assert.ok(s.items.some(item=>item.type===power.id));
+    assert.equal(isPowerUnlocked(p, power.id), false);
+    for (let i = 0; i < 30; i++) assert.notEqual(runPickup(p, 12, i, power.id), power.id);
+  }
+
+  // Unlocking College unlocks Super Jump Shoes + 2x Coins only
+  recordMapRunDistance(p, 'school', 15000);
+  assert.equal(buyMap(p, 'college', 20000).ok, true);
+  assert.deepEqual(unlockedPowersForProfile(p), ['shoes', 'doubleCoins']);
+  assert.equal(isPowerUnlocked(p, 'shoes'), true);
+  assert.equal(isPowerUnlocked(p, 'doubleCoins'), true);
+  assert.equal(isPowerUnlocked(p, 'nitro'), false);
+  assert.equal(isPowerUnlocked(p, 'ghost'), false);
+
+  // Unlocking IT Park unlocks Nitro Rush + Invisible (all 4 powers)
+  recordMapRunDistance(p, 'college', 10000);
+  assert.equal(buyMap(p, 'itpark', 20000).ok, true);
+  assert.deepEqual(unlockedPowersForProfile(p), ['shoes', 'doubleCoins', 'nitro', 'ghost']);
+  for (const power of powers) {
+    assert.equal(isPowerUnlocked(p, power.id), true);
+    const s = fresh(12);
+    Object.assign(s, { mode: 'running', map: 'itpark', unlockedMaps: [...p.unlockedMaps], featured: power.id, next: 30 });
+    step(s, .01);
+    assert.ok(s.items.some(item => item.type === power.id));
     for (let tier = 0; tier <= POWER_UPGRADE_COSTS.length; tier++) {
       assert.equal(powerDuration(power.id, { [power.id]: tier }), POWER_BASE_SECONDS + tier * POWER_UPGRADE_STEP_SECONDS);
     }
   }
-  assert.equal(playerLevel(1000000),25);
 });
 
 test('each unlocked pickup applies its gameplay effect',()=>{

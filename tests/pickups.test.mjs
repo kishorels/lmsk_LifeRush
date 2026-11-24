@@ -80,6 +80,7 @@ test('magnet and shield collectibles spawn along running routes in all maps (sch
   for (const map of ['school', 'college', 'itpark']) {
     const s = fresh(42);
     s.map = map;
+    s.unlockedMaps = ['school', 'college', 'itpark'];
     s.mode = 'running';
     equipPowers(s, ['nitro', 'doubleCoins']);
     let magnetsFound = 0, shieldsFound = 0;

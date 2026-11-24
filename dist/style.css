@@ -1188,6 +1188,12 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   border-color: #7dd3fc;
   font-weight: 900;
 }
+.counters .power-pill.nitro.is-danger {
+  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  color: #ffffff;
+  border-color: #fca5a5;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.75);
+}
 .counters .power-pill.shoes {
   background: linear-gradient(135deg, #15803d, #22c55e);
   color: #fef9c3;

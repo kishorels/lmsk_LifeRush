@@ -6,10 +6,11 @@ import {createPowerControls} from '../dist/power-controls.js';
 test('owned power slots are capped, independent, recharge by distance, and scale +2s per upgrade',()=>{
   const s=fresh(14);
   s.mode='running';
-  assert.deepEqual(availablePowers(1),[]);
-  assert.deepEqual(availablePowers(25),['shoes','doubleCoins','nitro','ghost']);
-  assert.ok(!availablePowers(25).includes('magnet')&&!availablePowers(25).includes('shield'),'magnet & shield are collectibles, not powers');
-  s.level=25;
+  assert.deepEqual(availablePowers(['school']),[]);
+  assert.deepEqual(availablePowers(['school','college']),['shoes','doubleCoins']);
+  assert.deepEqual(availablePowers(['school','college','itpark']),['shoes','doubleCoins','nitro','ghost']);
+  assert.ok(!availablePowers(['school','college','itpark']).includes('magnet')&&!availablePowers(['school','college','itpark']).includes('shield'),'magnet & shield are collectibles, not powers');
+  s.unlockedMaps=['school','college','itpark'];
   s.powerUpgrades={nitro:2,doubleCoins:3};
   equipPowers(s,['nitro','magnet','nitro','shield','doubleCoins','slow']);
   assert.deepEqual(s.slots.map(slot=>slot.id),['nitro','doubleCoins']);
@@ -30,14 +31,15 @@ test('owned power slots are capped, independent, recharge by distance, and scale
   assert.equal(usePower(s,2),false);
 });
 test('every selected power lasts ten seconds base (and +2s per upgrade); new routes contain coins but no power pickups',()=>{
-  for(const id of availablePowers(25)){
+  const allMaps=['school','college','itpark'];
+  for(const id of availablePowers(allMaps)){
     const s=fresh(14);
-    Object.assign(s,{level:25,mode:'running',next:40});
+    Object.assign(s,{unlockedMaps:allMaps,mode:'running',next:40});
     equipPowers(s,[id]);
     assert.ok(usePower(s,0));
     step(s,.05);
     assert.ok(s.items.some(item=>item.type==='coin'));
-    assert.ok(!s.items.some(item=>availablePowers(25).includes(item.type)));
+    assert.ok(!s.items.some(item=>availablePowers(allMaps).includes(item.type)));
     assert.equal(s.slots[0].until,10);
     const now=s.time;
     s.mode='paused';step(s,.1);
@@ -143,7 +145,7 @@ test('power wheel reveals slots only while holding POWER, activates strictly on 
   };
   try {
     const s = fresh(14);
-    s.level = 25;
+    s.unlockedMaps = ['school', 'college', 'itpark'];
     s.mode = 'running';
     equipPowers(s, ['nitro', 'doubleCoins']);
     const activated = [];

@@ -1,11 +1,11 @@
-import {ALL_CHARACTER_IDS, MAP_ORDER, MAX_LEVEL, PROFILE_VERSION, xpForLevel} from './progression.js';
+import {ALL_CHARACTER_IDS, MAP_ORDER, PROFILE_VERSION} from './progression.js';
 
 export function initializeBuildProfile() {
   if (typeof window !== 'undefined') window.__LMSK_TEST_ADS__ = true;
   const profile = {
     profileVersion: PROFILE_VERSION,
-    xp: xpForLevel(MAX_LEVEL),
-    introduced: MAX_LEVEL,
+    xp: 0,
+    introduced: 0,
     schoolBest: 25000,
     collegeBest: 25000,
     itParkBest: 25000,

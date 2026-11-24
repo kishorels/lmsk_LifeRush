@@ -2,9 +2,9 @@ import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.14';
 import {createTutorialGuide} from './tutorial-guide.js?v=3.10.14';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.18';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.20';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.18';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.20';
 import {createAdManager,requiredAdsForRevive,formatCooldown} from './ads.js?v=3.10.19';
 import {createFramePacer} from './frame-pacing.js';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
@@ -18,9 +18,9 @@ function loadRendererModule() {
 }
 
 import {
-  MAX_LEVEL, POWER_BASE_SECONDS, POWER_UPGRADE_STEP_SECONDS, POWER_UPGRADE_COSTS,
+  POWER_BASE_SECONDS, POWER_UPGRADE_STEP_SECONDS, POWER_UPGRADE_COSTS,
   MAP_ORDER, MAP_UNLOCK_RULES, CHARACTER_COSTS,
-  powers, powerById, powerDuration, playerLevel, xpForLevel,
+  powers, powerById, powerDuration, isPowerUnlocked,
   freshProfile, normalizeProfile, mapBestFor, recordMapRunDistance,
   isMapUnlocked, isMapDistanceMet, canBuyMap, buyMap,
   isCharacterUnlocked, canBuyCharacter, buyCharacter
@@ -603,7 +603,9 @@ function purchaseMap(mapId) {
   updateUnlockUI();
   updateCarouselUI();
   updateMenuPreviewImages();
-  showCloseCallBanner(`${rule.name.toUpperCase()} UNLOCKED!`, true);
+  refreshPowerSettings();
+  const powerBonus = mapId === 'college' ? ' · +2 POWERS (SHOES & 2X COINS)!' : mapId === 'itpark' ? ' · +2 POWERS (NITRO & INVISIBLE)!' : '!';
+  showCloseCallBanner(`${rule.name.toUpperCase()} UNLOCKED${powerBonus}`, true);
   return true;
 }
 
@@ -632,14 +634,13 @@ function updateUnlockUI() {
     inspectedLockedMap = lockedList[0] || '';
   }
   const charEntry = CHARACTER_ROSTER[carouselIndex] || CHARACTER_ROSTER[0];
-  const key = `${profile.xp}/${profile.schoolBest}/${profile.collegeBest}/${profile.itParkBest}:${profile.unlockedMaps.join(',')}:${profile.unlockedChars.join(',')}:${Math.floor(totalCoins)}:${inspectedLockedMap}:${charEntry.id}`;
+  const key = `${profile.schoolBest}/${profile.collegeBest}/${profile.itParkBest}:${profile.unlockedMaps.join(',')}:${profile.unlockedChars.join(',')}:${Math.floor(totalCoins)}:${inspectedLockedMap}:${charEntry.id}`;
   if (key === lastUnlockUiKey) return;
   lastUnlockUiKey = key;
-  const level = playerLevel(profile.xp);
-  const next = powers.find(power => power.level > level);
+  const openMapsCount = MAP_ORDER.filter(id => isMapOpen(id)).length;
+  const openPowersCount = availablePowers(profile).length;
   if ($('player-progress')) {
-    $('player-progress').textContent = 'Lv ' + level + ' · ' + profile.xp + (level < MAX_LEVEL ? '/' + xpForLevel(level+1) + ' XP' : ' XP MAX') +
-      (next ? ' · ' + next.name + ' (Lv ' + next.level + ')' : ' · 4/4 Powers');
+    $('player-progress').textContent = `${openMapsCount}/${MAP_ORDER.length} Maps · ${openPowersCount}/${powers.length} Powers`;
   }
   const bankEl = $('hub-coin-bank');
   if (bankEl) {
@@ -1018,7 +1019,8 @@ const UPGRADE_DEFS = powers.map(p => ({
   id: p.id,
   icon: POWER_ICONS[p.id] || IC_BOLT,
   name: p.name,
-  unlockLevel: p.level,
+  unlockMap: p.unlockMap,
+  unlockMapName: p.unlockMapName,
   values: POWER_UPGRADE_VALUES,
   unit: 's',
   costs: POWER_UPGRADE_COSTS
@@ -1181,19 +1183,18 @@ function renderShopModal() {
   }
   if (uList) {
     uList.hidden = activeShopTab !== 'upgrades';
-    const curLevel = playerLevel(profile.xp);
     uList.innerHTML = UPGRADE_DEFS.map(def => {
       const lv = upgrades[def.id] || 0;
-      const required = def.unlockLevel || powerById[def.id]?.level || 1;
-      if (required > curLevel) {
-        return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name}</strong><small>Unlocks at Level ${required} · Base ${POWER_BASE_SECONDS}s (+${POWER_UPGRADE_STEP_SECONDS}s / upgrade)</small></div><button type="button" class="shop-action-btn" disabled>${IC_LOCK} Lv.${required}</button></div>`;
+      if (!isPowerUnlocked(profile, def.id)) {
+        const shortMap = def.unlockMap === 'college' ? 'College' : def.unlockMap === 'itpark' ? 'IT Park' : def.unlockMapName;
+        return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name}</strong><small>Unlocks with ${def.unlockMapName} · Base ${POWER_BASE_SECONDS}s (+${POWER_UPGRADE_STEP_SECONDS}s / upgrade)</small></div><button type="button" class="shop-action-btn" disabled>${IC_LOCK} ${shortMap}</button></div>`;
       }
       const maxed = lv >= def.values.length - 1;
       const cost = maxed ? 0 : def.costs[lv];
       const canBuy = !maxed && totalCoins >= cost;
       const curVal = def.values[lv], nextVal = maxed ? curVal : def.values[lv + 1];
       const pct = Math.round(((lv + 1) / def.values.length) * 100);
-      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name} · Lv.${lv + 1}/${def.values.length}</strong><small>${maxed ? `MAX (${curVal}${def.unit})` : `${curVal}${def.unit} → ${nextVal}${def.unit} (+${POWER_UPGRADE_STEP_SECONDS}s)`}</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="shop-action-btn ${maxed ? 'is-done' : ''}" data-buy-upgrade="${def.id}" ${canBuy ? '' : 'disabled'}>${maxed ? 'MAXED' : `${cost.toLocaleString()} ${IC_COIN}`}</button></div>`;
+      return `<div class="shop-item-row"><div class="shop-item-meta"><strong>${def.icon} ${def.name} · Tier ${lv + 1}/${def.values.length}</strong><small>${maxed ? `MAX (${curVal}${def.unit})` : `${curVal}${def.unit} → ${nextVal}${def.unit} (+${POWER_UPGRADE_STEP_SECONDS}s)`}</small><div class="shop-bar-track"><div class="shop-bar-fill" style="width:${pct}%"></div></div></div><button type="button" class="shop-action-btn ${maxed ? 'is-done' : ''}" data-buy-upgrade="${def.id}" ${canBuy ? '' : 'disabled'}>${maxed ? 'MAXED' : `${cost.toLocaleString()} ${IC_COIN}`}</button></div>`;
     }).join('');
     uList.querySelectorAll('[data-buy-upgrade]').forEach(btn => {
       btn.onclick = () => {
@@ -1330,12 +1331,12 @@ const powerControls = createPowerControls(
 );
 function refreshPowerSettings(){
   const el=$('settings-powers-current');if(!el)return;
-  const ids=availablePowers(playerLevel(profile.xp));
+  const ids=availablePowers(profile);
   const cur=powerControls.current(ids);
-  el.textContent=!ids.length?'First power unlocks at Level 10':cur.length?cur.map(id=>powerById[id]?.name||id).join(' + '):'Pick 2 on your first run';
+  el.textContent=!ids.length?'Unlock College Campus for 2 powers':cur.length?cur.map(id=>powerById[id]?.name||id).join(' + '):'Pick 2 on your next run';
   const btn=$('btn-change-powers');if(btn)btn.disabled=ids.length<=2;
 }
-if($('btn-change-powers'))$('btn-change-powers').onclick=()=>powerControls.edit(availablePowers(playerLevel(profile.xp)),refreshPowerSettings);
+if($('btn-change-powers'))$('btn-change-powers').onclick=()=>powerControls.edit(availablePowers(profile),refreshPowerSettings);
 const openPrivacyModal = () => { if (privacyModalEl) { privacyModalEl.hidden = false; menuNeedsFrame = true; } };
 const closePrivacyModal = () => { if (privacyModalEl) { privacyModalEl.hidden = true; menuNeedsFrame = true; } };
 if ($('btn-privacy-policy')) $('btn-privacy-policy').onclick = openPrivacyModal;
@@ -1345,7 +1346,7 @@ if (privacyModalEl) privacyModalEl.addEventListener('click', ev => { if (ev.targ
 hubButtons.forEach(button=>button.addEventListener('click',()=>{if(button.dataset.hub==='settings')refreshPowerSettings();}));
 refreshPowerSettings();
 function defaultChosenPowers() {
-  const ids = availablePowers(playerLevel(profile.xp));
+  const ids = availablePowers(profile);
   const cur = powerControls.current(ids);
   return cur.length ? cur : ids.slice(0, 2);
 }
@@ -1376,7 +1377,7 @@ function initFinalRunStageState(targetMap, targetStage, targetCharId, chosen) {
   character = 'male';
 
   s = fresh();
-  s.level = playerLevel(profile.xp);
+  s.unlockedMaps = [...profile.unlockedMaps];
   s.powerUpgrades = { ...upgrades };
   equipPowers(s, powersToEquip);
   s.enableForks = targetMap === 'itpark';
@@ -1981,7 +1982,7 @@ function start(){
     playFinalRunIntro(defaultChosenPowers());
     return;
   }
-  powerControls.choose(availablePowers(playerLevel(profile.xp)),beginRun);
+  powerControls.choose(availablePowers(profile),beginRun);
 }
 let runLoadingActive = false;
 let runLaunchNonce = 0;
@@ -2027,7 +2028,7 @@ async function prepareLevelRun(map,key,launchId=++runLaunchNonce) {
     // Render the first running view under cover. The opening gesture keeps its own state.
     if(s.mode==='intro'){
       const preview=fresh();
-      Object.assign(preview,{map,mode:'running',enableForks:s.enableForks,level:s.level});
+      Object.assign(preview,{map,mode:'running',enableForks:s.enableForks,unlockedMaps:s.unlockedMaps});
       step(preview,.001);
       draw(preview,key,0);
     }
@@ -2102,7 +2103,7 @@ function beginRun(chosen){
     setScreenMode('running');
 
     s = fresh();
-    s.level = playerLevel(profile.xp);
+    s.unlockedMaps = [...profile.unlockedMaps];
     s.powerUpgrades = { ...upgrades };
     equipPowers(s, chosen);
     s.enableForks = targetMap === 'itpark';
@@ -2266,7 +2267,8 @@ function crash(completed=false){
     van:'Take a striped ramp, or use the clear ground lane.',
     block:isCol?'Dodge the vending machines, notice boards & parked scooties.':'Change lanes to dodge the tall crates.',
     jump:isCol?'Jump over the library book carts, canteen tables & barriers.':'Jump over the school benches and hurdles.',
-    slide:isCol?'Slide under the College Fest banner & solar arches.':'Slide under the teal overhead beams.'
+    slide:isCol?'Slide under the College Fest banner & solar arches.':'Slide under the teal overhead beams.',
+    nitroOverload:`Nitro overloads after ${NITRO_MAX_HITS} obstacle hits — dodge obstacles during Nitro Rush!`
   }[s.cause]||'Keep practicing!';
   
   const totalScore = runDist + s.coins * 10;
@@ -2689,6 +2691,9 @@ function tick(t) {
     game.classList.remove('impact-flash');
     void game.offsetWidth;
     game.classList.add('impact-flash');
+    if (s.nitroOverloaded) {
+      showCloseCallBanner(`NITRO OVERLOAD · ${NITRO_MAX_HITS}/${NITRO_MAX_HITS} OUT!`, true);
+    }
     if (navigator.vibrate) try { navigator.vibrate([140, 60, 180]); } catch {}
   } else if (hitBefore === 0 && s.hit > 0 && !s.shieldAbsorbed) {
     effects.play('hit', s.cause, character);
@@ -2703,21 +2708,16 @@ function tick(t) {
   if (old === 'captured' && captureBefore < 1.30 && s.capture >= 1.30) effects.play('laugh');
   if (old === 'captured' && captureBefore < CAPTURE_GESTURE_START && s.capture >= CAPTURE_GESTURE_START) effects.play('swag');
 
-  const metresXP = Math.floor(s.distance / 100) - Math.floor(distanceBefore / 100);
   const earnedCoins = Math.max(0,s.coins - coinsBefore);
   const reachedMapGoal =
     (s.map === 'school' && profile.schoolBest < MAP_UNLOCK_RULES.college.reqDistance && s.distance >= MAP_UNLOCK_RULES.college.reqDistance) ||
     (s.map === 'college' && profile.collegeBest < MAP_UNLOCK_RULES.itpark.reqDistance && s.distance >= MAP_UNLOCK_RULES.itpark.reqDistance) ||
     (s.map === 'itpark' && profile.itParkBest < MAP_UNLOCK_RULES.finalrun.reqDistance && s.distance >= MAP_UNLOCK_RULES.finalrun.reqDistance);
-  if (metresXP > 0 || earnedCoins || reachedMapGoal) {
-    profile.xp += Math.max(0,metresXP) + earnedCoins;
+  if (earnedCoins || reachedMapGoal) {
     if (['school', 'college', 'itpark'].includes(s.map)) {
       recordMapRunDistance(profile, s.map, s.distance);
       if (s.map === 'college') profile.collegeCoins += earnedCoins;
     }
-    const level = playerLevel(profile.xp);
-    if (level > s.level) showCloseCallBanner('LEVEL ' + level,true);
-    s.level = level;
     if (!earnedCoins) save();
   }
   if (s.coins > coinsBefore) {
@@ -2896,11 +2896,14 @@ function tick(t) {
     shieldPill.hidden = !shieldActive;
   }
   const nitroSec = s.nitro > 0 ? Math.ceil(s.nitro) : 0;
+  const nitroHitsNow = s.nitro > 0 ? (s.nitroHits || 0) : 0;
+  const nitroHudKey = `${nitroSec}:${nitroHitsNow}`;
   const nitroPill = $('nitro-pill');
-  if (nitroPill && nitroSec !== lastNitroSec) {
-    lastNitroSec = nitroSec;
+  if (nitroPill && nitroHudKey !== lastNitroSec) {
+    lastNitroSec = nitroHudKey;
     nitroPill.hidden = nitroSec <= 0;
-    if (nitroSec > 0 && $('nitro-timer')) $('nitro-timer').textContent = nitroSec + 's';
+    nitroPill.classList.toggle('is-danger', nitroSec > 0 && nitroHitsNow >= NITRO_MAX_HITS - 1);
+    if (nitroSec > 0 && $('nitro-timer')) $('nitro-timer').textContent = `${nitroSec}s · ${nitroHitsNow}/${NITRO_MAX_HITS}`;
   }
   const shoesSec = s.shoes > 0 ? Math.ceil(s.shoes) : 0;
   const shoesPill = $('shoes-pill');

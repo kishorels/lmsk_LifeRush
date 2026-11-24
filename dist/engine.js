@@ -1,8 +1,8 @@
 import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase,routeSegment} from './traffic-rules.js';
-import {pickupTypes as PICKUP_TYPES, powerById, powerDuration, runPickup} from './progression.js';
+import {NITRO_MAX_HITS, pickupTypes as PICKUP_TYPES, powerById, powerDuration, runPickup, unlockedPowersForProfile} from './progression.js';
 import {ROAD_EVENT_TYPES,updateRoadEvents,triggerRoadEvent,forkPlanAt,branchElevationAt,branchOffsetXAt,roadHillY,LMSK_LETTERS} from './road-events.js';
 import {populateGrandfatherPath,memoryPace,GRANDFATHER_GATE} from './grandfather-route.js?v=3.9.2';
-export {trafficPattern, PICKUP_TYPES, ROAD_EVENT_TYPES, LMSK_LETTERS, powerById, forkPlanAt, branchElevationAt, branchOffsetXAt, roadHillY};
+export {NITRO_MAX_HITS, trafficPattern, PICKUP_TYPES, ROAD_EVENT_TYPES, LMSK_LETTERS, powerById, forkPlanAt, branchElevationAt, branchOffsetXAt, roadHillY};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95, INJURED_DURATION = 10;
 export const MAGNET_RADIUS = 18, CAPTURE_GESTURE_START = 2.55;
@@ -29,8 +29,8 @@ export function fresh(seed=newRunSeed()) {
     damage: 0, injured: false, injuredUntil: 0, hit: 0, fall: 0, capture: 0, items: [], next: segmentBase(seed,0),
     firstHitAt: null, chaseReentered: false, chaserX: 0, chaseSide: 1,
     skills: [0, 0, 0], countdown: 0, cause: '',
-    level: 1, doubleCoins: 0, doubleJump: 0, slow: 0, ghost: 0, airJumpUsed: false,
-    magnet: 0, shield: false, nitro: 0, shoes: 0, powerUpgrades: {},
+    unlockedMaps: ['school'], doubleCoins: 0, doubleJump: 0, slow: 0, ghost: 0, airJumpUsed: false,
+    magnet: 0, shield: false, nitro: 0, nitroHits: 0, nitroOverloaded: false, shoes: 0, powerUpgrades: {},
     magnetDuration: 12, nitroDuration: 4.5, shoesDuration: 9,
     combo: 1, comboTimer: 0, nearMissCount: 0, nearMissEvent: null, nearMissId: 0, jumpsOver: 0, revivedOnce: false, reviveCount: 0,
     turboBoost: 0, launchBoost: 0, feverTimer: 0, lmskMask: 0,
@@ -383,12 +383,38 @@ function awardNearMiss(s, kind) {
   const bonus = 5 * s.combo;
   s.coins += bonus;
   s.nearMissId = (s.nearMissId || 0) + 1;
-  const label = kind === 'nitro' ? 'NITRO SMASH!'
+  const nitroHits = s.nitroHits || 0;
+  const label = kind === 'nitro'
+    ? (nitroHits >= NITRO_MAX_HITS - 1 ? `NITRO ${nitroHits}/${NITRO_MAX_HITS} · NEXT HIT OUT!` : `NITRO SMASH ${nitroHits}/${NITRO_MAX_HITS}`)
     : kind === 'vehicle' ? 'CLOSE CALL!'
     : kind === 'clean-jump' ? 'CLEAN JUMP!'
     : kind === 'clean-slide' ? 'SLICK SLIDE!'
     : 'NEAR MISS!';
   s.nearMissEvent = { id: s.nearMissId, label, bonus, combo: s.combo };
+}
+
+function handleNitroHit(s, type) {
+  s.nitroHits = (s.nitroHits || 0) + 1;
+  if (s.nitroHits >= NITRO_MAX_HITS) {
+    s.nitro = 0;
+    s.nitroOverloaded = true;
+    s.shield = false;
+    s.cause = 'nitroOverload';
+    s.jumpBuffer = 0;
+    const airborne = height(s);
+    s.jump = s.slide = s.roll = s.floor = s.fallSpeed = 0;
+    s.drop = airborne > 0 ? { start: airborne, duration: .16, remaining: .16, jumpRemaining: .24 } : null;
+    s.lastGroundDown = -Infinity;
+    s.damage = 2;
+    s.mode = 'falling';
+    s.fall = FALL_DURATION;
+    for (const slot of s.slots || []) {
+      if (slot.id === 'nitro' && slot.until > s.time) slot.until = s.time;
+    }
+    return true;
+  }
+  awardNearMiss(s, 'nitro');
+  return false;
 }
 
 export const MAX_REVIVES_PER_RUN = 2;
@@ -415,6 +441,9 @@ export function reviveRun(s) {
   s.jump = s.slide = s.roll = s.fallSpeed = 0;
   s.drop = null;
   s.floor = 0;
+  s.nitro = 0;
+  s.nitroHits = 0;
+  s.nitroOverloaded = false;
   s.shield = true;
   s.revivedOnce = true;
   s.reviveCount = used + 1;
@@ -517,13 +546,13 @@ function enforceOpenEscapeLane(s, checkFar = false) {
   }
 }
 
-export function availablePowers(level) {
+export function availablePowers(profileOrMaps) {
   // Magnet & Shield are road collectibles only — never part of the power list.
-  return Object.values(powerById).filter(p => p.level <= level).map(p => p.id);
+  return unlockedPowersForProfile(profileOrMaps);
 }
 
 export function equipPowers(s, ids) {
-  const available = availablePowers(s.level);
+  const available = availablePowers(s.unlockedMaps);
   s.slots = [...new Set(ids)].filter(id => available.includes(id)).slice(0,2)
     .map(id => ({id,readyAt:0,until:0,nextPulse:0}));
 }
@@ -557,6 +586,12 @@ export function usePower(s,index) {
     slot.nextPulse = s.time + 1;
   } else if (id === 'rush') {
     s.nitro = s.magnet = duration;
+    s.nitroHits = 0;
+    s.nitroOverloaded = false;
+  } else if (id === 'nitro') {
+    s.nitro = duration;
+    s.nitroHits = 0;
+    s.nitroOverloaded = false;
   } else if (id !== 'shield') {
     s[id] = duration;
   }
@@ -637,6 +672,7 @@ export function step(s, dt, random = Math.random) {
   s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
   s.magnet=Math.max(0,s.magnet-dt);
   s.nitro=Math.max(0,(s.nitro||0)-dt);
+  if (s.nitro === 0 && s.nitroHits) s.nitroHits = 0;
   s.shoes=Math.max(0,(s.shoes||0)-dt);
   if (s.comboTimer > 0) {
     s.comboTimer = Math.max(0, s.comboTimer - dt);
@@ -654,7 +690,7 @@ export function step(s, dt, random = Math.random) {
         // Collectible map pickups: alternate between magnet and shield along the running route in all maps
         pickup.type = (index % 2 === 0) ? 'magnet' : 'shield';
       } else {
-        pickup.type = runPickup(s.level,s.runSeed,index,s.featured);
+        pickup.type = runPickup(s.unlockedMaps,s.runSeed,index,s.featured);
       }
     }
     const safeLane=newItems.find(o=>o.type==='coin')?.lane??0;
@@ -839,6 +875,10 @@ export function step(s, dt, random = Math.random) {
     if((s.map === 'finalrun' || s.isFinalRun) && van.ramp >= stageGate - 85) continue;
     if(s.distance>=van.rear && s.distance<van.front && Math.abs(s.x-van.lane)*2.2<=van.width/2 && height(s)<van.roof-.18) {
       if (s.nitro > 0) {
+        if (!s.vanHits.includes(van.id)) {
+          s.vanHits.push(van.id);
+          if (handleNitroHit(s, 'van')) return;
+        }
         s.floor = van.roof;
         s.jump = s.fallSpeed = 0;
         s.drop = null;
@@ -863,7 +903,8 @@ export function step(s, dt, random = Math.random) {
       if(!obstacle.done && !obstacle.jumpCleared && relative<=1.1 && relative>=-obstacle.length && hits(s,obstacle)) {
         if (s.nitro > 0) {
           obstacle.done = true;
-          awardNearMiss(s, 'nitro');
+          obstacle.smashed = true;
+          if (handleNitroHit(s, obstacle.type)) break;
           continue;
         }
         obstacle.done=true;if(!s.hit){takeHit(s,obstacle.type);if(s.mode==='running')recoverFromBus(s);}if(s.mode!=='running')break;
@@ -887,7 +928,7 @@ export function step(s, dt, random = Math.random) {
     } else if (obstacle.type === 'shield') {
       if (Math.abs(s.x - obstacle.lane) < .65) { s.shield = true; s.collectedPowerup = 'shield'; }
     } else if (obstacle.type === 'nitro') {
-      if (Math.abs(s.x - obstacle.lane) < .65) { s.nitro = s.nitroDuration || 4.5; s.shield = true; s.speed = Math.max(s.speed * 1.45, 56); s.collectedPowerup = 'nitro'; }
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.nitro = s.nitroDuration || 4.5; s.nitroHits = 0; s.nitroOverloaded = false; s.speed = Math.max(s.speed * 1.45, 56); s.collectedPowerup = 'nitro'; }
     } else if (obstacle.type === 'shoes') {
       if (Math.abs(s.x - obstacle.lane) < .65) { s.shoes = s.shoesDuration || 9; s.collectedPowerup = 'shoes'; }
     } else if (powerById[obstacle.type]) {
@@ -898,14 +939,15 @@ export function step(s, dt, random = Math.random) {
         pulsePower(s,type);
       } else if (type === 'rush') {
         s.nitro = s.nitroDuration;
+        s.nitroHits = 0;
+        s.nitroOverloaded = false;
         s.magnet = s.magnetDuration;
-        s.shield = true;
       } else {
         s[type] = type === 'ghost' || type === 'slow' ? 6 : 10;
       }
-    } else if (s.nitro > 0 && Math.abs(s.x - obstacle.lane) < .7) {
+    } else if (s.nitro > 0 && hits(s, obstacle)) {
       obstacle.smashed = true;
-      awardNearMiss(s, 'nitro');
+      if (handleNitroHit(s, obstacle.type)) break;
     } else if (!s.hit && hits(s, obstacle)) {
       takeHit(s, obstacle.type);
       if (s.mode !== 'running') break;
