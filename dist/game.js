@@ -11,7 +11,7 @@ import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 let rendererModulePromise = null;
 function loadRendererModule() {
   if (!rendererModulePromise) {
-    rendererModulePromise = import('./renderer3d.js?v=3.10.13');
+    rendererModulePromise = import('./renderer3d.js?v=3.10.16');
   }
   return rendererModulePromise;
 }

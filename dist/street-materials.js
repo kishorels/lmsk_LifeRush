@@ -3,7 +3,7 @@ import {
   Mesh, MeshStandardMaterial, PlaneGeometry, DoubleSide, Group, InstancedMesh, Object3D, DynamicDrawUsage
 } from './vendor/three.module.js';
 import { roadCurveX, roadCurveY, roadCurveSlope, curveSlopeAt, curveRelX, curveRelY } from './campus-layout.js?v=3.9.2';
-import { wetCollegeAsphalt } from './college-rain3d.js';
+import { wetCollegeAsphalt } from './college-rain3d.js?v=3.10.16';
 import { hasCollegeRain, sceneWeather } from './weather.js';
 export { roadCurveX, roadCurveY, roadCurveSlope, curveSlopeAt, curveRelX, curveRelY };
 
@@ -95,7 +95,7 @@ export function streetSurfaces(scene, box, opts = {}) {
   const railMat = new MeshStandardMaterial({ color: 0x627578, roughness: .48, metalness: .38 });
   const curbMat = new MeshStandardMaterial({ color: 0xc1c7c2, roughness: .75 });
   const paversMat = new MeshStandardMaterial({ color: 0xd0cfc5, map: texture('pavers'), roughness: .9 });
-  const collegeRoadMat = new MeshStandardMaterial({color:0x969b9c,map:road.map,roughness:.95,roughnessMap:lowEnd?null:patches,bumpMap:lowEnd?null:road.map,bumpScale:.018});
+  const collegeRoadMat = new MeshStandardMaterial({color:0x969b9c,map:road.map,roughness:.95,roughnessMap:null,bumpMap:lowEnd?null:road.map,bumpScale:.018});
   const roadDistance = {value:0}, stormClock = {value:0}, wetStrength = {value:0}, rainbowStrength = {value:0};
   wetCollegeAsphalt(collegeRoadMat, roadDistance, stormClock, wetStrength, rainbowStrength);
   const soakedAsphalt = new Color(0x626f81);
@@ -436,11 +436,12 @@ export function streetSurfaces(scene, box, opts = {}) {
       }
     }
     road.color.copy(dry).lerp(wet, weather.rain);
-    road.roughness = 1 - .69 * weather.rain;
-    road.envMapIntensity = .35 + weather.rain * 1.95;
-    collegeRoadMat.color.set(0x969b9c).lerp(wetStrength.value ? soakedAsphalt : wet,weather.rain);
-    collegeRoadMat.roughness = wetStrength.value ? .22 : 1 - .69 * weather.rain;
-    collegeRoadMat.envMapIntensity = wetStrength.value ? 1.75 : 1;
+    road.roughness = 1 - .25 * weather.rain;
+    road.envMapIntensity = .35 + weather.rain * .25;
+    const wetAmt = Math.max(0, Math.min(1, wetStrength.value || 0));
+    collegeRoadMat.color.set(0x969b9c).lerp(wetAmt > 0 ? soakedAsphalt : wet, Math.max(weather.rain, wetAmt * 0.85));
+    collegeRoadMat.roughness = 0.95 - 0.13 * Math.max(weather.rain, wetAmt);
+    collegeRoadMat.envMapIntensity = 0.30;
     scene.environmentIntensity = .52 - weather.night * .39;
   };
 }

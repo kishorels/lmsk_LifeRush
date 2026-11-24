@@ -153,8 +153,14 @@ test('college uses Kodaikanal-style winding road, scooty/car traffic instead of 
 
  const busModelSrc=await readFile(new URL('../dist/bus-model.js',import.meta.url),'utf8');
  const r3dSrc=await readFile(new URL('../dist/renderer3d.js',import.meta.url),'utf8');
+ const rain3dSrc=await readFile(new URL('../dist/college-rain3d.js',import.meta.url),'utf8');
+ const streetSrc=await readFile(new URL('../dist/street-materials.js',import.meta.url),'utf8');
  assert.ok(busModelSrc.includes('export function buildCollegeVehicle'),
    'bus-model exports dedicated College cars, scooties and campus SUVs');
  assert.ok(r3dSrc.includes('function collegeObstacle')&&r3dSrc.includes('TECH FEST · LIFE RUSH'),
    'renderer3d builds College-themed obstacles (Fest Arch, Vending Machine, Book Trolley, Scooty)');
+ assert.ok(rain3dSrc.includes('reflectedLight.directSpecular') && rain3dSrc.includes('pNoise = vec2(p.x + 16.0'),
+   'College wet asphalt clamps foreground sun specular glare and avoids negative p.x center seam');
+ assert.ok(!streetSrc.includes('wetStrength.value ? .22') && streetSrc.includes('roughnessMap:null'),
+   'College road stays matte-wet without mirror-roughness white glare blobs on med/high phones');
 });

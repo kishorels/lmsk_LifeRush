@@ -3,13 +3,13 @@ import {BackSide, BufferAttribute, BufferGeometry, DynamicDrawUsage, Group,
 import {footSpray, rainSample} from './college-rain.js';
 
 const noiseGLSL = `
-  float rainHash(vec2 p) {
-    vec3 q = fract(vec3(p.xyx) * .1031);
+  float rainHash(highp vec2 p) {
+    highp vec3 q = fract(vec3(p.xyx) * .1031);
     q += dot(q, q.yzx + 33.33);
     return fract((q.x + q.y) * q.z);
   }
-  float rainNoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
+  float rainNoise(highp vec2 p) {
+    highp vec2 i = floor(p), f = fract(p);
     f = f*f*(3.-2.*f);
     return mix(mix(rainHash(i),rainHash(i+vec2(1,0)),f.x),
                mix(rainHash(i+vec2(0,1)),rainHash(i+1.),f.x),f.y);
@@ -47,19 +47,22 @@ export function wetCollegeAsphalt(material, distance, clock, strength, rainbowSt
     shader.vertexShader = 'varying highp vec2 roadUv;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>', '#include <begin_vertex>\n roadUv = uv;');
     shader.fragmentShader = 'varying highp vec2 roadUv; uniform highp float roadDistance, stormTime; uniform float wetStrength, rainbowStrength;\n' +
-      noiseGLSL + shader.fragmentShader.replace('#include <emissivemap_fragment>', `
+      noiseGLSL + shader.fragmentShader
+        .replace('#include <emissivemap_fragment>', `
         #include <emissivemap_fragment>
         if (wetStrength > 0.) {
           highp float distWrap = mod(roadDistance, 256.0);
           highp float timeWrap = mod(stormTime, 120.0);
           highp vec2 p = vec2((roadUv.x-.5)*7.1, distWrap-35.+roadUv.y*300.);
-          float grain = rainNoise(mod(p*vec2(7.,18.) + vec2(0.,timeWrap*.65), 128.0));
-          float pool = smoothstep(.22,.68,rainNoise(mod(p*vec2(1.3,.78), 128.0))*.73 + grain*.27);
+          // Keep noise coordinates strictly positive so mod/floor never creates a vertical seam at road center (p.x = 0).
+          highp vec2 pNoise = vec2(p.x + 16.0, p.y + 64.0);
+          float grain = rainNoise(pNoise*vec2(7.,18.) + vec2(0.,timeWrap*.65));
+          float pool = smoothstep(.22,.68,rainNoise(pNoise*vec2(1.3,.78))*.73 + grain*.27);
           float lampX = abs(p.x) - (2.78 + .45*(grain-.5));
           float lampWave = clamp(.5+.5*cos(6.2831853*(p.y-64.)/32.*3.), 0.0, 1.0);
           float lamps = exp(-min(40.0, 6.*lampX*lampX)) * (lampWave*lampWave*lampWave);
-          highp vec2 cells = p*1.65;
-          highp vec2 cell = mod(floor(cells), 256.0);
+          highp vec2 cells = pNoise*1.65;
+          highp vec2 cell = floor(cells);
           float seed = rainHash(cell);
           float age = fract(timeWrap*(.64+.45*seed)+seed*17.) * 1.48;
           vec2 center = .32 + .36*vec2(seed,rainHash(cell+12.));
@@ -87,6 +90,12 @@ export function wetCollegeAsphalt(material, distance, clock, strength, rainbowSt
             + vec3(.24,.36,.52)*ring*detail + rainbowRefl;
           totalEmissiveRadiance += wetStrength * max(vec3(0.0), wetGlow);
         }
+      `)
+        .replace('#include <lights_fragment_end>', `
+        #include <lights_fragment_end>
+        // Prevent harsh white sun/sky specular blowout patches on the foreground wet College road across all GPU tiers.
+        reflectedLight.directSpecular = min(reflectedLight.directSpecular * 0.08, vec3(0.02));
+        reflectedLight.indirectSpecular = min(reflectedLight.indirectSpecular * 0.25, vec3(0.03));
       `);
   };
 }
