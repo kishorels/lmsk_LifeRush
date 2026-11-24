@@ -23,7 +23,8 @@ test('Game script updates pause screen button to EXIT GAME and report card butto
 
   // Verify exit action routes to home on pause exit
   assert.ok(
-    gameSrc.includes("showHub(wasPaused ? 'home' : 'characters')"),
+    gameSrc.includes("showHub(wasPaused ? 'home' : 'characters')") ||
+    gameSrc.includes("exitGameOverToHub(wasPaused ? 'home' : 'characters'"),
     'Exit game button must route to home hub when exiting a paused run'
   );
 });

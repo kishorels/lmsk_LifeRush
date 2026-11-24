@@ -32,7 +32,7 @@ export function fresh(seed=newRunSeed()) {
     level: 1, doubleCoins: 0, doubleJump: 0, slow: 0, ghost: 0, airJumpUsed: false,
     magnet: 0, shield: false, nitro: 0, shoes: 0, powerUpgrades: {},
     magnetDuration: 12, nitroDuration: 4.5, shoesDuration: 9,
-    combo: 1, comboTimer: 0, nearMissCount: 0, nearMissEvent: null, nearMissId: 0, jumpsOver: 0, revivedOnce: false,
+    combo: 1, comboTimer: 0, nearMissCount: 0, nearMissEvent: null, nearMissId: 0, jumpsOver: 0, revivedOnce: false, reviveCount: 0,
     turboBoost: 0, launchBoost: 0, feverTimer: 0, lmskMask: 0,
     activeBranch: null, branchElevation: 0, branchOffsetX: 0, branchCoinMult: 1, branchStart: 0, branchEnd: 0,
     activeForkIndex: -1, forkWarnedIndex: -1, eventBanner: null, eventBannerId: 0, lastRoadSound: null, mysteryCount: 0,
@@ -391,8 +391,19 @@ function awardNearMiss(s, kind) {
   s.nearMissEvent = { id: s.nearMissId, label, bonus, combo: s.combo };
 }
 
+export const MAX_REVIVES_PER_RUN = 2;
+
+export function reviveAdsRequired(reviveCount = 0) {
+  const used = Math.max(0, Math.floor(Number(reviveCount) || 0));
+  if (used === 0) return 1;
+  if (used === 1) return 2;
+  return 0;
+}
+
 export function reviveRun(s) {
   if (!s) return false;
+  const used = Math.max(0, Math.floor(Number(s.reviveCount) || 0));
+  if (used >= MAX_REVIVES_PER_RUN) return false;
   s.damage = 0;
   s.injured = false;
   s.injuredUntil = 0;
@@ -406,6 +417,7 @@ export function reviveRun(s) {
   s.floor = 0;
   s.shield = true;
   s.revivedOnce = true;
+  s.reviveCount = used + 1;
   s.mode = 'countdown';
   s.countdown = 3;
   // Clear all hazards near and ahead of the player so the revived restart is 100% fair

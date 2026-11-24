@@ -2,9 +2,10 @@ import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.14';
 import {createTutorialGuide} from './tutorial-guide.js?v=3.10.14';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.13';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.18';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.13';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.18';
+import {createAdManager,requiredAdsForRevive,formatCooldown} from './ads.js?v=3.10.18';
 import {createFramePacer} from './frame-pacing.js';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 
@@ -43,6 +44,7 @@ const IC_ITPARK = '<svg class="ui-icon" viewBox="0 0 24 24" width="13" height="1
 const IC_SOUND_ON = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
 const IC_SOUND_OFF = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>';
 const IC_REPLAY = '<svg class="ui-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+const IC_VIDEO = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 14.5v-9l6.5 4.5-6.5 4.5z"/></svg>';
 const IC_CHAR = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
 const IC_EXIT = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 const IC_RUSH = '<svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 6 6-6 6"/><path d="m13 6 6 6-6 6"/></svg>';
@@ -441,6 +443,20 @@ const hudLocationEl = typeof document !== 'undefined' ? document.querySelector('
 let lastCoinAnimTime = 0;
 
 const effects=createSound();
+let adOverlayActive = false;
+const ads = createAdManager({
+  onPauseAudio: () => {
+    adOverlayActive = true;
+    effects.pauseBgm?.();
+  },
+  onResumeAudio: () => {
+    adOverlayActive = false;
+    if (sound && !document.hidden && !creditsAudioTakeover && !game.classList.contains('mode-splash') && !finalIntroActive && !collegeIntroActive) {
+      effects.startBgm?.(s.map === 'grandfather' ? 'grandfather' : 'default');
+    }
+  }
+});
+ads.init();
 try{sound=localStorage.getItem('runverse-sound')!=='off';}catch{}
 try{effects.setVolumes?.(JSON.parse(localStorage.getItem('runverse-volumes')||'{}'));}catch{}
 function showVolumeValues(){
@@ -1056,8 +1072,83 @@ function updateShopBadge() {
   dot.hidden = !hasClaim;
 }
 let activeShopTab = 'missions';
+let shopCooldownTimer = 0;
+let shopAdClaimBusy = false;
+
+function updateShopAdCard() {
+  const card = $('shop-free-coins-card');
+  const btn = $('btn-shop-ad-coins');
+  const sub = $('shop-ad-sub');
+  if (!card || !btn) return;
+  const available = ads.isAvailable();
+  card.hidden = !available;
+  if (!available) return;
+  if (shopAdClaimBusy) {
+    btn.disabled = true;
+    btn.textContent = 'LOADING AD...';
+    return;
+  }
+  const rem = ads.getShopCooldownRemaining();
+  if (rem > 0) {
+    btn.disabled = true;
+    btn.textContent = `READY ${formatCooldown(rem)}`;
+    if (sub) sub.textContent = 'Next free coin bonus recharging';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = `${IC_VIDEO} WATCH AD +${ads.config.shopRewardCoins}`;
+    if (sub) sub.textContent = `Watch a short video for +${ads.config.shopRewardCoins} Coins`;
+  }
+}
+
+function stopShopCooldownTimer() {
+  if (shopCooldownTimer) {
+    clearInterval(shopCooldownTimer);
+    shopCooldownTimer = 0;
+  }
+}
+
+function startShopCooldownTimer() {
+  stopShopCooldownTimer();
+  shopCooldownTimer = setInterval(() => {
+    if (!shopModalEl || shopModalEl.hidden) {
+      stopShopCooldownTimer();
+      return;
+    }
+    updateShopAdCard();
+  }, 1000);
+}
+
+if ($('btn-shop-ad-coins')) {
+  $('btn-shop-ad-coins').onclick = async () => {
+    if (shopAdClaimBusy || ads.getShopCooldownRemaining() > 0) return;
+    shopAdClaimBusy = true;
+    updateShopAdCard();
+    const res = await ads.claimShopCoinAd();
+    shopAdClaimBusy = false;
+    if (res.rewarded) {
+      totalCoins += res.coins;
+      lastUnlockUiKey = '';
+      save(true);
+      effects.play('upgrade');
+      updateUnlockUI();
+      updateCarouselUI();
+      renderShopModal();
+      showCloseCallBanner(`+${res.coins} FREE COINS!`, true);
+    } else {
+      updateShopAdCard();
+      const sub = $('shop-ad-sub');
+      if (sub) {
+        sub.textContent = res.reason === 'dismissed'
+          ? 'Watch full video to earn +500 Coins'
+          : 'Ad not ready right now — try again soon';
+      }
+    }
+  };
+}
+
 function renderShopModal() {
   if ($('shop-coin-bank')) $('shop-coin-bank').innerHTML = `${IC_COIN} ${totalCoins.toLocaleString()} Coins`;
+  updateShopAdCard();
   const mList = $('shop-missions-list');
   const uList = $('shop-upgrades-list');
   if (mList) {
@@ -1131,10 +1222,12 @@ if ($('btn-open-shop')) {
     if (!shopModalEl) return;
     renderShopModal();
     shopModalEl.hidden = false;
+    startShopCooldownTimer();
   };
 }
 if ($('btn-close-shop')) {
   $('btn-close-shop').onclick = () => {
+    stopShopCooldownTimer();
     if (shopModalEl) shopModalEl.hidden = true;
     menuNeedsFrame = true;
   };
@@ -2036,6 +2129,12 @@ function beginRun(chosen){
     lastFeverOn = false;
     if ($('fever-veil')) $('fever-veil').hidden = true;
     runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
+    crashReviveAdsWatched = 0;
+    runCoinsDoubled = false;
+    lastCrashReport = null;
+    if ($('report-ad-actions')) $('report-ad-actions').hidden = true;
+    if ($('btn-revive-ad')) $('btn-revive-ad').hidden = true;
+    if ($('btn-double-coins')) $('btn-double-coins').hidden = true;
     if ($('btn-revive')) $('btn-revive').hidden = true;
     if ($('btn-share-score')) $('btn-share-score').hidden = true;
     if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
@@ -2058,6 +2157,9 @@ function pause(){
   if($('report-grade')) $('report-grade').hidden = true;
   if($('report-records')) $('report-records').hidden = true;
   if($('report-challenge-banner')) $('report-challenge-banner').hidden = true;
+  if($('report-ad-actions')) $('report-ad-actions').hidden = true;
+  if($('btn-revive-ad')) $('btn-revive-ad').hidden = true;
+  if($('btn-double-coins')) $('btn-double-coins').hidden = true;
   if($('btn-revive')) $('btn-revive').hidden = true;
   if($('btn-share-score')) $('btn-share-score').hidden = true;
   setScreenMode('gameover');
@@ -2207,33 +2309,215 @@ function crash(completed=false){
     'RUN AGAIN',
     elderFinale?'GRANDFATHER’S VILLAGE':isFinalRun?'VILLAGE ROAD':completed?'MAP COMPLETE':'REPORT CARD'
   );
-  if ($('btn-revive')) {
-    const canRevive = !completed && !s.revivedOnce && totalCoins >= REVIVE_COST;
-    $('btn-revive').hidden = !canRevive;
-  }
+  lastCrashReport = { completed, isFinalRun, elderFinale, runDist, baseCoins: s.coins + bonusCoins, grade, closeCalls: s.nearMissCount || 0 };
+  crashReviveAdsWatched = 0;
+  updateCrashAdButtons();
   if ($('btn-share-score')) {
     $('btn-share-score').hidden = isFinalRun;
-    $('btn-share-score').onclick = () => shareReportCard(runDist, s.coins + bonusCoins, grade, s.nearMissCount || 0);
+    $('btn-share-score').onclick = () => {
+      const doubledExtra = runCoinsDoubled ? Math.max(0, Math.floor(s.coins)) : 0;
+      shareReportCard(runDist, s.coins + bonusCoins + doubledExtra, grade, s.nearMissCount || 0);
+    };
   }
   $('tip').textContent = elderFinale ? (completed?'All four stages complete.':`Reach his childhood home at ${GRANDFATHER_GATE.toLocaleString()} m.`) : isFinalRun
     ? `Reach ${finalRunGateFor(s.map).toLocaleString()}m to complete this stage of The Final Run.`
     : `Coins: ${s.coins + bonusCoins} | Bank: ${totalCoins.toLocaleString()} | Grade: ${grade}`;
 }
 
+let crashReviveAdsWatched = 0;
+let runCoinsDoubled = false;
+let lastCrashReport = null;
+let adActionBusy = false;
+
+function updateCrashAdButtons() {
+  const rep = lastCrashReport;
+  const wrap = $('report-ad-actions');
+  const adRevBtn = $('btn-revive-ad');
+  const dblBtn = $('btn-double-coins');
+  const coinRevBtn = $('btn-revive');
+  if (!rep) {
+    if (wrap) wrap.hidden = true;
+    if (adRevBtn) adRevBtn.hidden = true;
+    if (dblBtn) dblBtn.hidden = true;
+    if (coinRevBtn) coinRevBtn.hidden = true;
+    return;
+  }
+  const neededAds = rep.completed ? 0 : requiredAdsForRevive(s.reviveCount || 0);
+  const canAd = ads.isAvailable();
+  const showAdRevive = neededAds > 0 && canAd;
+  const showCoinRevive = !rep.completed && neededAds > 0 && !showAdRevive && totalCoins >= REVIVE_COST;
+  const showDoubleCoins = !rep.isFinalRun && s.coins > 0 && canAd;
+
+  if (adRevBtn) {
+    adRevBtn.hidden = !showAdRevive;
+    adRevBtn.disabled = adActionBusy;
+    if (showAdRevive) {
+      if (neededAds === 1) {
+        adRevBtn.innerHTML = `${IC_VIDEO} SAVE ME · 1 AD`;
+      } else if (crashReviveAdsWatched === 1) {
+        adRevBtn.innerHTML = `${IC_VIDEO} AD 1/2 · WATCH 2ND`;
+      } else {
+        adRevBtn.innerHTML = `${IC_VIDEO} SAVE ME · 2 ADS`;
+      }
+    }
+  }
+  if (dblBtn) {
+    dblBtn.hidden = !showDoubleCoins;
+    dblBtn.classList.toggle('is-claimed', runCoinsDoubled);
+    dblBtn.disabled = adActionBusy || runCoinsDoubled;
+    if (showDoubleCoins) {
+      const gain = Math.max(0, Math.floor(s.coins));
+      dblBtn.innerHTML = runCoinsDoubled
+        ? `${IC_CHECK} 2X CLAIMED (+${gain})`
+        : `${IC_VIDEO} 2X COINS (+${gain})`;
+    }
+  }
+  if (wrap) {
+    wrap.hidden = !(showAdRevive || showDoubleCoins);
+  }
+  if (coinRevBtn) {
+    coinRevBtn.hidden = !showCoinRevive;
+  }
+}
+
+function finishReviveIntoRun() {
+  if (!reviveRun(s)) return false;
+  crashReviveAdsWatched = 0;
+  lastCrashReport = null;
+  $('overlay').hidden = true;
+  if ($('report-ad-actions')) $('report-ad-actions').hidden = true;
+  if ($('btn-revive-ad')) $('btn-revive-ad').hidden = true;
+  if ($('btn-double-coins')) $('btn-double-coins').hidden = true;
+  if ($('btn-revive')) $('btn-revive').hidden = true;
+  if ($('btn-share-score')) $('btn-share-score').hidden = true;
+  setScreenMode('running');
+  effects.play('shield');
+  showCloseCallBanner((s.reviveCount || 0) >= MAX_REVIVES_PER_RUN ? 'FINAL SAVE · SHIELD!' : 'SHIELD ACTIVE!', true);
+  return true;
+}
+
+if ($('btn-revive-ad')) {
+  $('btn-revive-ad').onclick = async () => {
+    if (adActionBusy) return;
+    const needed = requiredAdsForRevive(s.reviveCount || 0);
+    if (needed <= 0) return;
+    adActionBusy = true;
+    const btn = $('btn-revive-ad');
+    try {
+      while (crashReviveAdsWatched < needed) {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = needed > 1 ? `LOADING AD ${crashReviveAdsWatched + 1}/${needed}...` : 'LOADING AD...';
+        }
+        const res = await ads.showRewardedAd();
+        if (!res.rewarded) {
+          if ($('tip')) {
+            $('tip').textContent = res.reason === 'dismissed'
+              ? 'Watch the full video to continue your run.'
+              : 'Ad unavailable right now — try again.';
+          }
+          return;
+        }
+        crashReviveAdsWatched++;
+        if (crashReviveAdsWatched < needed) {
+          if (btn) btn.textContent = `AD ${crashReviveAdsWatched}/${needed} DONE · NEXT AD...`;
+          if ($('tip')) $('tip').textContent = `Ad ${crashReviveAdsWatched}/${needed} complete — loading next video to Save Me...`;
+          await new Promise(r => setTimeout(r, 320));
+        }
+      }
+      finishReviveIntoRun();
+    } finally {
+      adActionBusy = false;
+      if (s.mode === 'crashed') updateCrashAdButtons();
+    }
+  };
+}
+
+if ($('btn-double-coins')) {
+  $('btn-double-coins').onclick = async () => {
+    if (adActionBusy || runCoinsDoubled || s.coins <= 0) return;
+    const bonus = Math.max(0, Math.floor(s.coins));
+    adActionBusy = true;
+    const btn = $('btn-double-coins');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'LOADING AD...';
+    }
+    try {
+      const res = await ads.showRewardedAd();
+      if (!res.rewarded) {
+        if ($('tip')) {
+          $('tip').textContent = res.reason === 'dismissed'
+            ? 'Watch the full video to double your run coins.'
+            : 'Ad unavailable right now — try again.';
+        }
+        return;
+      }
+      runCoinsDoubled = true;
+      totalCoins += bonus;
+      lastUnlockUiKey = '';
+      save(true);
+      effects.play('upgrade');
+      updateUnlockUI();
+      updateCarouselUI();
+      showCloseCallBanner(`+${bonus} COINS DOUBLED!`, true);
+      if ($('tip') && lastCrashReport) {
+        $('tip').textContent = `2X Coins Claimed (+${bonus}) | Bank: ${totalCoins.toLocaleString()} | Grade: ${lastCrashReport.grade}`;
+      }
+    } finally {
+      adActionBusy = false;
+      updateCrashAdButtons();
+    }
+  };
+}
+
 if ($('btn-revive')) {
   $('btn-revive').onclick = () => {
-    if (s.revivedOnce || totalCoins < REVIVE_COST) return;
+    if (requiredAdsForRevive(s.reviveCount || 0) <= 0 || totalCoins < REVIVE_COST) return;
     totalCoins -= REVIVE_COST;
+    lastUnlockUiKey = '';
     save();
     updateUnlockUI();
-    $('overlay').hidden = true;
-    $('btn-revive').hidden = true;
-    if ($('btn-share-score')) $('btn-share-score').hidden = true;
-    reviveRun(s);
-    setScreenMode('running');
-    effects.play('shield');
-    showCloseCallBanner('SHIELD ACTIVE!', true);
+    updateCarouselUI();
+    finishReviveIntoRun();
   };
+}
+
+async function exitGameOverToHub(targetHub, countForInterstitial) {
+  if (adActionBusy) return;
+  adActionBusy = true;
+  try {
+    if (countForInterstitial) {
+      await ads.maybeShowInterstitialForRun();
+    }
+  } finally {
+    adActionBusy = false;
+  }
+  const wasGrandfather = s.map === 'grandfather';
+  finalRunActiveCharId = '';
+  crashReviveAdsWatched = 0;
+  runCoinsDoubled = false;
+  lastCrashReport = null;
+  s = fresh();
+  s.map = selectedMap;
+  s.mode = 'ready';
+  $('overlay').hidden = true;
+  if ($('report-grade')) $('report-grade').hidden = true;
+  if ($('report-records')) $('report-records').hidden = true;
+  if ($('report-challenge-banner')) $('report-challenge-banner').hidden = true;
+  if ($('report-ad-actions')) $('report-ad-actions').hidden = true;
+  if ($('btn-revive-ad')) $('btn-revive-ad').hidden = true;
+  if ($('btn-double-coins')) $('btn-double-coins').hidden = true;
+  if ($('btn-revive')) $('btn-revive').hidden = true;
+  if ($('selection')) $('selection').hidden = false;
+  syncMapHeaderUI();
+  updateCarouselUI();
+  setScreenMode('select');
+  showHub(targetHub);
+  if (wasGrandfather) {
+    if (sound) effects.startBgm?.('default');
+    else effects.setBgmTrack?.('default');
+  }
 }
 
 if($('start')) $('start').onclick=e=>{
@@ -2259,47 +2543,12 @@ if($('start')) $('start').onclick=e=>{
 };
 if($('btn-play-again')) $('btn-play-again').onclick=()=>{
   if(s.mode==='paused'){resume();return;}
-  // After crash or completing Grandfather's journey → return to main hub & restore default BGM
-  const wasGrandfather = s.map === 'grandfather';
-  finalRunActiveCharId = '';
-  s=fresh();
-  s.map=selectedMap;
-  s.mode='ready';
-  $('overlay').hidden=true;
-  if($('report-grade')) $('report-grade').hidden=true;
-  if($('report-records')) $('report-records').hidden=true;
-  if($('report-challenge-banner')) $('report-challenge-banner').hidden=true;
-  if($('selection')) $('selection').hidden=false;
-  syncMapHeaderUI();
-  updateCarouselUI();
-  setScreenMode('select');
-  showHub('home');
-  if (wasGrandfather) {
-    if (sound) effects.startBgm?.('default');
-    else effects.setBgmTrack?.('default');
-  }
+  exitGameOverToHub('home', true);
 };
 if($('restart')) $('restart').onclick=start;
 if($('btn-change-char')) $('btn-change-char').onclick=()=>{
   const wasPaused = s.mode === 'paused';
-  const wasGrandfather = s.map === 'grandfather';
-  finalRunActiveCharId = '';
-  s=fresh();
-  s.map=selectedMap;
-  s.mode='ready';
-  $('overlay').hidden=true;
-  if($('report-grade')) $('report-grade').hidden=true;
-  if($('report-records')) $('report-records').hidden=true;
-  if($('report-challenge-banner')) $('report-challenge-banner').hidden=true;
-  if($('selection')) $('selection').hidden=false;
-  syncMapHeaderUI();
-  updateCarouselUI();
-  setScreenMode('select');
-  showHub(wasPaused ? 'home' : 'characters');
-  if (wasGrandfather) {
-    if (sound) effects.startBgm?.('default');
-    else effects.setBgmTrack?.('default');
-  }
+  exitGameOverToHub(wasPaused ? 'home' : 'characters', !wasPaused);
 };
 $('pause').onclick=()=>s.mode==='paused'?resume():pause();
 
@@ -2346,7 +2595,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     pause();
     effects.pauseBgm?.();
-  } else if(sound && !creditsAudioTakeover && (s.mode!=='remembering' || s.map==='grandfather') && !game.classList.contains('mode-splash') && !finalIntroActive && !collegeIntroActive) {
+  } else if(sound && !adOverlayActive && !creditsAudioTakeover && (s.mode!=='remembering' || s.map==='grandfather') && !game.classList.contains('mode-splash') && !finalIntroActive && !collegeIntroActive) {
     effects.startBgm?.();
   }
 });

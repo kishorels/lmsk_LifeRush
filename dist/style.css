@@ -2118,6 +2118,95 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   box-shadow: 0 4px 12px rgba(6, 182, 212, 0.42);
 }
 .btn-revive[hidden] { display: none !important; }
+.report-ad-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 0 0 8px;
+}
+.report-ad-actions[hidden] { display: none !important; }
+.report-ad-actions:has(> button[hidden]) {
+  grid-template-columns: 1fr;
+}
+.btn-ad-cta {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 11px;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.45px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform .13s ease, filter .13s ease, opacity .15s ease;
+}
+.btn-ad-cta[hidden] { display: none !important; }
+.btn-ad-cta:active:not(:disabled) { transform: scale(0.96); }
+.btn-ad-cta:disabled { opacity: 0.72; cursor: default; }
+.btn-revive-ad {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 1.5px solid #a7f3d0;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
+}
+.btn-double-coins {
+  background: linear-gradient(135deg, #ffe268, #f59e0b);
+  border: 1.5px solid #fff7cc;
+  color: #102138;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
+}
+.btn-double-coins.is-claimed {
+  background: linear-gradient(135deg, #15803d, #166534);
+  border-color: #86efac;
+  color: #dcfce7;
+  box-shadow: none;
+}
+.game.capture .report-ad-actions { margin: 0 0 5px; gap: 6px; }
+.game.capture .btn-ad-cta { padding: 6.5px 8px; font-size: 10px; }
+.shop-ad-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(255, 215, 84, 0.65);
+  background: linear-gradient(135deg, rgba(161, 98, 7, 0.34), rgba(14, 38, 74, 0.92));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.shop-ad-card[hidden] { display: none !important; }
+.shop-ad-meta { display: grid; gap: 2px; min-width: 0; }
+.shop-ad-meta strong { font-size: 11.5px; font-weight: 900; color: #ffe268; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.shop-ad-meta small { font-size: 9.5px; font-weight: 700; color: #c8e3fa; }
+.shop-ad-btn {
+  flex: none;
+  padding: 8px 11px;
+  border-radius: 999px;
+  border: 1.5px solid #fff3b0;
+  background: linear-gradient(135deg, #ffe268, #f59e0b);
+  color: #0d1d35;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.45px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  transition: transform .13s ease, filter .13s ease;
+}
+.shop-ad-btn:active:not(:disabled) { transform: scale(0.95); }
+.shop-ad-btn:disabled {
+  background: rgba(24, 46, 80, 0.85);
+  border-color: rgba(123, 197, 248, 0.3);
+  color: #9bbad8;
+  box-shadow: none;
+  cursor: default;
+}
 .overlay .panel .primary {
   width: 100%;
   padding: 11px 16px;

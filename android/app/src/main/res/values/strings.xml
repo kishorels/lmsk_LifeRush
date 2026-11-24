@@ -4,4 +4,6 @@
     <string name="title_activity_main">LMSK LifeRush</string>
     <string name="package_name">com.lmsk.liferush</string>
     <string name="custom_url_scheme">com.lmsk.liferush</string>
+    <!-- Official Google AdMob Test App ID. Replace with your live AdMob App ID (ca-app-pub-XXXX~YYYY) before Play Store release. -->
+    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
 </resources>

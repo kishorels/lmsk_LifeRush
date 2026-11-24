@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.10.17">
+  <link rel="stylesheet" href="style.css?v=3.10.18">
 </head>
 <body>
 <header>
@@ -354,6 +354,13 @@
           </div>
           <button type="button" id="btn-close-shop" class="shop-close-btn" aria-label="Close Missions and Shop"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         </div>
+        <div id="shop-free-coins-card" class="shop-ad-card" hidden>
+          <div class="shop-ad-meta">
+            <strong><img class="ui-coin-ic" width="14" height="14" src="assets/icons/coin.svg" alt=""> FREE +500 COINS</strong>
+            <small id="shop-ad-sub">Watch a short video ad</small>
+          </div>
+          <button type="button" id="btn-shop-ad-coins" class="shop-ad-btn">WATCH AD +500</button>
+        </div>
         <div class="shop-tabs" role="tablist">
           <button type="button" class="shop-tab active" data-shop-tab="missions" role="tab" aria-selected="true"><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg> Daily Missions</button>
           <button type="button" class="shop-tab" data-shop-tab="upgrades" role="tab" aria-selected="false"><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg> Powerup Shop</button>
@@ -454,6 +461,10 @@
           STUDENT: <strong id="report-player-name">Student</strong>
         </div>
         <p id="message">Swipe. Jump. Slide. Make your own story.</p>
+        <div id="report-ad-actions" class="report-ad-actions" hidden>
+          <button id="btn-revive-ad" class="btn-ad-cta btn-revive-ad" type="button" hidden>SAVE ME · 1 AD</button>
+          <button id="btn-double-coins" class="btn-ad-cta btn-double-coins" type="button" hidden>2X COINS · AD</button>
+        </div>
         <button id="btn-revive" class="btn-revive" type="button" hidden><svg class="ui-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg> SAVE ME · 250 <img class="ui-coin-ic" width="14" height="14" src="assets/icons/coin.svg" alt=""></button>
         <button id="btn-play-again" class="primary">RUN AGAIN <span aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span></button>
         <div class="report-secondary-row">
@@ -508,6 +519,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.10.16"></script>
+<script type="module" src="boot.js?v=3.10.18"></script>
 </body>
 </html>
