@@ -2,9 +2,9 @@ import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.14';
 import {createTutorialGuide} from './tutorial-guide.js?v=3.10.22y';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.22x';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.22z';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.10.22r';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.22x';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.22z';
 import {
   LOGIN_STREAK_REWARDS,
   normalizeMissionState, canClaimDailyLogin, claimDailyLogin,

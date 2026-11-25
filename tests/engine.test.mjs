@@ -290,6 +290,21 @@ test('all 3 lanes are never simultaneously blocked across low, mid, and high spe
   }
 });
 
+test('staggered slide and jump obstacles stay visible and never vanish prematurely in front of the player', () => {
+  const s = fresh(7);
+  s.mode = 'running';
+  s.distance = 200;
+  s.next = 1000;
+  s.lane = s.x = 0;
+  const slideObs = { type: 'slide', lane: 0, z: 226, done: false };
+  const leftBlock = { type: 'block', lane: -1, z: 218, done: false };
+  const rightBlock = { type: 'block', lane: 1, z: 234, done: false };
+  s.items = [leftBlock, slideObs, rightBlock];
+  step(s, 0.05);
+  assert.equal(slideObs.cleared, undefined, 'Staggered slide obstacle must NOT be cleared/hidden');
+  assert.equal(slideObs.done, false);
+});
+
 test('adjacent blocks do not trigger removed close-call popups; nitro smashes obstacles, super shoes boost jump, and revive clears hazards', () => {
   const s = fresh(0);
   s.mode = 'running';

@@ -533,19 +533,19 @@ function predictedBlockedLanesAt(s, targetZ, reactionSec = 0.95) {
   return blocked;
 }
 
-const FAR_ESCAPE_HORIZONS = [8.5, 7.2, 6.0, 4.8, 3.6, 2.5, 1.45, 1.15, 0.85, 0.55];
-const NEAR_ESCAPE_HORIZONS = [1.45, 1.15, 0.85, 0.55];
+const FAR_ESCAPE_HORIZONS = [11.0, 9.8, 8.6, 7.4, 6.2, 5.0, 3.8, 2.6, 1.45, 0.95, 0.55];
+const NEAR_ESCAPE_HORIZONS = [0.95, 0.55];
 function enforceOpenEscapeLane(s, checkFar = false) {
   if (s.next >= 90000) return;
   const speed = Math.max(24, s.speed || 28);
   const horizons = checkFar ? FAR_ESCAPE_HORIZONS : NEAR_ESCAPE_HORIZONS;
-  // Check far horizon when spawning / periodically so 3-lane conflicts clear BEFORE the player ever sees them!
+  // Use a tight physical overlap window (2.8m) so staggered slide/jump/block obstacles NEVER vanish in front of the player!
+  const padZ = 2.8;
   for (const t of horizons) {
     const targetZ = s.distance + speed * t;
-    const padZ = Math.max(9, speed * 0.38);
     const vanLanes = new Set();
     for (const van of routeVans(targetZ, s.runSeed)) {
-      if (targetZ >= van.ramp - padZ && targetZ <= van.front + padZ * 0.6) vanLanes.add(van.lane);
+      if (targetZ >= van.ramp - padZ && targetZ <= van.front + padZ) vanLanes.add(van.lane);
     }
     const byLane = new Map([[-1, []], [0, []], [1, []]]);
     for (const o of s.items) {
@@ -561,14 +561,16 @@ function enforceOpenEscapeLane(s, checkFar = false) {
         }
       }
       const len = o.length || 2.5;
-      if (targetZ >= predZ - padZ && targetZ <= predZ + len + padZ * 0.6) {
+      if (targetZ >= predZ - padZ && targetZ <= predZ + len + padZ) {
         byLane.get(o.lane)?.push(o);
       }
     }
     const blockedCount = [-1, 0, 1].filter(l => vanLanes.has(l) || byLane.get(l).length > 0).length;
     if (blockedCount < 3) continue;
-    const removable = [-1, 0, 1].filter(l => !vanLanes.has(l) && byLane.get(l).every(o => !o.roofRide));
-    const pool = removable.length ? removable : [-1, 0, 1].filter(l => !vanLanes.has(l));
+    // Prefer clearing non-roofRide lanes that don't hold a slide/jump barrier right in front of the player
+    const noRoof = [-1, 0, 1].filter(l => !vanLanes.has(l) && byLane.get(l).every(o => !o.roofRide));
+    const preferStaticBlock = noRoof.filter(l => byLane.get(l).every(o => o.type !== 'slide' && o.type !== 'jump'));
+    const pool = preferStaticBlock.length ? preferStaticBlock : (noRoof.length ? noRoof : [-1, 0, 1].filter(l => !vanLanes.has(l)));
     if (!pool.length) continue;
     pool.sort((a, b) => Math.abs(a - s.lane) - Math.abs(b - s.lane));
     for (const o of byLane.get(pool[0])) {
