@@ -11,8 +11,6 @@ const MISSION_POOL = [
   { id: 'coins_600',    type: 'coins',    target: 600,  reward: 600, title: 'Collect 600 Coins' },
   { id: 'dist_1500',    type: 'distance', target: 1500, reward: 400, title: 'Run 1,500m Total' },
   { id: 'dist_3000',    type: 'distance', target: 3000, reward: 700, title: 'Run 3,000m Total' },
-  { id: 'fever_1',      type: 'fevers',   target: 1,    reward: 450, title: 'Trigger Fever Rush 1 Time' },
-  { id: 'fever_2',      type: 'fevers',   target: 2,    reward: 800, title: 'Trigger Fever Rush 2 Times' },
   { id: 'jumps_8',      type: 'jumps',    target: 8,    reward: 400, title: 'Jump Over 8 Obstacles' },
   { id: 'runs_3',       type: 'runs',     target: 3,    reward: 500, title: 'Complete 3 Runs' }
 ];
@@ -41,7 +39,7 @@ export function generateDailyMissions(dateKey) {
   const byType = new Map();
   const chosen = [];
   for (let step = 0; step < MISSION_POOL.length && chosen.length < 3; step++) {
-    const idx = (hash + step * 3) % MISSION_POOL.length;
+    const idx = (hash + step) % MISSION_POOL.length;
     const tpl = MISSION_POOL[idx];
     if (byType.has(tpl.type)) continue;
     byType.set(tpl.type, true);

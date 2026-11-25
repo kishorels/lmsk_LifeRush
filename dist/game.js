@@ -2,15 +2,15 @@ import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.14';
 import {createTutorialGuide} from './tutorial-guide.js?v=3.10.14';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.22u';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.22x';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.10.22r';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,FEVER_DURATION,FEVER_CHARGE_MAX,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.22u';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.22x';
 import {
   LOGIN_STREAK_REWARDS,
   normalizeMissionState, canClaimDailyLogin, claimDailyLogin,
   recordRunForMissions, claimMissionReward, canClaimAllMissionsBonus,
   claimAllMissionsBonus, countPendingRewards
-} from './missions.js?v=3.10.22u';
+} from './missions.js?v=3.10.22x';
 import {createAdManager,requiredAdsForRevive,formatCooldown} from './ads.js?v=3.10.19';
 import {createFramePacer} from './frame-pacing.js';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
@@ -1208,7 +1208,7 @@ function freshMissions(day) {
     items: [
       { id: 'dist', label: 'Run 1,500m total today', target: 1500, progress: 0, reward: 350, claimed: false },
       { id: 'coins', label: 'Collect 150 coins today', target: 150, progress: 0, reward: 450, claimed: false },
-      { id: 'fever', label: 'Trigger 2 Fever Rushes today', target: 2, progress: 0, reward: 600, claimed: false }
+      { id: 'jumps', label: 'Jump over 8 obstacles today', target: 8, progress: 0, reward: 600, claimed: false }
     ]
   };
 }
@@ -1470,7 +1470,7 @@ async function shareReportCard(runDist, runCoins, grade, feverCount) {
     ['DISTANCE', `${runDist.toLocaleString()} m`],
     ['HIGHEST RECORD', `${best.toLocaleString()} m`],
     ['COINS EARNED', `${runCoins.toLocaleString()} Coins`],
-    ['FEVER RUSHES', `${feverCount || 0}`]
+    ['JUMPS OVER', `${feverCount || 0}`]
   ];
   rows.forEach(([k, v], i) => {
     const y = 480 + i * 86;
@@ -2847,7 +2847,7 @@ function tick(t) {
     lastMilestoneShown = s.milestoneEvent.id;
     const mv = s.milestoneEvent;
     effects.play('milestone');
-    showMilestoneBanner(mv.label, `+${mv.coins} COINS · +20% FEVER`);
+    showMilestoneBanner(mv.label, `+${mv.coins} BONUS COINS`);
     $('toast').textContent = `${mv.label} +${mv.coins} Bonus Coins!`;
   }
   if (s.lastRoadSound) {
@@ -3008,41 +3008,11 @@ function tick(t) {
     ghostPill.hidden = ghostSec <= 0;
     if (ghostSec > 0 && $('ghost-timer')) $('ghost-timer').textContent = ghostSec + 's';
   }
-  const speedMode = s.mode !== 'running' ? 0 : (s.nitro > 0 || s.turboBoost > 0 || s.feverTimer > 0) ? 2 : s.speed >= 42 ? 1 : 0;
+  const speedMode = s.mode !== 'running' ? 0 : (s.nitro > 0 || s.turboBoost > 0) ? 2 : s.speed >= 42 ? 1 : 0;
   if (speedLinesEl && speedMode !== lastSpeedMode) {
     lastSpeedMode = speedMode;
     speedLinesEl.hidden = speedMode === 0;
     speedLinesEl.classList.toggle('is-nitro', speedMode === 2);
-  }
-  const feverOn = s.mode === 'running' && s.feverTimer > 0;
-  if (feverOn !== lastFeverOn) {
-    lastFeverOn = feverOn;
-    if ($('fever-veil')) $('fever-veil').hidden = !feverOn;
-  }
-  if (feverMeterEl) {
-    const showFever = s.mode === 'running' && s.map !== 'grandfather';
-    feverMeterEl.hidden = !showFever;
-    if (showFever) {
-      feverMeterEl.classList.toggle('is-active', feverOn);
-      const pct = feverOn
-        ? Math.max(0, Math.min(100, Math.round((s.feverTimer / FEVER_DURATION) * 100)))
-        : Math.max(0, Math.min(100, Math.round(((s.feverCharge || 0) / FEVER_CHARGE_MAX) * 100)));
-      feverMeterEl.classList.toggle('is-hot', !feverOn && pct >= 75);
-      const sec = feverOn ? Math.ceil(s.feverTimer) : 0;
-      if (pct !== lastFeverPct) {
-        if (!feverOn && lastFeverPct >= 0 && pct - lastFeverPct >= 10) {
-          feverMeterEl.classList.remove('is-bump');
-          void feverMeterEl.offsetWidth;
-          feverMeterEl.classList.add('is-bump');
-        }
-        lastFeverPct = pct;
-        if (feverMeterFillEl) feverMeterFillEl.style.width = pct + '%';
-      }
-      if (sec !== lastFeverSec || (feverOn && feverMeterLabelEl && !feverMeterLabelEl.textContent.startsWith('FEVER '))) {
-        lastFeverSec = sec;
-        if (feverMeterLabelEl) feverMeterLabelEl.textContent = feverOn ? `FEVER ${sec}s` : 'FEVER';
-      }
-    }
   }
   const curMask = s.lmskMask || 0;
   if (curMask !== lastLmskMask) {

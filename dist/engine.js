@@ -145,20 +145,10 @@ function collectMagnetCoins(s) {
 }
 
 export function coinGain(s) {
-  return (s.doubleCoins > 0 ? 2 : 1) * (s.feverTimer > 0 ? 2 : 1) * (s.branchCoinMult || 1);
+  return (s.doubleCoins > 0 ? 2 : 1) * (s.branchCoinMult || 1);
 }
 
-export function addFeverCharge(s, amount) {
-  if (!s || amount <= 0 || s.map === 'grandfather' || s.feverTimer > 0) return false;
-  s.feverCharge = clamp((s.feverCharge || 0) + amount, 0, FEVER_CHARGE_MAX);
-  if (s.feverCharge >= FEVER_CHARGE_MAX) {
-    s.feverCharge = 0;
-    s.feverTimer = FEVER_DURATION;
-    s.feverCount = (s.feverCount || 0) + 1;
-    s.lastRoadSound = 'fever';
-    pushEventBanner(s, `FEVER RUSH! 2X COINS · ${FEVER_DURATION}s`, 'fever');
-    return true;
-  }
+export function addFeverCharge() {
   return false;
 }
 
@@ -175,7 +165,6 @@ export function checkDistanceMilestones(s, prevDist) {
       s.milestoneId = (s.milestoneId || 0) + 1;
       s.milestoneEvent = { id: s.milestoneId, distance: target, coins, label };
       hit = s.milestoneEvent;
-      addFeverCharge(s, 20);
     }
     const nextPreset = DISTANCE_MILESTONES.find(m => m.distance > target);
     target = nextPreset ? nextPreset.distance : (target < 10000 ? 10000 : target + 5000);
