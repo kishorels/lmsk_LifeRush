@@ -1,7 +1,7 @@
 import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.14';
-import {createTutorialGuide} from './tutorial-guide.js?v=3.10.14';
+import {createTutorialGuide} from './tutorial-guide.js?v=3.10.22y';
 import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.22x';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.10.22r';
 import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.22x';
@@ -389,6 +389,7 @@ function setCameraAngleMode(next, showNotice = false) {
 function cycleCameraAngle(showNotice = true) {
   const idx = CAMERA_MODES.indexOf(cameraAngle);
   setCameraAngleMode(CAMERA_MODES[(idx + 1) % CAMERA_MODES.length], showNotice);
+  tutorialGuide?.onCameraInteract?.();
 }
 syncCameraUI();
 document.querySelectorAll('[data-cam]').forEach(btn => {
@@ -2643,6 +2644,10 @@ $('pause').onclick=()=>s.mode==='paused'?resume():pause();
 
 function input(a){
   if(runLoadingActive || finalRunCutsceneBlocking())return;
+  if (tutorialGuide.isFrozen()) {
+    const accepted = tutorialGuide.onAction(a);
+    if (!accepted) return;
+  }
   const before=[s.jump,s.slide,s.roll,s.drop,s.lane];
   action(s,a);
   if(s.mode==='running'){
@@ -2734,8 +2739,10 @@ function tick(t) {
   }
 
   // ULTRA-only brief slow-motion knockdown impact punch at start of fatal fall (untouched on AUTO/LOW/MED/HIGH)
-  const simDt = (graphicsQuality === 'ultra' && s.mode === 'falling' && s.fall > 0.64) ? dt * 0.36 : dt;
-  step(s, simDt);
+  const simDt = tutorialGuide.isFrozen()
+    ? 0
+    : (graphicsQuality === 'ultra' && s.mode === 'falling' && s.fall > 0.64) ? dt * 0.36 : dt;
+  if (simDt > 0) step(s, simDt);
   const finishGate=s.map==='grandfather'?GRANDFATHER_GATE:(s.map==='finalrun'||s.isFinalRun)?finalRunGateFor(s.map):Infinity;
   const memory=old==='running' && reachedMemory(s,distanceBefore);
   if(memory) {

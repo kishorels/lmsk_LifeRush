@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.10.22x">
+  <link rel="stylesheet" href="style.css?v=3.10.22y">
 </head>
 <body>
 <header>
@@ -197,7 +197,6 @@
           <span id="hub-map-name">SCHOOL CAMPUS</span>
           <small id="hub-outfit-name">School Boy</small>
           <small id="hub-coin-bank"><img class="ui-coin-ic" width="14" height="14" src="assets/icons/coin.svg" alt=""> 0 Coins</small>
-          <small id="player-progress">1/4 Maps · 0/4 Powers</small>
         </div>
         <button type="button" id="btn-daily-hub" class="hub-daily-btn" aria-label="Daily missions and rewards">
           <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
@@ -484,15 +483,15 @@
       </div>
     </div>
 
-    <!-- FIRST-RUN INTERACTIVE GESTURE TUTORIAL CUE (NON-BLOCKING) -->
+    <!-- FIRST-RUN INTERACTIVE LIVE OBSTACLE TUTORIAL OVERLAY -->
     <div id="run-tutorial-banner" class="run-tutorial-banner" hidden aria-live="polite">
-      <div class="tut-icon" id="tut-icon" aria-hidden="true"></div>
+      <div class="tut-arrow-stage" id="tut-icon" aria-hidden="true"></div>
       <div class="tut-copy">
         <div class="tut-head">
-          <span class="tut-step-badge" id="tut-step-badge">1 / 4</span>
-          <strong id="tut-title">SWIPE LEFT OR RIGHT</strong>
+          <span class="tut-step-badge" id="tut-step-badge">TUTORIAL</span>
+          <strong id="tut-title">SWIPE LEFT TO DODGE</strong>
         </div>
-        <small id="tut-desc">Switch lanes to dodge buses &amp; barriers</small>
+        <small id="tut-desc">Move into the open lane to continue</small>
       </div>
       <button type="button" id="btn-tut-skip" class="btn-tut-skip">Skip</button>
     </div>
@@ -600,6 +599,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.10.22x"></script>
+<script type="module" src="boot.js?v=3.10.22y"></script>
 </body>
 </html>
