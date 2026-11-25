@@ -11,8 +11,6 @@ const MISSION_POOL = [
   { id: 'coins_600',    type: 'coins',    target: 600,  reward: 600, title: 'Collect 600 Coins' },
   { id: 'dist_1500',    type: 'distance', target: 1500, reward: 400, title: 'Run 1,500m Total' },
   { id: 'dist_3000',    type: 'distance', target: 3000, reward: 700, title: 'Run 3,000m Total' },
-  { id: 'nearmiss_3',   type: 'nearmiss', target: 3,    reward: 450, title: 'Do 3 Close Calls' },
-  { id: 'nearmiss_6',   type: 'nearmiss', target: 6,    reward: 750, title: 'Do 6 Close Calls' },
   { id: 'fever_1',      type: 'fevers',   target: 1,    reward: 450, title: 'Trigger Fever Rush 1 Time' },
   { id: 'fever_2',      type: 'fevers',   target: 2,    reward: 800, title: 'Trigger Fever Rush 2 Times' },
   { id: 'jumps_8',      type: 'jumps',    target: 8,    reward: 400, title: 'Jump Over 8 Obstacles' },

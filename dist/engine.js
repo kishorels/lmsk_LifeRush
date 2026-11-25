@@ -189,7 +189,7 @@ function advanceCoinFlights(s,dt) {
   s.coinFlights=s.coinFlights.filter(flight=>{
     if(flight.elapsed<flight.duration)return true;
     s.coins += coinGain(s);
-    addFeverCharge(s, 2);
+    addFeverCharge(s, 3);
     return false;
   });
 }
@@ -270,13 +270,13 @@ function updateElevation(s, dt) {
     for(let n=0;n<4;n++) {
       const z=van.rear+2+n*4,id=van.id+':'+n;
       if(Math.abs(s.distance-z)<.9 && Math.abs(s.x-van.lane)<.34 && height(s)>=van.roof-.12 && height(s)<van.roof+1.2 && !s.collected.includes(id)) {
-        s.collected.push(id);s.coins += coinGain(s);addFeverCharge(s, 2);
+        s.collected.push(id);s.coins += coinGain(s);addFeverCharge(s, 3);
       }
     }
   }
   for(const bus of s.items){if(!bus.roofRide||!bus.started)continue;
    for(let i=0;i<4;i++){const id=bus.id+':'+i,z=bus.z+4+i*4;
-    if(!s.collected.includes(id)&&Math.abs(s.distance-z)<1.2&&Math.abs(s.x-bus.lane)<.34&&height(s)>=bus.roof-.12&&height(s)<bus.roof+1.1){s.collected.push(id);s.coins += coinGain(s);addFeverCharge(s, 2);}
+    if(!s.collected.includes(id)&&Math.abs(s.distance-z)<1.2&&Math.abs(s.x-bus.lane)<.34&&height(s)>=bus.roof-.12&&height(s)<bus.roof+1.1){s.collected.push(id);s.coins += coinGain(s);addFeverCharge(s, 3);}
    }
   }
   s.entryCoins.forEach((distance,index) => {
@@ -286,7 +286,7 @@ function updateElevation(s, dt) {
     if (elevation < s.entryVan.roof-.12 || elevation > s.entryVan.roof+.84) return;
     s.roofCoins |= 1<<index;
     s.coins += coinGain(s);
-    addFeverCharge(s, 2);
+    addFeverCharge(s, 3);
   });
 }
 
@@ -433,25 +433,6 @@ export const SWEEP_SECONDS = 27 / 24;
 
 
 
-function awardNearMiss(s, kind) {
-  s.nearMissCount = (s.nearMissCount || 0) + 1;
-  s.combo = Math.min(5, (s.comboTimer > 0 ? (s.combo || 1) : 1) + 1);
-  s.comboTimer = 4.5;
-  const maxComboBonus = s.combo === 5 ? 15 : 0;
-  const bonus = 5 * s.combo + maxComboBonus;
-  s.coins += bonus;
-  s.nearMissId = (s.nearMissId || 0) + 1;
-  const nitroHits = s.nitroHits || 0;
-  const label = kind === 'nitro'
-    ? (nitroHits >= NITRO_MAX_HITS - 1 ? `NITRO ${nitroHits}/${NITRO_MAX_HITS} · NEXT HIT OUT!` : `NITRO SMASH ${nitroHits}/${NITRO_MAX_HITS}`)
-    : kind === 'vehicle' ? 'CLOSE CALL!'
-    : kind === 'clean-jump' ? 'CLEAN JUMP!'
-    : kind === 'clean-slide' ? 'SLICK SLIDE!'
-    : 'NEAR MISS!';
-  s.nearMissEvent = { id: s.nearMissId, label, bonus, combo: s.combo, maxCombo: s.combo === 5 };
-  addFeverCharge(s, 15);
-}
-
 function handleNitroHit(s, type) {
   s.nitroHits = (s.nitroHits || 0) + 1;
   if (s.nitroHits >= NITRO_MAX_HITS) {
@@ -472,7 +453,11 @@ function handleNitroHit(s, type) {
     }
     return true;
   }
-  awardNearMiss(s, 'nitro');
+  const label = s.nitroHits >= NITRO_MAX_HITS - 1
+    ? `NITRO ${s.nitroHits}/${NITRO_MAX_HITS} · NEXT HIT OUT!`
+    : `NITRO SMASH ${s.nitroHits}/${NITRO_MAX_HITS}`;
+  pushEventBanner(s, label, 'turbo');
+  addFeverCharge(s, 10);
   return false;
 }
 
@@ -974,19 +959,13 @@ export function step(s, dt, random = Math.random) {
           continue;
         }
         obstacle.done=true;if(!s.hit){takeHit(s,obstacle.type);if(s.mode==='running')recoverFromBus(s);}if(s.mode!=='running')break;
-      } else if (!obstacle.done && !obstacle.nearMissed && !obstacle.roofRide && relative < -0.6 && relative > -obstacle.length - 3) {
-        const dx = Math.abs(s.x - obstacle.lane);
-        if (dx >= 0.68 && dx <= 1.38 && s.floor < 1) {
-          obstacle.nearMissed = true;
-          awardNearMiss(s, 'vehicle');
-        }
       }
       continue;
     }
     if (obstacle.done || obstacle.z > s.distance + 1.1) continue;
     obstacle.done = true;
     if (obstacle.type === 'coin') {
-      if (Math.abs(s.x - obstacle.lane) < .65) { s.coins += coinGain(s); addFeverCharge(s, 2); }
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.coins += coinGain(s); addFeverCharge(s, 3); }
     } else if (ROAD_EVENT_TYPES.has(obstacle.type)) {
       triggerRoadEvent(s, obstacle, JUMP_DURATION);
     } else if (obstacle.type === 'magnet') {
@@ -1021,11 +1000,7 @@ export function step(s, dt, random = Math.random) {
       const dx = Math.abs(s.x - obstacle.lane);
       if (obstacle.type === 'jump' && dx < .55 && height(s) > .65) {
         s.jumpsOver = (s.jumpsOver || 0) + 1;
-        awardNearMiss(s, 'clean-jump');
-      } else if (obstacle.type === 'slide' && dx < .55 && (s.slide > 0 || s.roll > 0)) {
-        awardNearMiss(s, 'clean-slide');
-      } else if (obstacle.type === 'block' && !obstacle.isForkDivider && dx >= .72 && dx <= 1.35) {
-        awardNearMiss(s, 'block');
+        addFeverCharge(s, 10);
       }
     }
   }

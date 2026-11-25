@@ -148,8 +148,8 @@ export function createRenderer(canvas, callbacks = {}){
    if(activeTier==='ultra-low')return isTouchDevice?0.92:0.80;
    if(activeTier==='low')return isTouchDevice?1.05:0.90;
    if(activeTier==='med')return isTouchDevice?1.30:1.20;
-   if(activeTier==='ultra')return isTouchDevice?2.15:2.0;
-   return isTouchDevice?(isFlagshipGpu||gfxPref==='high'?2.0:1.65):2.0;
+   if(activeTier==='ultra')return isTouchDevice?1.60:2.0;
+   return isTouchDevice?(isFlagshipGpu||gfxPref==='high'?1.50:1.45):2.0;
  }
  function resize(){
    const {width,height}=canvas.getBoundingClientRect();
@@ -184,17 +184,17 @@ export function createRenderer(canvas, callbacks = {}){
    scene.userData.ultraLow=ultra;
    scene.userData.lowEnd=low;
    scene.userData.maxAniso=low?1:med?2:4;
-   scene.userData.trafficFar=isUltra?310:ultra?135:low?165:med?225:295;
-   obsFar=isUltra?310:ultra?125:low?155:med?210:280;
-   coinFar=isUltra?175:ultra?54:low?68:med?92:(isTouchDevice?110:175);
-   glintFar=isUltra?52:low?0:med?20:(isTouchDevice?28:48);
-   coinBurstCount=isUltra?6:ultra?1:low?2:med?3:5;
-   camFarDist=isUltra?395:ultra?168:low?200:med?270:375;
+   scene.userData.trafficFar=isUltra?(isTouchDevice?245:310):ultra?135:low?165:med?225:295;
+   obsFar=isUltra?(isTouchDevice?235:310):ultra?125:low?155:med?210:280;
+   coinFar=isUltra?(isTouchDevice?125:175):ultra?54:low?68:med?92:(isTouchDevice?110:175);
+   glintFar=isUltra?(isTouchDevice?34:52):low?0:med?20:(isTouchDevice?28:48);
+   coinBurstCount=isUltra?(isTouchDevice?4:6):ultra?1:low?2:med?3:5;
+   camFarDist=isUltra?(isTouchDevice?310:395):ultra?168:low?200:med?270:375;
    resize();
    renderer.toneMapping=low?T.NoToneMapping:T.ACESFilmicToneMapping;
    renderer.toneMappingExposure=low?1.0:1.22;
-   renderer.shadowMap.type=isUltra?T.PCFSoftShadowMap:((low||med||isTouchDevice)?T.BasicShadowMap:T.PCFShadowMap);
-   const shadowSize=Math.min(isUltra?1024:(isTouchDevice?512:1024),maxBuffer);
+   renderer.shadowMap.type=isUltra?(isTouchDevice?T.PCFShadowMap:T.PCFSoftShadowMap):((low||med||isTouchDevice)?T.BasicShadowMap:T.PCFShadowMap);
+   const shadowSize=Math.min(isUltra?(isTouchDevice?768:1024):(isTouchDevice?512:1024),maxBuffer);
    if(sun.shadow.mapSize.x!==shadowSize){
      sun.shadow.map?.dispose();
      sun.shadow.map=null;
@@ -544,6 +544,33 @@ export function createRenderer(canvas, callbacks = {}){
  if(typeof window!=='undefined')window.addEventListener('resize',resize);
  let perfFrames=0,perfTime=0,slowWindows=0,smoothWindows=0;
  const renderFn=function render(s,character,frameDt){if(contextLost||renderer.getContext?.()?.isContextLost?.())return 'context-lost';stage.restore();capture.restore();runner.scale.setScalar(1);runner.rotation.set(0,0,0);const dt=Math.min(.05,Math.max(0,s.time-lastTime));lastTime=s.time;
+ // Smooth Dynamic Resolution Scaling for manual ULTRA on mobile: keeps 100% ULTRA visuals ON while locking 60 FPS!
+ if(gfxPref==='ultra'&&isTouchDevice&&s.mode==='running'&&frameDt>0.004&&frameDt<0.25){
+   perfFrames++;perfTime+=frameDt;
+   if(perfFrames>=35){
+     const avgDt=perfTime/perfFrames;
+     perfFrames=0;perfTime=0;
+     const curCap=getDprCap();
+     if(avgDt>0.021){
+       smoothWindows=0;slowWindows++;
+       if(slowWindows>=2){
+         slowWindows=0;
+         if(curCap>1.22)applyQualityTier('ultra',Math.max(1.22,Number((curCap-0.16).toFixed(2))));
+       }
+     }else if(avgDt<0.0172){
+       slowWindows=0;smoothWindows++;
+       if(smoothWindows>=5){
+         smoothWindows=0;
+         if(dynamicDprCap>0&&curCap<1.60){
+           const nextCap=Math.min(1.60,Number((curCap+0.16).toFixed(2)));
+           applyQualityTier('ultra',nextCap>=1.59?0:nextCap);
+         }
+       }
+     }else{
+       slowWindows=0;smoothWindows=0;
+     }
+   }
+ }
  // Fast live bidirectional dynamic GPU auto-scaler in AUTO mode: 2 consecutive slow windows step DOWN cleanly, 5 smooth windows step UP!
  if(gfxPref==='auto'&&s.mode==='running'&&frameDt>0.004&&frameDt<0.25){
    perfFrames++;perfTime+=frameDt;
@@ -557,7 +584,9 @@ export function createRenderer(canvas, callbacks = {}){
        if(slowWindows>=dropNeeded){
          slowWindows=0;
          if(activeTier==='ultra'){
-           applyQualityTier('high');
+           const curCap=getDprCap();
+           if(isTouchDevice&&curCap>1.32)applyQualityTier('ultra',1.28);
+           else applyQualityTier('high');
          }else if(activeTier==='high'){
            const curCap=getDprCap();
            if(isTouchDevice&&curCap>1.75)applyQualityTier('high',1.70);

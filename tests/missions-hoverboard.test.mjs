@@ -45,7 +45,7 @@ test('Daily missions track run stats, pay individual rewards, and unlock +1,000 
   assert.equal(canClaimAllMissionsBonus(st), false);
 });
 
-test('Stale removed hoverboard missions in localStorage are automatically replaced with valid missions', () => {
+test('Stale removed hoverboard and close-call missions in localStorage are automatically replaced with valid missions', () => {
   const staleSaved = {
     dateKey: '2026-11-25',
     streakDay: 2,
@@ -59,8 +59,7 @@ test('Stale removed hoverboard missions in localStorage are automatically replac
   };
   const cleaned = normalizeMissionState(staleSaved, '2026-11-25');
   assert.equal(cleaned.missions.length, 3);
-  assert.equal(cleaned.missions.some(m => m.id === 'boards_2' || m.type === 'boards'), false);
+  assert.equal(cleaned.missions.some(m => m.id === 'boards_2' || m.type === 'boards' || m.type === 'nearmiss'), false);
   assert.equal(cleaned.missions[1].progress, 120);
-  assert.equal(cleaned.missions[2].progress, 1);
   assert.equal(new Set(cleaned.missions.map(m => m.type)).size, 3);
 });

@@ -2,15 +2,15 @@ import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.14';
 import {createTutorialGuide} from './tutorial-guide.js?v=3.10.14';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.22r';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.22u';
 import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.10.22r';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,FEVER_DURATION,FEVER_CHARGE_MAX,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.22r';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,FEVER_DURATION,FEVER_CHARGE_MAX,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.22u';
 import {
   LOGIN_STREAK_REWARDS,
   normalizeMissionState, canClaimDailyLogin, claimDailyLogin,
   recordRunForMissions, claimMissionReward, canClaimAllMissionsBonus,
   claimAllMissionsBonus, countPendingRewards
-} from './missions.js?v=3.10.22s';
+} from './missions.js?v=3.10.22u';
 import {createAdManager,requiredAdsForRevive,formatCooldown} from './ads.js?v=3.10.19';
 import {createFramePacer} from './frame-pacing.js';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
@@ -18,7 +18,7 @@ import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 let rendererModulePromise = null;
 function loadRendererModule() {
   if (!rendererModulePromise) {
-    rendererModulePromise = import('./renderer3d.js?v=3.10.22r');
+    rendererModulePromise = import('./renderer3d.js?v=3.10.22u');
   }
   return rendererModulePromise;
 }
@@ -1208,7 +1208,7 @@ function freshMissions(day) {
     items: [
       { id: 'dist', label: 'Run 1,500m total today', target: 1500, progress: 0, reward: 350, claimed: false },
       { id: 'coins', label: 'Collect 150 coins today', target: 150, progress: 0, reward: 450, claimed: false },
-      { id: 'near', label: 'Pull off 8 Close Calls today', target: 8, progress: 0, reward: 600, claimed: false }
+      { id: 'fever', label: 'Trigger 2 Fever Rushes today', target: 2, progress: 0, reward: 600, claimed: false }
     ]
   };
 }
@@ -1445,7 +1445,7 @@ function resetFeverMilestoneHud() {
   clearTimeout(milestoneHideTimer);
 }
 
-async function shareReportCard(runDist, runCoins, grade, closeCalls) {
+async function shareReportCard(runDist, runCoins, grade, feverCount) {
   const cv = document.createElement('canvas');
   cv.width = 720; cv.height = 960;
   const ctx = cv.getContext('2d');
@@ -1470,7 +1470,7 @@ async function shareReportCard(runDist, runCoins, grade, closeCalls) {
     ['DISTANCE', `${runDist.toLocaleString()} m`],
     ['HIGHEST RECORD', `${best.toLocaleString()} m`],
     ['COINS EARNED', `${runCoins.toLocaleString()} Coins`],
-    ['CLOSE CALLS', `${closeCalls}`]
+    ['FEVER RUSHES', `${feverCount || 0}`]
   ];
   rows.forEach(([k, v], i) => {
     const y = 480 + i * 86;
@@ -2390,22 +2390,22 @@ function crash(completed=false){
     : isFinalRun
     ? hint
     : completed
-      ? '10,000 m · Village road complete · '+(s.coins+bonusCoins)+' coins'+(bonusCoins?' (+'+bonusCoins+' bonus)':'')+(s.nearMissCount?' · '+s.nearMissCount+' close calls':'')+'.'
-      : runDist+' m | '+(s.coins+bonusCoins)+' coins'+(bonusCoins?' (+'+bonusCoins+' bonus)':'')+(s.nearMissCount?' · '+s.nearMissCount+' close calls':'')+'. '+hint;
+      ? '10,000 m · Village road complete · '+(s.coins+bonusCoins)+' coins'+(bonusCoins?' (+'+bonusCoins+' bonus)':'')+'.'
+      : runDist+' m | '+(s.coins+bonusCoins)+' coins'+(bonusCoins?' (+'+bonusCoins+' bonus)':'')+'. '+hint;
   show(
     elderFinale&&completed?'THE FINAL RUN COMPLETE':isFinalRun?'THE FINAL RUN':completed?'SCHOOL REACHED!':'ACADEMIC REPORT CARD',
     resultMessage,
     'RUN AGAIN',
     elderFinale?'GRANDFATHER’S VILLAGE':isFinalRun?'VILLAGE ROAD':completed?'MAP COMPLETE':'REPORT CARD'
   );
-  lastCrashReport = { completed, isFinalRun, elderFinale, runDist, baseCoins: s.coins + bonusCoins, grade, closeCalls: s.nearMissCount || 0 };
+  lastCrashReport = { completed, isFinalRun, elderFinale, runDist, baseCoins: s.coins + bonusCoins, grade, feverCount: s.feverCount || 0 };
   crashReviveAdsWatched = 0;
   updateCrashAdButtons();
   if ($('btn-share-score')) {
     $('btn-share-score').hidden = isFinalRun;
     $('btn-share-score').onclick = () => {
       const doubledExtra = runCoinsDoubled ? Math.max(0, Math.floor(s.coins)) : 0;
-      shareReportCard(runDist, s.coins + bonusCoins + doubledExtra, grade, s.nearMissCount || 0);
+      shareReportCard(runDist, s.coins + bonusCoins + doubledExtra, grade, s.feverCount || 0);
     };
   }
   $('tip').textContent = elderFinale ? (completed?'All four stages complete.':`Reach his childhood home at ${GRANDFATHER_GATE.toLocaleString()} m.`) : isFinalRun
@@ -2843,13 +2843,6 @@ function tick(t) {
     effects.play('magnet');
     s.collectedPowerup = null;
   }
-  if (s.nearMissEvent && s.nearMissEvent.id !== lastNearMissShown) {
-    lastNearMissShown = s.nearMissEvent.id;
-    const ev = s.nearMissEvent;
-    effects.play('nearMiss');
-    const comboTag = ev.maxCombo ? 'MAX x5!' : `x${ev.combo}`;
-    showCloseCallBanner(`${ev.label} +${ev.bonus} Coins · ${comboTag}`, ev.label.includes('NITRO') || ev.maxCombo);
-  }
   if (s.milestoneEvent && s.milestoneEvent.id !== lastMilestoneShown) {
     lastMilestoneShown = s.milestoneEvent.id;
     const mv = s.milestoneEvent;
@@ -3014,14 +3007,6 @@ function tick(t) {
     lastGhostSec = ghostSec;
     ghostPill.hidden = ghostSec <= 0;
     if (ghostSec > 0 && $('ghost-timer')) $('ghost-timer').textContent = ghostSec + 's';
-  }
-  const curCombo = (s.mode === 'running' && s.combo > 1 && s.comboTimer > 0) ? s.combo : 1;
-  const comboPill = $('combo-pill');
-  if (comboPill && curCombo !== lastComboVal) {
-    lastComboVal = curCombo;
-    comboPill.hidden = curCombo <= 1;
-    comboPill.classList.toggle('is-max', curCombo >= 5);
-    if (curCombo > 1 && $('combo-val')) $('combo-val').textContent = curCombo >= 5 ? 'x5 MAX' : ('x' + curCombo);
   }
   const speedMode = s.mode !== 'running' ? 0 : (s.nitro > 0 || s.turboBoost > 0 || s.feverTimer > 0) ? 2 : s.speed >= 42 ? 1 : 0;
   if (speedLinesEl && speedMode !== lastSpeedMode) {

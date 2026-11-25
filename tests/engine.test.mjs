@@ -290,17 +290,17 @@ test('all 3 lanes are never simultaneously blocked across low, mid, and high spe
   }
 });
 
-test('near-miss close calls award combo bonuses, nitro smashes obstacles, super shoes boost jump, and revive clears hazards', () => {
+test('adjacent blocks do not trigger removed close-call popups; nitro smashes obstacles, super shoes boost jump, and revive clears hazards', () => {
   const s = fresh(0);
   s.mode = 'running';
   s.next = 100000;
   s.lane = s.x = 0;
-  // Adjacent block triggers Near Miss + combo x2 + 10 bonus coins
+  // Adjacent block passes cleanly without Close Call popups or combo multipliers
   s.items = [{ z: 1, lane: 1, type: 'block', done: false }];
   step(s, .05);
-  assert.equal(s.nearMissCount, 1);
-  assert.equal(s.combo, 2);
-  assert.equal(s.coins, 10);
+  assert.equal(s.nearMissCount, 0);
+  assert.equal(s.combo, 1);
+  assert.equal(s.coins, 0);
 
   // Super Jump Shoes raise jump apex above 3m (clearing 2.8m bus roofs)
   s.items = [{ z: s.distance + 0.5, lane: 0, type: 'shoes', done: false }];
