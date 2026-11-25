@@ -1359,15 +1359,53 @@ let collegeIntroTimer = 0;
 let collegeIntroRaf = 0;
 let finalRunActiveCharId = '';
 let lastFinalRunChosenPowers = [];
-let cutsceneWarmupFrames = 0;
-let cutscenePrewarmedCharLoaded = false;
-let cutscenePrewarmTimer = 0;
-let cutscenePrewarmNonce = 0;
-let cutscenePrewarmDone = false;
+let finalRunRevealing = false;
 
-function cancelCutscenePrewarm() {
-  cutscenePrewarmNonce++;
-  if (cutscenePrewarmTimer) { clearTimeout(cutscenePrewarmTimer); cutscenePrewarmTimer = 0; }
+function finalRunCutsceneBlocking() {
+  return (finalIntroActive || collegeIntroActive) && !finalRunRevealing;
+}
+
+function createFinalRunCountdown(stage, textEl) {
+  let currentStep = '';
+  return label => {
+    if (!stage || !textEl || label === currentStep) return;
+    currentStep = label;
+    const isStart = label === 'START';
+    stage.hidden = false;
+    stage.classList.toggle('is-start', isStart);
+    textEl.textContent = label;
+    textEl.dataset.step = label;
+    stage.classList.add('is-pop');
+    for (const animation of stage.getAnimations?.({ subtree: true }) || []) {
+      animation.currentTime = 0;
+      animation.play();
+    }
+    if (sound) effects.play(isStart ? 'start' : 'tap');
+  };
+}
+
+async function playFinalRunVideo(video, isActive, onFailure) {
+  delete video.dataset.gamePaused;
+  try {
+    await video.play();
+  } catch {
+    if (!isActive()) return;
+    video.muted = true;
+    try {
+      await video.play();
+    } catch {
+      if (isActive()) onFailure();
+    }
+  }
+}
+
+function updateFinalRunCountdown(video, fallbackDuration, showStep) {
+  const duration = Number.isFinite(video.duration) && video.duration > 3 ? video.duration : fallbackDuration;
+  if (video.currentTime <= 0.5) return;
+  const remaining = duration - video.currentTime;
+  if (remaining <= 1.05) showStep('1');
+  else if (remaining <= 2.05) showStep('2');
+  else if (remaining <= 3.05) showStep('3');
 }
 
 function initFinalRunStageState(targetMap, targetStage, targetCharId, chosen) {
@@ -1392,77 +1430,20 @@ function initFinalRunStageState(targetMap, targetStage, targetCharId, chosen) {
   step(s, 0.001);
   s.distance = 0;
   s.time = 0;
-  cutsceneWarmupFrames = 0;
-  cutscenePrewarmDone = false;
-  cutscenePrewarmedCharLoaded = Boolean(draw?.isLoaded?.(targetCharId));
 }
 
-function scheduleCutscenePrewarm(targetMap, targetStage, targetCharId, chosen, videoEl) {
-  cancelCutscenePrewarm();
-  initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
-  const nonce = cutscenePrewarmNonce;
-  let started = false;
-
-  const runChunkedWarmup = () => {
-    if (started || nonce !== cutscenePrewarmNonce) return;
-    started = true;
-    if (cutscenePrewarmTimer) { clearTimeout(cutscenePrewarmTimer); cutscenePrewarmTimer = 0; }
-
-    // Wait 600ms after video playback stabilizes before doing lightweight async preloading.
-    // Never run synchronous 3D mesh/shader construction during cutscene video on mobile so playback has 0ms freeze!
-    cutscenePrewarmTimer = setTimeout(async () => {
-      if (nonce !== cutscenePrewarmNonce) return;
-      if (targetStage === 'grandfather') effects.preloadBgm?.('grandfather');
-      const isMobileTouch = typeof navigator !== 'undefined' && (navigator.maxTouchPoints > 0 || 'ontouchstart' in window);
-      if (isMobileTouch) {
-        // On mobile, never initialize WebGL or run synchronous 3D scene building during video playback so H.264 stays 100% smooth.
-        if (draw) draw.preload?.(targetCharId);
-        cutscenePrewarmDone = false;
-        return;
-      }
-      await ensureRenderer(targetCharId);
-      if (nonce !== cutscenePrewarmNonce) return;
-      draw?.selectLevel?.(targetMap,targetCharId);
-      draw?.preload?.(targetCharId);
-
-      const nextStep = () => {
-        if (nonce !== cutscenePrewarmNonce) return;
-        let ran;
-        try { ran=draw?.warmMapStep?.(targetMap); }
-        catch(error){console.warn('Deferring cutscene preparation until launch.',error);return;}
-        if (ran) {
-          cutscenePrewarmTimer = setTimeout(nextStep, 580);
-          return;
-        }
-        cutscenePrewarmDone = true;
-        cutscenePrewarmedCharLoaded = Boolean(draw?.isLoaded?.(targetCharId));
-        cutscenePrewarmTimer = setTimeout(() => {
-          if (nonce !== cutscenePrewarmNonce) return;
-          cutsceneWarmupFrames = 1;
-        }, 420);
-      };
-
-      cutscenePrewarmTimer = setTimeout(nextStep, 580);
-    }, 600);
-  };
-
-  if (videoEl && !videoEl.paused && videoEl.readyState >= 2 && (videoEl.currentTime || 0) > 0.05) {
-    runChunkedWarmup();
-  } else {
-    if (videoEl) videoEl.addEventListener('playing', runChunkedWarmup, { once: true });
-    // Safety fallback so warmup still proceeds even if the video buffers slowly or is muted/stalled.
-    cutscenePrewarmTimer = setTimeout(runChunkedWarmup, 1400);
-  }
+function prepareFinalRunStage(map, stage, charId, chosen, duringVideo = false) {
+  initFinalRunStageState(map, stage, charId, chosen);
+  if (stage === 'grandfather') effects.preloadBgm?.('grandfather');
+  // Give video frames time to paint between renderer setup, scene builds, and the first draw.
+  const yieldFrame = duringVideo ? async () => {
+    await new Promise(resolve => setTimeout(resolve, 180));
+    await nextLoadingFrame();
+  } : nextLoadingFrame;
+  return prepareLevelRun(map, charId, ++runLaunchNonce, yieldFrame);
 }
 
-async function launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chosen) {
-  cancelCutscenePrewarm();
-  if (!s?.isFinalRun || s.finalRunStage !== targetStage || s.map !== targetMap) {
-    initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
-  }
-  if (!await prepareLevelRun(targetMap,targetCharId)) return false;
-  finalRunActiveCharId = targetCharId;
-  character = 'male';
+function activateFinalRunStage(targetStage) {
   s.distance = 0;
   s.time = 0;
   s.turnTime = 0;
@@ -1500,13 +1481,24 @@ async function launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId
     else effects.setBgmTrack?.('default');
     effects.play('bell');
   }
-  return true;
+}
+
+async function revealFinalRunStage({ preparation, targetStage, overlay, showStep, schedule, stop, isActive }) {
+  if (!await preparation || !isActive()) return;
+  activateFinalRunStage(targetStage);
+  showStep?.('START');
+  schedule(() => {
+    overlay.classList.add('is-fading-out');
+    prev = 0;
+    framePacer.reset();
+    finalRunRevealing = true;
+    schedule(stop, 340);
+  }, 250);
 }
 
 function stopCollegeIntroOverlay() {
-  cancelCutscenePrewarm();
   collegeIntroActive = false;
-  cutsceneWarmupFrames = 0;
+  finalRunRevealing = false;
   if (collegeIntroTimer) { clearTimeout(collegeIntroTimer); collegeIntroTimer = 0; }
   if (collegeIntroRaf) { cancelAnimationFrame(collegeIntroRaf); collegeIntroRaf = 0; }
   const overlay = $('college-intro-overlay');
@@ -1530,13 +1522,11 @@ function stopCollegeIntroOverlay() {
 }
 
 function turnScreenOffAfterFinalCollegeStage() {
-  cancelCutscenePrewarm();
   const overlay = $('college-intro-overlay');
   const stage = $('college-countdown-stage');
   if (collegeIntroTimer) { clearTimeout(collegeIntroTimer); collegeIntroTimer = 0; }
   if (collegeIntroRaf) { cancelAnimationFrame(collegeIntroRaf); collegeIntroRaf = 0; }
   collegeIntroActive = true;
-  cutsceneWarmupFrames = 0;
 
   effects.pauseBgm?.();
   if ($('overlay')) $('overlay').hidden = true;
@@ -1587,7 +1577,6 @@ function getOrCreateCutsceneVideo(videoId, videoSrc) {
 }
 
 function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targetMap, targetStage, targetCharId, withCountdown = true, endToHub = false }) {
-  cancelCutscenePrewarm();
   const overlay = $('college-intro-overlay');
   const video = getOrCreateCutsceneVideo(videoId, videoSrc) || $('college-intro-video');
   const stage = $('college-countdown-stage');
@@ -1608,7 +1597,9 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
 
   if (!overlay || !video) {
     collegeIntroActive = false;
-    if (!endToHub) launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chosen);
+    if (!endToHub) prepareFinalRunStage(targetMap, targetStage, targetCharId, chosen).then(ready => {
+      if (ready) activateFinalRunStage(targetStage);
+    });
     return;
   }
 
@@ -1640,30 +1631,9 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
   void overlay.offsetWidth;
   overlay.classList.add('is-screen-off');
 
-  // Lightweight JS stage prep only during blackout; 3D WebGL shader warming runs in spaced chunks AFTER video playback starts!
-  if (!endToHub && targetMap) {
-    initFinalRunStageState(targetMap, targetStage, targetCharId, chosen);
-  }
-
-  let currentStep = '';
+  let preparation;
   let launched = false;
-  let hasStartedFromBeginning = false;
-
-  function showCountdownStep(stepLabel) {
-    if (!withCountdown || currentStep === stepLabel || !stage || !textEl) return;
-    currentStep = stepLabel;
-    stage.hidden = false;
-    const isStart = stepLabel === 'START';
-    stage.classList.toggle('is-start', isStart);
-    textEl.textContent = stepLabel;
-    textEl.dataset.step = stepLabel;
-    stage.classList.remove('is-pop');
-    void stage.offsetWidth;
-    stage.classList.add('is-pop');
-    if (sound) {
-      effects.play(isStart ? 'start' : 'tap');
-    }
-  }
+  const showStep = withCountdown ? createFinalRunCountdown(stage, textEl) : null;
 
   async function finishTransitionAndLaunch() {
     if (launched || !collegeIntroActive) return;
@@ -1674,7 +1644,6 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
     video.onerror = null;
     gamePauseVideo(video);
     if (endToHub) {
-      cancelCutscenePrewarm();
       finalRunActiveCharId = '';
       s = fresh();
       s.map = selectedMap;
@@ -1697,42 +1666,18 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
       }, 450);
       return;
     }
-    if (!await launchPrewarmedFinalRunStage(targetMap, targetStage, targetCharId, chosen)) return;
-    showCountdownStep('START');
-    collegeIntroTimer = setTimeout(() => {
-      overlay.classList.add('is-fading-out');
-      collegeIntroTimer = setTimeout(() => {
-        stopCollegeIntroOverlay();
-      }, 420);
-    }, 380);
+    preparation ??= prepareFinalRunStage(targetMap, targetStage, targetCharId, chosen);
+    await revealFinalRunStage({
+      preparation, targetStage, overlay, showStep,
+      schedule: (callback, delay) => { collegeIntroTimer = setTimeout(callback, delay); },
+      stop: stopCollegeIntroOverlay,
+      isActive: () => collegeIntroActive
+    });
   }
 
   function monitorTransitionProgress() {
     if (!collegeIntroActive || launched) return;
-    if (!endToHub && targetCharId && cutscenePrewarmDone && !cutscenePrewarmedCharLoaded && draw?.isLoaded?.(targetCharId)) {
-      cutscenePrewarmedCharLoaded = true;
-      cutsceneWarmupFrames = 1;
-    }
-    const dur = (Number.isFinite(video.duration) && video.duration > 3) ? video.duration : fallbackDuration;
-    const cur = video.currentTime || 0;
-    if (!hasStartedFromBeginning) {
-      if (!video.paused && cur > 0.05 && cur < 2.5) {
-        hasStartedFromBeginning = true;
-      } else {
-        collegeIntroRaf = requestAnimationFrame(monitorTransitionProgress);
-        return;
-      }
-    }
-    const rem = dur - cur;
-    if (video.ended || (cur >= dur - 0.08 && dur > 3)) {
-      finishTransitionAndLaunch();
-      return;
-    }
-    if (withCountdown && cur >= Math.max(1.0, dur - 3.15)) {
-      if (rem <= 1.05) showCountdownStep('1');
-      else if (rem <= 2.05) showCountdownStep('2');
-      else if (rem <= 3.05) showCountdownStep('3');
-    }
+    if (showStep) updateFinalRunCountdown(video, fallbackDuration, showStep);
     collegeIntroRaf = requestAnimationFrame(monitorTransitionProgress);
   }
 
@@ -1746,49 +1691,17 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
   video.muted = !sound;
   video.defaultMuted = !sound;
   video.volume = 1.0;
-  video.onended = () => {
-    if (hasStartedFromBeginning) finishTransitionAndLaunch();
-  };
-  video.onerror = null;
-
-  function attemptPlayVideo() {
-    if (!collegeIntroActive || launched) return;
-    delete video.dataset.gamePaused;
-    try {
-      if (video.readyState >= 1 && video.currentTime > 1.5) video.currentTime = 0;
-    } catch {}
-    video.muted = !sound;
-    video.defaultMuted = !sound;
-    video.volume = 1.0;
-    const p = video.play();
-    if (p && typeof p.catch === 'function') {
-      p.catch(() => {
-        if (!collegeIntroActive || launched) return;
-        video.muted = true;
-        const p2 = video.play();
-        if (p2 && typeof p2.catch === 'function') {
-          p2.catch(() => {
-            // If still buffering, wait for canplay instead of cutting off the video
-            video.addEventListener('canplay', () => {
-              if (collegeIntroActive && !launched) {
-                delete video.dataset.gamePaused;
-                video.play().catch(() => {});
-              }
-            }, { once: true });
-          });
-        }
-      });
-    }
-  }
+  video.onended = finishTransitionAndLaunch;
+  video.onerror = finishTransitionAndLaunch;
 
   // Phase 2: Play cutscene video fullscreen after the screen turn-off blackout
   collegeIntroTimer = setTimeout(() => {
     if (!collegeIntroActive) return;
     overlay.classList.remove('is-screen-off');
     overlay.classList.add('is-playing-video');
-    attemptPlayVideo();
+    playFinalRunVideo(video, () => collegeIntroActive && !launched, finishTransitionAndLaunch);
     if (!endToHub && targetMap) {
-      scheduleCutscenePrewarm(targetMap, targetStage, targetCharId, chosen, video);
+      preparation ??= prepareFinalRunStage(targetMap, targetStage, targetCharId, chosen, true);
     }
     collegeIntroRaf = requestAnimationFrame(monitorTransitionProgress);
   }, 850);
@@ -1836,15 +1749,16 @@ function playGrandfatherIntroAfterItPark() {
 }
 
 function stopFinalRunIntroOverlay() {
-  cancelCutscenePrewarm();
   finalIntroActive = false;
-  cutsceneWarmupFrames = 0;
+  finalRunRevealing = false;
   if (finalIntroRaf) { cancelAnimationFrame(finalIntroRaf); finalIntroRaf = 0; }
   if (finalIntroHideTimer) { clearTimeout(finalIntroHideTimer); finalIntroHideTimer = 0; }
   const overlay = $('finalrun-intro-overlay');
   const video = $('finalrun-intro-video');
   const stage = $('finalrun-countdown-stage');
   if (video) {
+    video.onended = null;
+    video.onerror = null;
     gamePauseVideo(video);
   }
   if (stage) {
@@ -1858,13 +1772,14 @@ function stopFinalRunIntroOverlay() {
 }
 
 function playFinalRunIntro(chosen) {
-  cancelCutscenePrewarm();
   const overlay = $('finalrun-intro-overlay');
   const video = $('finalrun-intro-video');
   const stage = $('finalrun-countdown-stage');
   const textEl = $('finalrun-countdown-text');
   if (!overlay || !video) {
-    launchPrewarmedFinalRunStage('finalrun', 'village', 'male', chosen);
+    prepareFinalRunStage('finalrun', 'village', 'male', chosen).then(ready => {
+      if (ready) activateFinalRunStage('village');
+    });
     return;
   }
   if (finalIntroRaf) { cancelAnimationFrame(finalIntroRaf); finalIntroRaf = 0; }
@@ -1877,64 +1792,33 @@ function playFinalRunIntro(chosen) {
   overlay.hidden = false;
   overlay.classList.remove('is-fading-out');
   overlay.oncontextmenu = e => e.preventDefault();
-  lockVideoNoUserPause(video, () => finalIntroActive && !launched);
+  lockVideoNoUserPause(video, () => finalIntroActive);
   if (stage) {
     stage.hidden = true;
     stage.classList.remove('is-pop', 'is-start');
   }
 
-  let currentStep = '';
+  let preparation;
   let launched = false;
-
-  function showCountdownStep(stepLabel) {
-    if (currentStep === stepLabel || !stage || !textEl) return;
-    currentStep = stepLabel;
-    stage.hidden = false;
-    const isStart = stepLabel === 'START';
-    stage.classList.toggle('is-start', isStart);
-    textEl.textContent = stepLabel;
-    textEl.dataset.step = stepLabel;
-    stage.classList.remove('is-pop');
-    void stage.offsetWidth;
-    stage.classList.add('is-pop');
-    if (sound) {
-      effects.play(isStart ? 'start' : 'tap');
-    }
-  }
+  const showStep = createFinalRunCountdown(stage, textEl);
 
   async function finishIntroAndLaunch() {
     if (launched || !finalIntroActive) return;
     launched = true;
     if (finalIntroRaf) { cancelAnimationFrame(finalIntroRaf); finalIntroRaf = 0; }
     gamePauseVideo(video);
-    if (!await launchPrewarmedFinalRunStage('finalrun', 'village', 'male', chosen)) return;
-    showCountdownStep('START');
-    finalIntroHideTimer = setTimeout(() => {
-      overlay.classList.add('is-fading-out');
-      finalIntroHideTimer = setTimeout(() => {
-        stopFinalRunIntroOverlay();
-      }, 420);
-    }, 380);
+    preparation ??= prepareFinalRunStage('finalrun', 'village', 'male', chosen);
+    await revealFinalRunStage({
+      preparation, targetStage: 'village', overlay, showStep,
+      schedule: (callback, delay) => { finalIntroHideTimer = setTimeout(callback, delay); },
+      stop: stopFinalRunIntroOverlay,
+      isActive: () => finalIntroActive
+    });
   }
 
   function monitorProgress() {
     if (!finalIntroActive || launched) return;
-    if (cutscenePrewarmDone && !cutscenePrewarmedCharLoaded && draw?.isLoaded?.('male')) {
-      cutscenePrewarmedCharLoaded = true;
-      cutsceneWarmupFrames = 1;
-    }
-    const dur = (Number.isFinite(video.duration) && video.duration > 3) ? video.duration : 14.93;
-    const cur = video.currentTime || 0;
-    const rem = dur - cur;
-    if (video.ended || (cur > 1 && rem <= 0.08)) {
-      finishIntroAndLaunch();
-      return;
-    }
-    if (cur > 0.5) {
-      if (rem <= 1.05) showCountdownStep('1');
-      else if (rem <= 2.05) showCountdownStep('2');
-      else if (rem <= 3.05) showCountdownStep('3');
-    }
+    updateFinalRunCountdown(video, 14.93, showStep);
     finalIntroRaf = requestAnimationFrame(monitorProgress);
   }
 
@@ -1952,32 +1836,14 @@ function playFinalRunIntro(chosen) {
   video.volume = 1.0;
 
   // Start the intro video FIRST with zero WebGL contention on Frame 0!
-  delete video.dataset.gamePaused;
-  const p = video.play();
-  if (p && typeof p.catch === 'function') {
-    p.catch(() => {
-      if (!finalIntroActive || launched) return;
-      video.muted = true;
-      const p2 = video.play();
-      if (p2 && typeof p2.catch === 'function') {
-        p2.catch(() => {
-          video.addEventListener('canplay', () => {
-            if (finalIntroActive && !launched) {
-              delete video.dataset.gamePaused;
-              video.play().catch(() => finishIntroAndLaunch());
-            }
-          }, { once: true });
-        });
-      }
-    });
-  }
+  playFinalRunVideo(video, () => finalIntroActive && !launched, finishIntroAndLaunch);
 
-  // Stage 1 of The Final One: Warm 3D village & hero in spaced non-blocking chunks AFTER video starts playing smoothly.
-  scheduleCutscenePrewarm('finalrun', 'village', 'male', chosen, video);
+  preparation ??= prepareFinalRunStage('finalrun', 'village', 'male', chosen, true);
   finalIntroRaf = requestAnimationFrame(monitorProgress);
 }
 
 function start(){
+  if (runLoadingActive || finalIntroActive || collegeIntroActive) return;
   if (selectedMap === 'finalrun') {
     playFinalRunIntro(defaultChosenPowers());
     return;
@@ -2003,13 +1869,13 @@ function hideRunLoadingVeilSmooth() {
   }, 290);
 }
 const nextLoadingFrame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
-async function prepareLevelRun(map,key,launchId=++runLaunchNonce) {
+async function prepareLevelRun(map,key,launchId, yieldFrame=nextLoadingFrame) {
   runLoadingActive=true;
   framePacer.reset();
   const veil=$('run-loading-veil');
   try {
     setRunLoadingProgress(18,'Loading 3D engine...');
-    await nextLoadingFrame();
+    await yieldFrame();
     if(launchId!==runLaunchNonce)return false;
     await ensureRenderer(key);
     if(launchId!==runLaunchNonce)return false;
@@ -2018,7 +1884,7 @@ async function prepareLevelRun(map,key,launchId=++runLaunchNonce) {
     const steps=draw.warmMapSteps?.(map) || [];
     for(let i=0;i<steps.length;i++){
       setRunLoadingProgress(32+50*i/steps.length,'Preparing track and effects...');
-      await nextLoadingFrame();
+      await yieldFrame();
       if(launchId!==runLaunchNonce)return false;
       draw.warmMapStep(map);
     }
@@ -2036,9 +1902,11 @@ async function prepareLevelRun(map,key,launchId=++runLaunchNonce) {
       switchToLiteRenderer('WebGL context lost');
       draw(s,key,0);
     }
+    if (yieldFrame !== nextLoadingFrame) await yieldFrame();
+    if(launchId!==runLaunchNonce)return false;
     setRunLoadingProgress(94,'Preparing local textures and lighting...');
     await draw.finishPreparation?.();
-    await nextLoadingFrame();
+    await yieldFrame();
     if(launchId!==runLaunchNonce)return false;
     draw(s,key,0);
     setRunLoadingProgress(100,'Ready!');
@@ -2158,7 +2026,7 @@ function beginRun(chosen){
 }
 
 function pause(){
-  if(!['running','countdown'].includes(s.mode))return;
+  if(finalRunCutsceneBlocking() || !['running','countdown'].includes(s.mode))return;
   s.mode='paused';
   flushSave();
   $('countdown').hidden=true;
@@ -2532,7 +2400,7 @@ async function exitGameOverToHub(targetHub, countForInterstitial) {
 if($('start')) $('start').onclick=e=>{
   e?.preventDefault?.();
   if($('start').dataset.loadError==='true'){ location.reload(); return; }
-  if (runLoadingActive || startBtnLaunching) return;
+  if (runLoadingActive || startBtnLaunching || finalIntroActive || collegeIntroActive) return;
   startBtnLaunching = true;
   playLaunchClick(sound);
   if (navigator.vibrate) try { navigator.vibrate(18); } catch {}
@@ -2562,7 +2430,7 @@ if($('btn-change-char')) $('btn-change-char').onclick=()=>{
 $('pause').onclick=()=>s.mode==='paused'?resume():pause();
 
 function input(a){
-  if(runLoadingActive || collegeIntroActive || finalIntroActive)return;
+  if(runLoadingActive || finalRunCutsceneBlocking())return;
   const before=[s.jump,s.slide,s.roll,s.drop,s.lane];
   action(s,a);
   if(s.mode==='running'){
@@ -2581,7 +2449,7 @@ window.addEventListener('keydown',e=>{
   if ($('power-picker')?.open) return;
   if(e.target?.closest?.('input, textarea, select')) return;
   // Never allow keyboard shortcuts or media keys to pause/interrupt active videos.
-  if (finalIntroActive || collegeIntroActive || game.classList.contains('mode-splash')) {
+  if (finalRunCutsceneBlocking() || game.classList.contains('mode-splash')) {
     if ([' ', 'k', 'K', 'p', 'P', 'Escape', 'MediaPlayPause', 'MediaPause', 'MediaStop'].includes(e.key)) {
       e.preventDefault();
       return;
@@ -2626,13 +2494,7 @@ function tick(t) {
   const dt = prev ? Math.min(0.1, (t-prev)/1000) : 0;
   prev = t;
   if (runLoadingActive || s.mode === 'remembering') return;
-  if (finalIntroActive || collegeIntroActive) {
-    if (draw && cutsceneWarmupFrames > 0) {
-      cutsceneWarmupFrames--;
-      try { draw(s, finalRunActiveCharId || equippedCharId, 0.016); } catch {}
-    }
-    return;
-  }
+  if (finalRunCutsceneBlocking()) return;
   // Zero-lag 2D image menus: pause 100% of WebGL rendering & game simulation during Splash and Menu hubs!
   if (game.classList.contains('mode-splash') || game.classList.contains('mode-select') || s.mode === 'ready') {
     if (!assetsReady) onAllAssetsReady();

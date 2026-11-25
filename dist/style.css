@@ -2655,7 +2655,7 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   justify-content: center;
   overflow: hidden;
   opacity: 1;
-  transition: opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .finalrun-intro-overlay[hidden] {
   display: none !important;
@@ -2672,7 +2672,6 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  perspective: 700px;
   background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.52) 100%);
 }
 .finalrun-countdown-stage[hidden] {
@@ -2723,7 +2722,6 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 6px 0 #5c1906) drop-shadow(0 14px 26px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 22px rgba(255, 191, 0, 0.75));
-  transform-style: preserve-3d;
 }
 .finalrun-countdown-stage.is-start .finalrun-countdown-ring {
   width: 280px;
@@ -2758,41 +2756,41 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 @keyframes finalCountSlam {
   0% {
     opacity: 0;
-    transform: perspective(700px) translateZ(180px) scale(2.15) rotateX(22deg);
+    transform: scale(1.30);
   }
   28% {
     opacity: 1;
-    transform: perspective(700px) translateZ(0px) scale(0.92) rotateX(0deg);
+    transform: scale(0.96);
   }
   46% {
     opacity: 1;
-    transform: perspective(700px) translateZ(16px) scale(1.06) rotateX(-4deg);
+    transform: scale(1.03);
   }
   78% {
     opacity: 1;
-    transform: perspective(700px) translateZ(0px) scale(1.0) rotateX(0deg);
+    transform: scale(1);
   }
   100% {
-    opacity: 0.18;
-    transform: perspective(700px) translateZ(-60px) scale(0.78) rotateX(0deg);
+    opacity: 1;
+    transform: scale(1);
   }
 }
 @keyframes finalStartBurst {
   0% {
     opacity: 0;
-    transform: perspective(700px) scale(0.35) rotateX(-18deg);
+    transform: scale(0.80);
   }
   38% {
     opacity: 1;
-    transform: perspective(700px) scale(1.12) rotateX(0deg);
+    transform: scale(1.08);
   }
   70% {
     opacity: 1;
-    transform: perspective(700px) scale(1.02) rotateX(0deg);
+    transform: scale(1);
   }
   100% {
     opacity: 1;
-    transform: perspective(700px) scale(1.18) rotateX(0deg);
+    transform: scale(1);
   }
 }
 @keyframes finalRingPulse {
@@ -2817,7 +2815,7 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
   justify-content: center;
   overflow: hidden;
   opacity: 1;
-  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .college-intro-overlay[hidden] {
   display: none !important;
