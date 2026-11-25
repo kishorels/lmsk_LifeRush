@@ -2639,10 +2639,18 @@ html,body{height:100%;overflow:hidden;background:#0d1529}body{display:flex;justi
 .gfx-settings-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
 .gfx-settings-head strong{font-size:12.5px;color:#fff;font-weight:900}
 .gfx-settings-head small{font-size:9.5px;font-weight:700;color:#7dd3fc;text-align:right}
-.gfx-pills{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.gfx-pill{padding:6px 4px;border-radius:9px;border:1px solid rgba(123,197,248,.32);background:rgba(16,36,68,.85);color:#b7d7f4;font-size:10.5px;font-weight:900;letter-spacing:.4px;cursor:pointer;transition:transform .14s ease,background .15s ease,color .15s ease,border-color .15s ease}
+.gfx-pills{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.gfx-pill{padding:6px 2px;border-radius:9px;border:1px solid rgba(123,197,248,.32);background:rgba(16,36,68,.85);color:#b7d7f4;font-size:10px;font-weight:900;letter-spacing:.35px;cursor:pointer;transition:transform .14s ease,background .15s ease,color .15s ease,border-color .15s ease}
 .gfx-pill:active{transform:scale(.95)}
 .gfx-pill.selected{background:linear-gradient(135deg,#ffe26e,#ffa726);color:#0b1c36;border-color:#fff6c2;box-shadow:0 3px 10px rgba(255,179,0,.4)}
+.gfx-pill-ultra{border-color:rgba(251,146,60,.55);color:#fed7aa;background:linear-gradient(135deg,rgba(67,20,7,.85),rgba(30,27,75,.88))}
+.gfx-pill-ultra.selected{background:linear-gradient(135deg,#ff9f1c,#ff4500);color:#ffffff;border-color:#fef08a;box-shadow:0 3px 14px rgba(255,69,0,.55)}
+body.gfx-ultra #world{filter:contrast(1.12) saturate(1.22)}
+body.gfx-ultra #game-container:not(.mode-splash):not(.mode-select)::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;box-shadow:inset 0 0 86px rgba(4,10,22,.44)}
+.video-skip-btn{position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;z-index:45;padding:8px 18px;min-height:36px;border-radius:999px;border:1px solid rgba(255,255,255,.38);background:rgba(7,14,28,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f8fafc;font-size:12px;font-weight:800;letter-spacing:.12em;cursor:pointer;transition:transform .12s ease,background .15s ease,border-color .15s ease;pointer-events:auto}
+.video-skip-btn:hover{background:rgba(15,28,54,.88);border-color:rgba(255,255,255,.68)}
+.video-skip-btn:active{transform:scale(.95)}
+.cam-toggle-btn.is-action{background:linear-gradient(135deg,rgba(255,159,28,.28),rgba(255,69,0,.28));border-color:rgba(254,240,138,.65);color:#fef08a}
 
 /* FINAL ONE MAP INTRO CUTSCENE & REALISTIC 3D 3-2-1-START COUNTDOWN */
 .finalrun-intro-overlay {

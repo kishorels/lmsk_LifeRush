@@ -1,6 +1,7 @@
 import {makeCoin,spinCoin} from './coin.js';
-import {campusMaterial, roadsideTree, curveRelX, curveRelY, curveSlopeAt} from './street-materials.js';
-import {buildBus, buildCollegeVehicle} from './bus-model.js';
+import {campusMaterial, roadsideTree, curveRelX, curveRelY, curveSlopeAt} from './street-materials.js?v=3.10.22';
+import {buildBus, buildUltraSchoolBus, buildCollegeVehicle} from './bus-model.js?v=3.10.22';
+import {buildUltraSchoolEntrance, ultraSchoolWindClock} from './ultra-school.js?v=3.10.22';
 import {buildRedShuttleCart} from './itpark-models.js?v=3.8.0';
 import {bakeGroup} from './bake-static-meshes.js';
 import { BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SRGBColorSpace } from './vendor/three.module.js';
@@ -71,16 +72,19 @@ export function createSchoolEntrance(scene) {
     board.parent.add(face);
   }
 
+  const classicTrees = new Group();
+  campus.add(classicTrees);
   for (const side of [-1, 1]) {
-    roadsideTree(campus, side*6.8, -4-side*2, 6.3, side===1, side*.26);
-    roadsideTree(campus, side*12.4, -10, 9, true, side*.18);
-    roadsideTree(campus, side*7.5, -38-side*2, 7.5, false, side*.36);
-    roadsideTree(campus, side*16, -30, 10, false, -side*.35);
+    roadsideTree(classicTrees, side*6.8, -4-side*2, 6.3, side===1, side*.26);
+    roadsideTree(classicTrees, side*12.4, -10, 9, true, side*.18);
+    roadsideTree(classicTrees, side*7.5, -38-side*2, 7.5, false, side*.36);
+    roadsideTree(classicTrees, side*16, -30, 10, false, -side*.35);
   }
   const gateDistance=FINALRUN_GATE;
   const gate=-SCHOOL_GATE;
   const schoolSigns=new Group(),collegeSigns=new Group();
   const parkSigns=new Group(),classicWings=new Group(),parkWings=new Group();
+  let ultraSchoolGate=null;
   campus.add(schoolSigns,collegeSigns,parkSigns,classicWings,parkWings);
   sign(parkSigns,'LMSK IT PARK','TECHNOLOGY DISTRICT',0,4.45,gate,8.05,1.24);
   for (const side of [-1,1]) {
@@ -185,6 +189,7 @@ export function createSchoolEntrance(scene) {
   }
 
   const body=buildBus(length,van.roof,false);body.name='entry-bus';body.position.set(0,road,0);vehicle.add(body);
+  let ultraBody=null;
   const collegeBody=buildCollegeVehicle('van',length,van.roof,false);collegeBody.name='entry-college-van';collegeBody.rotation.y=Math.PI;collegeBody.position.set(0,road,-length);collegeBody.visible=false;vehicle.add(collegeBody);
   const parkBody=buildRedShuttleCart(length,van.roof);parkBody.name='entry-itpark-shuttle';parkBody.position.set(0,road,0);parkBody.visible=false;vehicle.add(parkBody);
 
@@ -202,15 +207,25 @@ export function createSchoolEntrance(scene) {
     const isCollege=state.map==='college';
     const isPark=state.map==='itpark';
     const isFinalVillage=state.map==='finalrun';
+    const isUltraSchool=Boolean(scene.userData?.ultraQuality)&&state.map==='school';
+    if(isUltraSchool){
+      ultraSchoolWindClock.value=state.time||0;
+      if(!ultraSchoolGate){ultraSchoolGate=buildUltraSchoolEntrance(gate);campus.add(ultraSchoolGate);}
+      if(!ultraBody){ultraBody=buildUltraSchoolBus(length,van.roof,false);ultraBody.name='entry-ultra-bus';ultraBody.rotation.y=Math.PI;ultraBody.position.set(0,road,-length);vehicle.add(ultraBody);}
+    }
     // At the end of The Final One's College stage (>150m), display the LMSK IT PARK entrance arch & glass reception towers 26m before College stage gate so the runner sprints deep inside IT Park!
     const isFinalCollegeToItPark=isCollege&&Boolean(state.isFinalRun)&&state.distance>150;
     const mapGate=isFinalCollegeToItPark?(finalRunGateFor('college')-26):isFinalVillage?(FINALRUN_GATE-18):SCHOOL_GATE;
     campus.position.set(curveRelX(mapGate,state),curveRelY(mapGate,state),state.distance-(mapGate-SCHOOL_GATE));
     const showParkEntrance=isPark||isFinalCollegeToItPark;
     parkSigns.visible=showParkEntrance;parkWings.visible=showParkEntrance;
-    classicWings.visible=!showParkEntrance;
-    schoolSigns.visible=!isCollege&&!showParkEntrance;collegeSigns.visible=isCollege&&!showParkEntrance;
-    body.visible=!isCollege&&!showParkEntrance;collegeBody.visible=isCollege&&!showParkEntrance;parkBody.visible=showParkEntrance;
+    classicWings.visible=!showParkEntrance&&!isUltraSchool;
+    classicTrees.visible=!isUltraSchool;
+    if(ultraSchoolGate)ultraSchoolGate.visible=isUltraSchool&&!showParkEntrance;
+    schoolSigns.visible=!isCollege&&!showParkEntrance&&!isUltraSchool;collegeSigns.visible=isCollege&&!showParkEntrance;
+    body.visible=!isCollege&&!showParkEntrance&&!isUltraSchool;
+    if(ultraBody)ultraBody.visible=isUltraSchool&&!showParkEntrance;
+    collegeBody.visible=isCollege&&!showParkEntrance;parkBody.visible=showParkEntrance;
     const entry=state.entryVan??SCHOOL_VAN;
     const hideEndVehicle=(isFinalVillage||isFinalCollegeToItPark)&&state.distance>120;
     vehicle.visible=!hideEndVehicle;

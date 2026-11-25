@@ -12,7 +12,7 @@ import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 let rendererModulePromise = null;
 function loadRendererModule() {
   if (!rendererModulePromise) {
-    rendererModulePromise = import('./renderer3d.js?v=3.10.16');
+    rendererModulePromise = import('./renderer3d.js?v=3.10.22n');
   }
   return rendererModulePromise;
 }
@@ -25,7 +25,7 @@ import {
   isMapUnlocked, isMapDistanceMet, canBuyMap, buyMap,
   isCharacterUnlocked, canBuyCharacter, buyCharacter
 } from './progression.js';
-import {initializeBuildProfile} from './build-profile.js';
+import {initializeBuildProfile} from './build-profile.js?v=3.10.22';
 initializeBuildProfile();
 const profile = freshProfile();
 const $=id=>document.getElementById(id);
@@ -219,8 +219,7 @@ const CHARACTER_ROSTER = [
   { id: 'female', name: 'SCHOOL GIRL', outfit: 'School Uniform · Any Map', gender: 'female', cost: CHARACTER_COSTS.female },
   { id: 'college-male', name: 'COLLEGE BOY', outfit: 'Casual Outfit · Any Map', gender: 'male', cost: CHARACTER_COSTS['college-male'] },
   { id: 'college-woman', name: 'COLLEGE WOMAN', outfit: 'Blue Style · Any Map', gender: 'female', cost: CHARACTER_COSTS['college-woman'] },
-  { id: 'college-man', name: 'COLLEGE MAN', outfit: 'Jacket Style · Any Map', gender: 'male', cost: CHARACTER_COSTS['college-man'] },
-  { id: 'aged-elder', name: 'GRANDFATHER', outfit: 'Village Elder · Any Map', gender: 'male', cost: CHARACTER_COSTS['aged-elder'] }
+  { id: 'college-man', name: 'COLLEGE MAN', outfit: 'Jacket Style · Any Map', gender: 'male', cost: CHARACTER_COSTS['college-man'] }
 ];
 
 const game = canvas.closest('.game');
@@ -304,13 +303,14 @@ let lastDrawnRun=null, lastDrawnRunTime=0;
 let graphicsQuality = 'auto';
 try {
   const savedGfx = localStorage.getItem('runverse-gfx');
-  if (['auto', 'low', 'med', 'high'].includes(savedGfx)) graphicsQuality = savedGfx;
+  if (['auto', 'low', 'med', 'high', 'ultra'].includes(savedGfx)) graphicsQuality = savedGfx;
 } catch {}
 const GFX_HINTS = {
   auto: 'Auto · Dynamic 60 FPS for your phone',
   low: 'Low · Max 60 FPS for low-end phones',
   med: 'Medium · Balanced shadows & speed',
-  high: 'High · Full detail for flagship devices'
+  high: 'High · Full detail for flagship devices',
+  ultra: 'Ultra · Realistic body physics, camera & VFX'
 };
 function syncGraphicsUI() {
   document.querySelectorAll('[data-gfx]').forEach(btn => {
@@ -318,13 +318,16 @@ function syncGraphicsUI() {
     btn.classList.toggle('selected', active);
     btn.setAttribute('aria-pressed', String(active));
   });
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.classList.toggle('gfx-ultra', graphicsQuality === 'ultra');
+  }
   if ($('gfx-quality-hint')) $('gfx-quality-hint').textContent = GFX_HINTS[graphicsQuality] || GFX_HINTS.auto;
 }
 syncGraphicsUI();
 document.querySelectorAll('[data-gfx]').forEach(btn => {
   btn.onclick = () => {
     const next = btn.dataset.gfx;
-    if (!['auto', 'low', 'med', 'high'].includes(next)) return;
+    if (!['auto', 'low', 'med', 'high', 'ultra'].includes(next)) return;
     graphicsQuality = next;
     framePacer.reset();
     try { localStorage.setItem('runverse-gfx', graphicsQuality); } catch {}
@@ -332,6 +335,61 @@ document.querySelectorAll('[data-gfx]').forEach(btn => {
     draw?.setGraphicsQuality?.(graphicsQuality);
   };
 });
+
+const CAMERA_MODES = ['classic', 'action', 'closeup', 'fpv'];
+let cameraAngle = 'classic';
+try {
+  const savedCam = localStorage.getItem('runverse-camera');
+  if (CAMERA_MODES.includes(savedCam)) cameraAngle = savedCam;
+} catch {}
+const CAM_HINTS = {
+  classic: 'Classic · Elevated view for spotting obstacles',
+  action: 'Action · Low cinematic angle behind runner',
+  closeup: 'Close · Tight over-the-shoulder action view',
+  fpv: 'FPV · First-person runner view (you are running!)'
+};
+const CAM_LABELS = { classic: 'CAM 1', action: 'CAM 2', closeup: 'CAM 3', fpv: 'CAM 4' };
+const CAM_TOASTS = { classic: 'Camera: Classic (CAM 1)', action: 'Camera: Low Action (CAM 2)', closeup: 'Camera: Close-Up (CAM 3)', fpv: 'Camera: First Person (CAM 4)' };
+function syncCameraUI() {
+  document.querySelectorAll('[data-cam]').forEach(btn => {
+    const active = btn.dataset.cam === cameraAngle;
+    btn.classList.toggle('selected', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+  if ($('cam-angle-hint')) $('cam-angle-hint').textContent = CAM_HINTS[cameraAngle] || CAM_HINTS.classic;
+  const hudCam = $('btn-camera');
+  if (hudCam) {
+    hudCam.classList.toggle('is-action', cameraAngle !== 'classic');
+    hudCam.setAttribute('aria-pressed', String(cameraAngle !== 'classic'));
+  }
+  if ($('hud-cam-label')) $('hud-cam-label').textContent = CAM_LABELS[cameraAngle] || 'CAM 1';
+}
+function setCameraAngleMode(next, showNotice = false) {
+  cameraAngle = CAMERA_MODES.includes(next) ? next : 'classic';
+  try { localStorage.setItem('runverse-camera', cameraAngle); } catch {}
+  syncCameraUI();
+  draw?.setCameraAngle?.(cameraAngle);
+  if (showNotice && $('toast') && s.mode === 'running') {
+    $('toast').textContent = CAM_TOASTS[cameraAngle] || 'Camera: Classic';
+    $('toast').hidden = false;
+    clearTimeout(setCameraAngleMode._t);
+    setCameraAngleMode._t = setTimeout(() => { if ($('toast')) $('toast').hidden = true; }, 1100);
+  }
+}
+function cycleCameraAngle(showNotice = true) {
+  const idx = CAMERA_MODES.indexOf(cameraAngle);
+  setCameraAngleMode(CAMERA_MODES[(idx + 1) % CAMERA_MODES.length], showNotice);
+}
+syncCameraUI();
+document.querySelectorAll('[data-cam]').forEach(btn => {
+  btn.onclick = () => setCameraAngleMode(btn.dataset.cam, false);
+});
+if ($('btn-camera')) {
+  $('btn-camera').onclick = e => {
+    e.stopPropagation();
+    cycleCameraAngle(true);
+  };
+}
 
 async function ensureRenderer(targetCharKey = equippedCharId) {
   if (rendererStarted || draw) return;
@@ -342,6 +400,7 @@ async function ensureRenderer(targetCharKey = equippedCharId) {
     draw=createRenderer(canvas, {
       initialModelKey: targetCharKey || initialModelKey,
       graphicsQuality,
+      cameraAngle,
       onBoyProgress: f => updateAssetProgress('boy', f),
       onChaserProgress: f => updateAssetProgress('chaser', f)
     });
@@ -1693,6 +1752,15 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
   video.volume = 1.0;
   video.onended = finishTransitionAndLaunch;
   video.onerror = finishTransitionAndLaunch;
+  const skipCollegeBtn = $('btn-skip-college');
+  if (skipCollegeBtn) {
+    skipCollegeBtn.hidden = false;
+    skipCollegeBtn.onclick = e => {
+      e.stopPropagation();
+      skipCollegeBtn.hidden = true;
+      finishTransitionAndLaunch();
+    };
+  }
 
   // Phase 2: Play cutscene video fullscreen after the screen turn-off blackout
   collegeIntroTimer = setTimeout(() => {
@@ -1824,6 +1892,15 @@ function playFinalRunIntro(chosen) {
 
   video.onended = finishIntroAndLaunch;
   video.onerror = finishIntroAndLaunch;
+  const skipFinalBtn = $('btn-skip-finalrun');
+  if (skipFinalBtn) {
+    skipFinalBtn.hidden = false;
+    skipFinalBtn.onclick = e => {
+      e.stopPropagation();
+      skipFinalBtn.hidden = true;
+      finishIntroAndLaunch();
+    };
+  }
 
   if (!video.getAttribute('src')) {
     video.setAttribute('src', 'assets/videos/final_one_intro.mp4');
@@ -2448,6 +2525,11 @@ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('pointe
 window.addEventListener('keydown',e=>{
   if ($('power-picker')?.open) return;
   if(e.target?.closest?.('input, textarea, select')) return;
+  if((e.key==='c'||e.key==='C')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&s.mode==='running'){
+    e.preventDefault();
+    cycleCameraAngle(true);
+    return;
+  }
   // Never allow keyboard shortcuts or media keys to pause/interrupt active videos.
   if (finalRunCutsceneBlocking() || game.classList.contains('mode-splash')) {
     if ([' ', 'k', 'K', 'p', 'P', 'Escape', 'MediaPlayPause', 'MediaPause', 'MediaStop'].includes(e.key)) {
@@ -2516,7 +2598,9 @@ function tick(t) {
     }
   }
 
-  step(s, dt);
+  // ULTRA-only brief slow-motion knockdown impact punch at start of fatal fall (untouched on AUTO/LOW/MED/HIGH)
+  const simDt = (graphicsQuality === 'ultra' && s.mode === 'falling' && s.fall > 0.64) ? dt * 0.36 : dt;
+  step(s, simDt);
   const finishGate=s.map==='grandfather'?GRANDFATHER_GATE:(s.map==='finalrun'||s.isFinalRun)?finalRunGateFor(s.map):Infinity;
   const memory=old==='running' && reachedMemory(s,distanceBefore);
   if(memory) {

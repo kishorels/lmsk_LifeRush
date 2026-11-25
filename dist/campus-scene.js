@@ -1,5 +1,6 @@
-import {campusMaterial, roadsideTree} from './street-materials.js';
-import {buildBus} from './bus-model.js';
+import {campusMaterial, roadsideTree} from './street-materials.js?v=3.10.22';
+import {buildBus} from './bus-model.js?v=3.10.22';
+import {buildUltraSchoolTemplate, ultraSchoolWindClock} from './ultra-school.js?v=3.10.22';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {Group,Mesh,BoxGeometry,SphereGeometry,CylinderGeometry,MeshStandardMaterial,CanvasTexture,SRGBColorSpace} from './vendor/three.module.js';
 import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
@@ -110,14 +111,38 @@ export function createCampus(scene) {
   return merged;
  }
  const templates=[0,1,2,3,4,5].map(build);
- const slots=Array.from({length:CAMPUS_SLOTS},(_,slot)=>{const root=new Group();scene.add(root);return{slot,root,kind:-1};});
+ let ultraTemplates=null;
+ const slots=Array.from({length:CAMPUS_SLOTS},(_,slot)=>{const root=new Group();scene.add(root);return{slot,root,kind:-1,ultra:false};});
  const cache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
+ const ultraCache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
  const glazing=mats.get(0x276fa0);
- return (s,weather)=>{if(glazing)glazing.emissiveIntensity=(weather?.night||0)*.38;for(const item of slots){const baseVis=s.map==='school';if(!baseVis){item.root.visible=false;continue;}const anchor=campusAnchor(item.slot,s.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,s);
-  if(clr.hide){item.root.visible=false;continue;}
-  item.root.visible=true;
-  if(item.kind!==kind){item.root.clear();if(!cache[item.slot].has(kind))cache[item.slot].set(kind,templates[kind].clone());item.root.add(cache[item.slot].get(kind));item.kind=kind;}
-  item.root.position.set(curveRelX(anchor,s),curveRelY(anchor,s)+clr.dropY,s.distance-anchor);
-  item.root.rotation.y=s.activeBranch?-Math.atan(curveSlopeAt(anchor,s)):0;
- }};
+ return (s,weather)=>{
+  const isUltraQ=Boolean(scene.userData?.ultraQuality);
+  if(isUltraQ&&s.map==='school'){
+   ultraSchoolWindClock.value=s.time||0;
+   if(!ultraTemplates)ultraTemplates=[0,1,2,3,4,5].map(kind=>plantFloweringTree(buildUltraSchoolTemplate(kind),kind));
+  }
+  if(glazing)glazing.emissiveIntensity=(weather?.night||0)*.38;
+  for(const item of slots){
+   const baseVis=s.map==='school';
+   if(!baseVis){item.root.visible=false;continue;}
+   const anchor=campusAnchor(item.slot,s.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,s);
+   if(clr.hide){item.root.visible=false;continue;}
+   item.root.visible=true;
+   if(item.kind!==kind||item.ultra!==isUltraQ){
+    item.root.clear();
+    if(isUltraQ){
+     if(!ultraCache[item.slot].has(kind))ultraCache[item.slot].set(kind,ultraTemplates[kind].clone());
+     item.root.add(ultraCache[item.slot].get(kind));
+    }else{
+     if(!cache[item.slot].has(kind))cache[item.slot].set(kind,templates[kind].clone());
+     item.root.add(cache[item.slot].get(kind));
+    }
+    item.kind=kind;
+    item.ultra=isUltraQ;
+   }
+   item.root.position.set(curveRelX(anchor,s),curveRelY(anchor,s)+clr.dropY,s.distance-anchor);
+   item.root.rotation.y=s.activeBranch?-Math.atan(curveSlopeAt(anchor,s)):0;
+  }
+ };
 }

@@ -91,7 +91,7 @@ test('unified character carousel with left/right arrows and 2-step College unloc
    'gender-split character menus removed in favor of unified carousel');
  assert.ok(htmlSrc.includes('id="char-prev"')&&htmlSrc.includes('id="char-next"')&&htmlSrc.includes('id="char-equip-btn"'),
    'Characters screen exposes Left/Right arrow navigation and select button');
-assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&gameSrc.includes("id: 'female'")&&gameSrc.includes("id: 'college-male'")&&gameSrc.includes("id: 'college-woman'")&&gameSrc.includes("id: 'college-man'"),
+assert.ok(gameSrc.includes('CHARACTER_ROSTER')&&gameSrc.includes("id: 'male'")&&gameSrc.includes("id: 'female'")&&gameSrc.includes("id: 'college-male'")&&gameSrc.includes("id: 'college-woman'")&&gameSrc.includes("id: 'college-man'")&&!(/CHARACTER_ROSTER\s*=\s*\[[^\]]*aged-elder/.test(gameSrc)),
   'unified roster cycles cleanly through all 5 characters (2 School + 3 College)');
  const moveFn = gameSrc.match(/function moveCarousel\([^)]*\)\s*\{[^}]*\}/)?.[0] || '';
  assert.ok(moveFn && !moveFn.includes('selectUnlockedCharacter'),

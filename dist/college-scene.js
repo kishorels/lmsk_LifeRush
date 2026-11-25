@@ -1,6 +1,7 @@
 import {BoxGeometry,CanvasTexture,Group,Mesh,MeshStandardMaterial,RepeatWrapping,SphereGeometry,SRGBColorSpace,TextureLoader} from './vendor/three.module.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
-import {roadsideTree} from './street-materials.js';
+import {roadsideTree} from './street-materials.js?v=3.10.22';
+import {buildUltraCollegeTemplate, updateUltraCollegeWeather} from './ultra-college.js?v=3.10.22';
 import {campusAnchor,campusKind,CAMPUS_SLOTS,curveRelX,curveRelY,curveSlopeAt} from './campus-layout.js';
 import {FINALRUN_GATE, finalRunGateFor} from './engine.js';
 import {branchForkClearance} from './road-events.js';
@@ -126,15 +127,30 @@ export function createCollegeCampus(scene){
   return merged;
  }
  const templates=Array.from({length:6},(_,kind)=>build(kind));
- const slots=Array.from({length:CAMPUS_SLOTS},()=>{const root=new Group();scene.add(root);return {root,kind:-1};});
+ let ultraTemplates=null;
+ const slots=Array.from({length:CAMPUS_SLOTS},()=>{const root=new Group();scene.add(root);return {root,kind:-1,ultra:false};});
  const cache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
+ const ultraCache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
  return state=>{
   const college=state.map==='college';
+  const isUltraQ = Boolean(scene.userData?.ultraQuality);
+  let showUmbrellas = false;
   if(college){
+   const w = sceneWeather(state);
+   if(isUltraQ){
+    if(!ultraTemplates)ultraTemplates=Array.from({length:6},(_,kind)=>buildUltraCollegeTemplate(kind));
+    showUmbrellas = updateUltraCollegeWeather(w, state.time || 0);
+   }
    const lamp=material(0xffeac0);
    lamp.emissive.setHex(0xffbf65);
-   const w = sceneWeather(state);
-   lamp.emissiveIntensity = (w.rain > 0.25 || (w.wet || 0) > 0.4) ? 1.7 : 0;
+   const wetLit = (w.rain > 0.25 || (w.wet || 0) > 0.4);
+   lamp.emissiveIntensity = wetLit ? (isUltraQ ? 2.4 : 1.7) : 0;
+   const gWin = material(C.glass);
+   const gWinL = material(C.glassLight);
+   gWin.emissive.setHex(0xffb454);
+   gWinL.emissive.setHex(0xffcf82);
+   gWin.emissiveIntensity = isUltraQ ? (w.rain * 0.72 + (w.wet || 0) * 0.25) : 0;
+   gWinL.emissiveIntensity = isUltraQ ? (w.rain * 0.62 + (w.wet || 0) * 0.20) : 0;
   }
   for(let slot=0;slot<slots.length;slot++){
    const item=slots[slot];
@@ -142,7 +158,22 @@ export function createCollegeCampus(scene){
    const anchor=campusAnchor(slot,state.distance),kind=campusKind(anchor),clr=branchForkClearance(anchor,state);
    if(clr.hide||(state.isFinalRun&&anchor>=finalRunGateFor('college')-55)){item.root.visible=false;continue;}
    item.root.visible=true;
-   if(item.kind!==kind){item.root.clear();if(!cache[slot].has(kind))cache[slot].set(kind,templates[kind].clone());item.root.add(cache[slot].get(kind));item.kind=kind;}
+   if(item.kind!==kind||item.ultra!==isUltraQ){
+    item.root.clear();
+    if(isUltraQ){
+     if(!ultraCache[slot].has(kind))ultraCache[slot].set(kind,ultraTemplates[kind].clone());
+     item.root.add(ultraCache[slot].get(kind));
+    }else{
+     if(!cache[slot].has(kind))cache[slot].set(kind,templates[kind].clone());
+     item.root.add(cache[slot].get(kind));
+    }
+    item.kind=kind;
+    item.ultra=isUltraQ;
+   }
+   if(isUltraQ){
+    const umb=item.root.children[0]?.getObjectByName?.('college-rain-umbrellas');
+    if(umb)umb.visible=showUmbrellas;
+   }
    item.root.position.set(curveRelX(anchor,state),curveRelY(anchor,state)+clr.dropY,state.distance-anchor);
    item.root.rotation.y=-Math.atan(curveSlopeAt(anchor,state));
   }

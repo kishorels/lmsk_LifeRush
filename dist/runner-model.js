@@ -1,6 +1,6 @@
 import { AnimationClip, AnimationMixer, AnimationUtils, LoopOnce, MeshStandardMaterial, CanvasTexture, DoubleSide, VectorKeyframeTrack, QuaternionKeyframeTrack, Group, Mesh, BufferGeometry, Float32BufferAttribute, TorusGeometry, PlaneGeometry, BoxGeometry } from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
-import { SWEEP_SECONDS, JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture } from './engine.js';
+import { SWEEP_SECONDS, JUMP_DURATION, SLIDE_DURATION, ROLL_DURATION, HIT_DURATION, FALL_DURATION, capturePose, isCapture, height } from './engine.js';
 import {saveGestureBindPose} from './signature-gesture.js';
 
 function createSchoolBadgeTexture(CanvasTextureClass) {
@@ -220,6 +220,10 @@ function loadFemaleCollegeAnims() {
 export function loadRunnerModel(parent, selected = 'male', onProgress, isInitiallyActive = selected === 'male', onLoaded = null) {
   let model, mixer, actions, current, capturing = false, lean=0, pace=1, motionId=-1, currentRotationY = 0;
   let skirtMeshes = [], clothL = 0.06, clothR = 0.06, clothVelL = 0, clothVelR = 0, stridePhase = 0, scarfMeshes = [];
+  // ULTRA-only PUBG procedural bone physics state (completely inactive on AUTO/LOW/MED/HIGH)
+  let ultraBones = null;
+  let uPrevAirH = 0, uPeakAirH = 0, uLandingDip = 0, uLandingVel = 0;
+  let uSprintBlend = 0, uHeadYaw = 0, uGlanceYaw = 0, uAppliedDip = false;
   function load() {
     const assets = {
       male: './assets/runverse-schoolboy.glb?v=2.2-opt',
@@ -501,6 +505,20 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
       spineBone.add(backBadge);
     }
     saveGestureBindPose(model);
+    const findBone = (...candidates) => {
+      for (const nm of candidates) {
+        const b = model.getObjectByName(nm);
+        if (b) return b;
+      }
+      return null;
+    };
+    ultraBones = {
+      spine: findBone('mixamorig:Spine', 'mixamorigSpine', 'CC_Base_Spine01'),
+      spine1: findBone('mixamorig:Spine1', 'mixamorigSpine1', 'CC_Base_Spine02'),
+      spine2: findBone('mixamorig:Spine2', 'mixamorigSpine2'),
+      neck: findBone('mixamorig:Neck', 'mixamorigNeck', 'CC_Base_NeckTwist01'),
+      head: findBone('mixamorig:Head', 'mixamorigHead', 'CC_Base_Head')
+    };
     mixer = new AnimationMixer(model);
     actions = Object.fromEntries(names.map(name => [name, mixer.clipAction(clips.get(name))]));
     if (injuredData) {
@@ -637,6 +655,83 @@ export function loadRunnerModel(parent, selected = 'male', onProgress, isInitial
     const stepDt = frozen ? 0 : Math.min(.05, Math.max(0, dt ?? 0));
     const motionDt=state.mode==='running'?Math.max(0,dt??0):stepDt;
     mixer.update(motionDt);
+
+    // ULTRA-only PUBG-grade procedural skeleton physics (speed sprint posture, look-ahead head turn, chase shoulder glance, heavy landing crouch absorption).
+    // Strictly untouched on AUTO / LOW / MED / HIGH tiers!
+    if (state._ultraQuality && !capturing && ultraBones) {
+      const running = state.mode === 'running';
+      const airH = running ? Math.max(0, height(state) - (state.floor || 0)) : 0;
+      if (state.time === 0 || !running) {
+        uPrevAirH = 0;
+        uPeakAirH = 0;
+        if (!running) { uLandingDip = 0; uLandingVel = 0; }
+      } else {
+        if (airH > 0.08) {
+          uPeakAirH = Math.max(uPeakAirH, airH);
+        } else if (uPrevAirH > 0.14 && airH <= 0.06) {
+          const impact = Math.max(0.16, Math.min(0.45, 0.15 + uPeakAirH * 0.14));
+          uLandingVel -= impact * 10.5;
+          render.lastLandingImpact = impact;
+          render.landingSeq = (render.landingSeq || 0) + 1;
+          uPeakAirH = 0;
+        } else if (airH <= 0.05) {
+          uPeakAirH = 0;
+        }
+        uPrevAirH = airH;
+      }
+
+      if (stepDt > 0) {
+        const stiff = 128, damp = 17.5;
+        uLandingVel += (-uLandingDip * stiff - uLandingVel * damp) * stepDt;
+        uLandingDip = Math.max(-0.26, Math.min(0.08, uLandingDip + uLandingVel * stepDt));
+        if (Math.abs(uLandingDip) < 0.001 && Math.abs(uLandingVel) < 0.005) { uLandingDip = 0; uLandingVel = 0; }
+      }
+      model.position.y = uLandingDip;
+      uAppliedDip = true;
+
+      const smooth = 1 - Math.exp(-9 * Math.max(0.001, stepDt || 0.016));
+      const spdNorm = running && name === 'Run'
+        ? Math.max(0, Math.min(1, ((state.speed || 28) - 28) / 56 + ((state.nitro || 0) > 0 ? 0.55 : 0)))
+        : 0;
+      uSprintBlend += (spdNorm - uSprintBlend) * smooth;
+
+      const wantHeadYaw = running ? Math.max(-0.34, Math.min(0.34, -(state.lane - state.x) * 0.42)) : 0;
+      uHeadYaw += (wantHeadYaw - uHeadYaw) * smooth;
+
+      // Tense over-the-shoulder glance when villain is actively chasing after 1st hit
+      let targetGlance = 0;
+      if (running && state.firstHitAt !== null && name !== 'Slide' && name !== 'Roll') {
+        const phase = ((state.time || 0) % 2.4) / 2.4;
+        if (phase > 0.25 && phase < 0.58) {
+          targetGlance = Math.sin(((phase - 0.25) / 0.33) * Math.PI) * 0.44 * (state.chaseSide || 1);
+        }
+      }
+      uGlanceYaw += (targetGlance - uGlanceYaw) * (1 - Math.exp(-7 * Math.max(0.001, stepDt || 0.016)));
+
+      const dipPitch = Math.max(0, -uLandingDip) * 1.15;
+      const forwardLean = uSprintBlend * 0.26 + dipPitch;
+      const idleBreath = (!running && name === 'Idle') ? Math.sin((state.time || 0) * 2.4) * 0.028 : 0;
+
+      if (ultraBones.spine) ultraBones.spine.rotation.x += forwardLean * 0.36 + idleBreath * 0.4;
+      if (ultraBones.spine1) ultraBones.spine1.rotation.x += forwardLean * 0.38 + idleBreath;
+      if (ultraBones.spine2) {
+        ultraBones.spine2.rotation.x += forwardLean * 0.34 + idleBreath * 0.6;
+        ultraBones.spine2.rotation.y += uGlanceYaw * 0.32;
+      }
+      if (ultraBones.neck) {
+        ultraBones.neck.rotation.x -= forwardLean * 0.45;
+        ultraBones.neck.rotation.y += uHeadYaw * 0.48 + uGlanceYaw * 0.45;
+      }
+      if (ultraBones.head) {
+        ultraBones.head.rotation.x -= forwardLean * 0.52;
+        ultraBones.head.rotation.y += uHeadYaw * 0.62 + uGlanceYaw * 0.65;
+      }
+    } else if (uAppliedDip) {
+      model.position.y = 0;
+      uLandingDip = 0;
+      uLandingVel = 0;
+      uAppliedDip = false;
+    }
 
     // Spring-damped real-time cloth dynamics for the School Female pleated skirt (wind billow, stride flutter, jump flare, turn swing!)
     if (skirtMeshes.length) {

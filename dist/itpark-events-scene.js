@@ -453,12 +453,26 @@ export function createRoadEventsScene(scene) {
   const shrubDeep = getMat('reShrub2', { color: 0x15803d, roughness: 0.78 });
   const shrubLime = getMat('reShrub3', { color: 0x4ade80, roughness: 0.68 });
 
+  // ULTRA-only wet-mirror rainy-night bridge deck & night ocean reflection uniforms (0 on HIGH/MED/LOW/AUTO!)
+  const skyFloorUniforms = {
+    uUltraBridge: { value: 0 },
+    uBridgeTime: { value: 0 },
+    uBridgeDist: { value: 0 }
+  };
+  const seaUltraUniforms = {
+    uUltraSea: { value: 0 },
+    uSeaTime: { value: 0 },
+    uSeaDist: { value: 0 }
+  };
+
   // High-Definition Laminated Architectural Glass Floor (Spider Bolts, Expansion Joints & Anti-Slip Frit Pattern)
   function createSkywalkGlassMat() {
     if (typeof document === 'undefined') {
-      return getMat('reSkyGlass:fb', {
+      const fbMat = getMat('reSkyGlass:fb', {
         color: 0x6ce0ff, roughness: 0.04, metalness: 0.46, transparent: true, opacity: 0.50, emissive: 0x0284c7, emissiveIntensity: 0.24
       });
+      fbMat.userData.skyFloorUniforms = skyFloorUniforms;
+      return fbMat;
     }
     const S = 256;
     const cv = document.createElement('canvas');
@@ -536,7 +550,7 @@ export function createRoadEventsScene(scene) {
     emissiveMap.repeat.set(2, 4);
     emissiveMap.anisotropy = 4;
 
-    return new MeshStandardMaterial({
+    const mat = new MeshStandardMaterial({
       color: 0xffffff,
       map,
       emissiveMap,
@@ -549,6 +563,87 @@ export function createRoadEventsScene(scene) {
       depthWrite: !scene.userData?.isTouch,
       envMapIntensity: 2.1
     });
+    mat.userData.skyFloorUniforms = skyFloorUniforms;
+    mat.customProgramCacheKey = () => 'ultra-sky-floor-v2';
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uUltraBridge = skyFloorUniforms.uUltraBridge;
+      shader.uniforms.uBridgeTime = skyFloorUniforms.uBridgeTime;
+      shader.uniforms.uBridgeDist = skyFloorUniforms.uBridgeDist;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>
+varying float vBridgeLocalX;
+varying float vBridgeLocalZ;
+varying vec3 vBridgeWorld;`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+vBridgeLocalX = transformed.x;
+vBridgeLocalZ = transformed.z;
+vec4 bWp = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+bWp = instanceMatrix * bWp;
+#endif
+vBridgeWorld = (modelMatrix * bWp).xyz;`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>
+uniform float uUltraBridge;
+uniform float uBridgeTime;
+uniform float uBridgeDist;
+varying float vBridgeLocalX;
+varying float vBridgeLocalZ;
+varying vec3 vBridgeWorld;`)
+        .replace('#include <map_fragment>', `#include <map_fragment>
+if (uUltraBridge > 0.01) {
+  float ax = abs(vBridgeLocalX);
+  float wz = -vBridgeWorld.z + uBridgeDist;
+  // Deep glossy dark wet obsidian-charcoal steel bridge deck so reflections pop with photographic contrast!
+  float rib = 0.5 + 0.5 * sin(wz * 14.0);
+  float plankSeam = smoothstep(0.95, 1.0, abs(sin(wz * 1.05)));
+  vec3 deckCol = mix(vec3(0.012, 0.017, 0.026), vec3(0.026, 0.036, 0.054), rib * 0.45);
+  deckCol = mix(deckCol, vec3(0.005, 0.008, 0.014), plankSeam * 0.75);
+  // Twin gleaming longitudinal stainless expansion tracks
+  float railMask = smoothstep(0.095, 0.018, abs(ax - 1.48));
+  deckCol = mix(deckCol, vec3(0.32, 0.42, 0.56), railMask * 0.92);
+  diffuseColor.rgb = mix(diffuseColor.rgb, deckCol, uUltraBridge);
+  diffuseColor.a = mix(diffuseColor.a, 0.98, uUltraBridge);
+}`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+if (uUltraBridge > 0.01) {
+  float ax = abs(vBridgeLocalX);
+  float wz = -vBridgeWorld.z + uBridgeDist;
+  // Fine horizontal water-film ripple distortion (real mirror reflections stretch vertically & break horizontally!)
+  float w1 = sin(wz * 22.0 + sin(vBridgeLocalX * 5.2) * 1.4 + uBridgeTime * 2.2);
+  float w2 = sin(wz * 47.0 - vBridgeLocalX * 8.4 - uBridgeTime * 3.1);
+  float w3 = sin(wz * 83.0 + vBridgeLocalX * 14.0 + uBridgeTime * 4.4);
+  float ripple = smoothstep(-0.35, 0.85, w1 * 0.48 + w2 * 0.32 + w3 * 0.20);
+  // Wet puddle patches across the dark deck (glossy mirror pools vs slightly rougher damp steel)
+  float puddle = smoothstep(0.22, 0.78, 0.5 + 0.5 * sin(vBridgeLocalX * 2.1 + sin(wz * 0.35) * 1.8) * cos(wz * 0.28 + vBridgeLocalX * 0.9));
+
+  // 1. Tall Streetlamp Mirror Reflection Trails (spaced every 24m, stretched vertically along wet outer lanes!)
+  float lampPhase = 0.5 + 0.5 * cos(wz * (6.283185 / 24.0));
+  float lampStreak = pow(lampPhase, 2.4) * exp(-pow((ax - 2.72) * 1.45, 2.0));
+  // 2. Vertical Bollard & Recessed Curb LED Mirror Reflections (every 12m + crisp continuous curb edge reflection!)
+  float bollardPhase = 0.5 + 0.5 * cos(wz * (6.283185 / 12.0));
+  float bollardPool = pow(bollardPhase, 3.2) * exp(-pow((ax - 3.28) * 2.1, 2.0));
+  float curbMirror = smoothstep(3.18, 3.74, ax) * (0.48 + 0.52 * ripple);
+  vec3 warmMirror = vec3(1.0, 0.76, 0.34) * (lampStreak * (0.55 + 1.15 * ripple) * mix(0.55, 1.15, puddle) + bollardPool * (0.45 + 0.85 * ripple))
+                  + vec3(1.0, 0.90, 0.68) * curbMirror * 0.88;
+
+  // 3. Cool Blue-White Floodlit H-Frame Suspension Pylon & Storm Sky Reflection down center & wet stainless tracks
+  float pylonTwin = exp(-pow((ax - 0.85) * 2.2, 2.0)) + exp(-pow(ax * 1.15, 2.0)) * 0.55;
+  float railSpec = smoothstep(0.08, 0.012, abs(ax - 1.48)) * (0.35 + 0.85 * ripple);
+  vec3 coolMirror = vec3(0.32, 0.66, 1.0) * (pylonTwin * puddle * (0.14 + 0.42 * ripple) + railSpec * 0.68);
+
+  // 4. Subtle animated raindrop splash rings sparkling on the wet glass/steel surface
+  vec2 cell = floor(vec2(vBridgeLocalX * 1.6, wz * 0.85));
+  vec2 fuv = fract(vec2(vBridgeLocalX * 1.6, wz * 0.85)) - 0.5;
+  float rnd = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+  float age = fract(uBridgeTime * 1.35 + rnd * 6.28);
+  float ring = smoothstep(0.055, 0.0, abs(length(fuv) - age * 0.42)) * (1.0 - age) * step(0.52, rnd);
+
+  vec3 ultraRefl = warmMirror + coolMirror + vec3(0.75, 0.86, 1.0) * ring * 0.14;
+  totalEmissiveRadiance = mix(totalEmissiveRadiance, ultraRefl, uUltraBridge);
+}`);
+    };
+    return mat;
   }
 
   // Structural Glass Balustrade Railing (Vertical Panels, Panel Gaps & Clamp Shoes)
@@ -1097,6 +1192,59 @@ export function createRoadEventsScene(scene) {
     metalness: 0.62,
     envMapIntensity: 1.9
   });
+  oceanBaseMat.customProgramCacheKey = () => 'ultra-sea-night-v2';
+  oceanBaseMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uUltraSea = seaUltraUniforms.uUltraSea;
+    shader.uniforms.uSeaTime = seaUltraUniforms.uSeaTime;
+    shader.uniforms.uSeaDist = seaUltraUniforms.uSeaDist;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vSeaWorld;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+vSeaWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform float uUltraSea;
+uniform float uSeaTime;
+uniform float uSeaDist;
+varying vec3 vSeaWorld;`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+if (uUltraSea > 0.01) {
+  float sx = vSeaWorld.x;
+  float sz = -vSeaWorld.z + uSeaDist;
+  float swell = 0.5 + 0.5 * sin(sz * 0.55 + sin(sx * 0.14) * 2.2 - uSeaTime * 1.45);
+  vec3 nightSea = mix(vec3(0.020, 0.036, 0.068), vec3(0.048, 0.082, 0.138), swell);
+  diffuseColor.rgb = mix(diffuseColor.rgb, nightSea, uUltraSea);
+}`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+if (uUltraSea > 0.01) {
+  float sx = vSeaWorld.x;
+  float ax = abs(sx);
+  float vz = -vSeaWorld.z;
+  float sz = vz + uSeaDist;
+  // Multi-layered animated horizontal ocean wave ripples that break city & bridge lights into shimmering bars!
+  float wA = sin(vz * 1.85 + sin(sx * 0.16) * 2.4 - uSeaTime * 2.6);
+  float wB = sin(vz * 4.30 - sx * 0.28 + uSeaTime * 3.2);
+  float wC = sin(vz * 9.10 + sx * 0.55 - uSeaTime * 4.1);
+  float waveSpark = smoothstep(-0.15, 0.92, wA * 0.45 + wB * 0.35 + wC * 0.20);
+  float fineBar = pow(0.5 + 0.5 * sin(vz * 3.6 + sin(sx * 0.22) * 1.8 - uSeaTime * 2.2), 2.2);
+
+  // 1. Distinct Vertical Waterfront City Light Reflection Trails across deep dark midnight ocean (high contrast!)
+  float cityBand = smoothstep(12.0, 26.0, ax) * smoothstep(235.0, 38.0, vz);
+  float cols = pow(0.5 + 0.5 * sin(sx * 0.24 + 0.6), 7.5) * 0.85
+             + pow(0.5 + 0.5 * sin(sx * 0.53 - 1.3), 9.0) * 0.65;
+  // 2. Iconic Warm-Gold Reflection Trail on the RIGHT ocean mirroring the illuminated domed waterfront building!
+  float domeMirror = exp(-pow((sx - 105.0) * 0.028, 2.0)) * smoothstep(225.0, 35.0, vz);
+  // 3. Bridge Streetlamp & Warm Curb Reflections shimmering on the dark water flanking both sides of the bridge!
+  float bridgeSide = exp(-pow((ax - 11.5) * 0.14, 2.0)) * pow(0.5 + 0.5 * cos(sz * (6.283185 / 24.0)), 1.8);
+  // 4. Subtle cool blue-slate night sky sheen across wave crests
+  float skyGlint = smoothstep(6.0, 45.0, ax) * smoothstep(210.0, 15.0, vz) * (0.04 + 0.08 * waveSpark);
+
+  vec3 seaRefl = vec3(1.0, 0.72, 0.30) * (cityBand * cols * (0.22 + 0.72 * fineBar) + domeMirror * (0.26 + 0.78 * waveSpark) + bridgeSide * (0.20 + 0.55 * waveSpark))
+               + vec3(0.35, 0.56, 0.86) * skyGlint;
+  totalEmissiveRadiance = mix(totalEmissiveRadiance, seaRefl, uUltraSea);
+}`);
+  };
   const oceanSwellMat = new MeshBasicMaterial({
     color: 0xa5f3fc,
     map: oceanTex.swellMap,
@@ -2207,6 +2355,16 @@ export function createRoadEventsScene(scene) {
 
     // Fast path for School & College: Glass Bridge, Cave, Sea World, Metro Viaducts, Helicopter & Blimp are IT Park–only!
     if (!isPark) {
+      skyFloorUniforms.uUltraBridge.value = 0.0;
+      seaUltraUniforms.uUltraSea.value = 0.0;
+      skyGlassFloor.metalness = 0.52;
+      skyGlassFloor.roughness = 0.04;
+      skyGlassFloor.envMapIntensity = 2.1;
+      metroWhite.emissive.setHex(0x000000);
+      metroWhite.emissiveIntensity = 0.0;
+      cyanLed.emissive.setHex(0x00e5ff);
+      cyanLed.emissiveIntensity = 1.45;
+      blueSteel.color.setHex(0x3b72b4);
       portalArch.visible = false;
       portalPreview.visible = false;
       skyLoop.visible = false;
@@ -2419,9 +2577,51 @@ export function createRoadEventsScene(scene) {
       const t = state.time || 0;
       const phase = weather?.phase || 0;
       const lowSun = Math.max(0, 1 - Math.abs(phase - 0.15) * 7);
-      // Dynamic ocean tinting matching Day / Sunset / Night / Rain
-      oceanBaseMat.color.copy(oceanDayCol).lerp(oceanSunsetCol, lowSun * 0.72).lerp(oceanNightCol, night * 0.9).lerp(oceanRainCol, rain * 0.65);
-      oceanBaseMat.roughness = 0.07 + rain * 0.16;
+      const isUltraBridge = Boolean(scene.userData?.ultraQuality || state._ultraQuality) && onSky && !isBridgePreview;
+      if (isUltraBridge) {
+        skyFloorUniforms.uUltraBridge.value = 1.0;
+        skyFloorUniforms.uBridgeTime.value = t;
+        skyFloorUniforms.uBridgeDist.value = state.distance || 0;
+        seaUltraUniforms.uUltraSea.value = 1.0;
+        seaUltraUniforms.uSeaTime.value = t;
+        seaUltraUniforms.uSeaDist.value = state.distance || 0;
+        skyGlassFloor.emissiveIntensity = 0.0;
+        skyGlassFloor.opacity = 0.98;
+        skyGlassFloor.depthWrite = true;
+        skyGlassFloor.metalness = 0.08;
+        skyGlassFloor.roughness = 0.25;
+        skyGlassFloor.envMapIntensity = 0.22;
+        metroWhite.emissive.setHex(0x7cc4ff);
+        metroWhite.emissiveIntensity = 0.45;
+        cyanLed.emissive.setHex(0x9be0ff);
+        cyanLed.emissiveIntensity = 1.75;
+        blueSteel.color.setHex(0x1f2b3d);
+        oceanBaseMat.color.setHex(0x16243a);
+        oceanBaseMat.roughness = 0.14;
+        oceanBaseMat.metalness = 0.28;
+        oceanSwellMat.color.setHex(0xb8cde4);
+        glintMat.color.setHex(0xffca78);
+      } else {
+        skyFloorUniforms.uUltraBridge.value = 0.0;
+        seaUltraUniforms.uUltraSea.value = 0.0;
+        skyGlassFloor.emissiveIntensity = 0.32;
+        skyGlassFloor.opacity = 0.58;
+        skyGlassFloor.depthWrite = !scene.userData?.isTouch;
+        skyGlassFloor.metalness = 0.52;
+        skyGlassFloor.roughness = 0.04;
+        skyGlassFloor.envMapIntensity = 2.1;
+        metroWhite.emissive.setHex(0x000000);
+        metroWhite.emissiveIntensity = 0.0;
+        cyanLed.emissive.setHex(0x00e5ff);
+        cyanLed.emissiveIntensity = 1.45;
+        blueSteel.color.setHex(0x3b72b4);
+        // Dynamic ocean tinting matching Day / Sunset / Night / Rain
+        oceanBaseMat.color.copy(oceanDayCol).lerp(oceanSunsetCol, lowSun * 0.72).lerp(oceanNightCol, night * 0.9).lerp(oceanRainCol, rain * 0.65);
+        oceanBaseMat.roughness = 0.07 + rain * 0.16;
+        oceanBaseMat.metalness = 0.62;
+        oceanSwellMat.color.setHex(0xa5f3fc);
+        glintMat.color.setHex(0xfff3c4);
+      }
       seaSwellMesh.visible = !lowEnd && !isTouchScene;
       sunGlintInst.visible = !ultraLow;
       waveCrestInst.visible = !ultraLow;
@@ -2431,7 +2631,7 @@ export function createRoadEventsScene(scene) {
         oceanTex.colorMap.offset.set((t * 0.028) % 1, (state.distance / 18 + t * 0.05) % 1);
       }
       if (!lowEnd && !isTouchScene) {
-        oceanSwellMat.opacity = Math.max(0.14, 0.36 - night * 0.14 - rain * 0.12);
+        oceanSwellMat.opacity = isUltraBridge ? 0.22 : Math.max(0.14, 0.36 - night * 0.14 - rain * 0.12);
         if (oceanTex.bumpMap) {
           oceanTex.bumpMap.offset.set((t * 0.028) % 1, (state.distance / 18 + t * 0.05) % 1);
         }

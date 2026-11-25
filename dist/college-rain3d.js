@@ -36,21 +36,44 @@ export function stormSkyMaterial(clock) {
 }
 
 // Use the ribbon UVs before texture repeats so water follows the road mesh on hills and bends.
-export function wetCollegeAsphalt(material, distance, clock, strength, rainbowStrength = {value:0}) {
+export function wetCollegeAsphalt(material, distance, clock, strength, rainbowStrength = {value:0}, ultraStrength = {value:0}) {
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, {
       roadDistance: distance,
       stormTime: clock,
       wetStrength: strength,
-      rainbowStrength: rainbowStrength
+      rainbowStrength: rainbowStrength,
+      ultraStrength: ultraStrength
     });
     shader.vertexShader = 'varying highp vec2 roadUv;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>', '#include <begin_vertex>\n roadUv = uv;');
-    shader.fragmentShader = 'varying highp vec2 roadUv; uniform highp float roadDistance, stormTime; uniform float wetStrength, rainbowStrength;\n' +
+    shader.fragmentShader = 'varying highp vec2 roadUv; uniform highp float roadDistance, stormTime; uniform float wetStrength, rainbowStrength, ultraStrength;\n' +
       noiseGLSL + shader.fragmentShader
+        .replace('#include <color_fragment>', `
+        #include <color_fragment>
+        if (ultraStrength > 0.01) {
+          highp float uDist = mod(roadDistance, 256.0);
+          highp vec2 up = vec2((roadUv.x - 0.5) * 7.1, uDist - 35.0 + roadUv.y * 300.0);
+          highp vec2 uNoise = vec2(up.x + 16.0, up.y + 64.0);
+          float uPool = smoothstep(0.18, 0.72, rainNoise(uNoise * vec2(1.15, 0.625)) * 0.72 + rainNoise(uNoise * vec2(4.2, 2.5)) * 0.28);
+          float uWet = clamp(wetStrength, 0.0, 1.0) * ultraStrength;
+          // Subtle dry asphalt grain in sunshine; deepens into rich dark mirror-wet charcoal when rain rolls in (Panel 2 look)
+          float dryGrain = rainNoise(uNoise * vec2(12.0, 12.0)) * 0.14;
+          diffuseColor.rgb *= (0.92 + dryGrain) * mix(1.0, 0.44 - 0.14 * uPool, uWet);
+          // Scattered wet golden-russet fallen leaves along both road curbs
+          float curbBand = smoothstep(1.95, 3.30, abs(up.x));
+          highp vec2 lCell = floor(uNoise * vec2(2.6, 2.0));
+          float lRand = rainHash(lCell);
+          vec2 lPos = fract(uNoise * vec2(2.6, 2.0)) - (0.28 + 0.44 * vec2(lRand, rainHash(lCell + 7.3)));
+          float leafDot = (1.0 - smoothstep(0.06, 0.19, length(lPos * vec2(1.0, 1.45)))) * step(0.50, lRand) * curbBand;
+          vec3 leafCol = mix(vec3(0.48, 0.28, 0.08), vec3(0.76, 0.50, 0.12), rainHash(lCell + 19.1));
+          diffuseColor.rgb = mix(diffuseColor.rgb, leafCol, leafDot * 0.88 * ultraStrength);
+        }
+      `)
         .replace('#include <emissivemap_fragment>', `
         #include <emissivemap_fragment>
-        if (wetStrength > 0.) {
+        float effWet = clamp(wetStrength, 0.0, 1.0);
+        if (effWet > 0.005) {
           highp float distWrap = mod(roadDistance, 256.0);
           highp float timeWrap = mod(stormTime, 120.0);
           highp vec2 p = vec2((roadUv.x-.5)*7.1, distWrap-35.+roadUv.y*300.);
@@ -88,7 +111,38 @@ export function wetCollegeAsphalt(material, distance, clock, strength, rainbowSt
 
           vec3 wetGlow = vec3(.06,.12,.22)*pool + vec3(1.37,.53,.09)*lamps*pool*(.09+grain)
             + vec3(.24,.36,.52)*ring*detail + rainbowRefl;
-          totalEmissiveRadiance += wetStrength * max(vec3(0.0), wetGlow);
+
+          if (ultraStrength > 0.01) {
+            // ULTRA-only mirror-wet puddle reflections: shimmering amber streetlamp columns, warm window smears, and overcast sky sheen
+            float shimmer = 0.68 + 0.32 * rainNoise(pNoise * vec2(3.8, 1.2) + vec2(0.0, -timeWrap * 1.35));
+            float curbDist = abs(p.x);
+            // Elongated warm golden streetlamp columns reflecting down both sides of the wet asphalt
+            float lampColBand = exp(-min(30.0, 1.55 * pow(curbDist - 2.35, 2.0)));
+            float lampStreak = (0.35 + 0.65 * pow(lampWave, 1.6)) * lampColBand * (0.35 + 0.65 * pool) * shimmer;
+            // Warm glowing heritage window reflections spilling into outer puddles
+            float winBand = smoothstep(1.35, 3.35, curbDist);
+            float winWave = 0.5 + 0.5 * sin(p.y * 0.55 + (p.x > 0.0 ? 1.4 : 0.0));
+            float winRefl = winBand * (0.45 + 0.55 * winWave) * pool * (0.55 + 0.45 * grain);
+            // Center road cool overcast sky puddle reflection (clamped safely — zero white blowout!)
+            float centerBand = 1.0 - smoothstep(0.5, 2.8, curbDist);
+            float skyMirror = centerBand * smoothstep(0.32, 0.82, pool) * (0.72 + 0.28 * grain);
+            // Extra crisp secondary raindrop rings in ULTRA puddles
+            highp vec2 cells2 = pNoise * 2.45 + vec2(5.3, 9.1);
+            highp vec2 cell2 = floor(cells2);
+            float seed2 = rainHash(cell2);
+            float age2 = fract(timeWrap * (0.82 + 0.4 * seed2) + seed2 * 13.0) * 1.35;
+            float rad2 = length(fract(cells2) - (0.3 + 0.4 * vec2(seed2, rainHash(cell2 + 4.7))));
+            float ring2 = (1.0 - smoothstep(0.0, 0.055, abs(rad2 - age2 * 0.28))) * max(0.0, 1.0 - age2) * pool * detail;
+
+            vec3 ultraRefl =
+              vec3(1.18, 0.68, 0.22) * lampStreak * 0.62 +
+              vec3(0.95, 0.52, 0.16) * winRefl * 0.28 +
+              vec3(0.24, 0.34, 0.48) * skyMirror * 0.42 +
+              vec3(0.52, 0.68, 0.86) * ring2 * 0.48;
+            wetGlow += ultraRefl * ultraStrength;
+          }
+
+          totalEmissiveRadiance += effWet * max(vec3(0.0), wetGlow);
         }
       `)
         .replace('#include <lights_fragment_end>', `

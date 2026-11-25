@@ -3,9 +3,55 @@ import {
   Mesh, MeshStandardMaterial, PlaneGeometry, DoubleSide, Group, InstancedMesh, Object3D, DynamicDrawUsage
 } from './vendor/three.module.js';
 import { roadCurveX, roadCurveY, roadCurveSlope, curveSlopeAt, curveRelX, curveRelY } from './campus-layout.js?v=3.9.2';
-import { wetCollegeAsphalt } from './college-rain3d.js?v=3.10.16';
+import { wetCollegeAsphalt } from './college-rain3d.js?v=3.10.22';
 import { hasCollegeRain, sceneWeather } from './weather.js';
 export { roadCurveX, roadCurveY, roadCurveSlope, curveSlopeAt, curveRelX, curveRelY };
+
+// ULTRA-only procedural School asphalt realism shader (fine aggregate grain, weathered cracks, dusty curbs, scrolling dappled tree-leaf shadows).
+// Strictly 0% effect when ultraStrength == 0 (AUTO/LOW/MED/HIGH completely unchanged).
+function attachUltraSchoolAsphalt(material, distanceUniform, clockUniform, ultraUniform) {
+  material.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, {
+      uSchoolDist: distanceUniform,
+      uSchoolTime: clockUniform,
+      uUltraSchool: ultraUniform
+    });
+    shader.vertexShader = 'varying highp vec3 uRoadWorld;\n' + shader.vertexShader.replace(
+      '#include <begin_vertex>', '#include <begin_vertex>\n uRoadWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;'
+    );
+    shader.fragmentShader = `varying highp vec3 uRoadWorld; uniform highp float uSchoolDist, uSchoolTime; uniform float uUltraSchool;
+      float uHash(highp vec2 p){ highp vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+      float uNoise(highp vec2 p){ highp vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(uHash(i), uHash(i+vec2(1.0,0.0)), f.x), mix(uHash(i+vec2(0.0,1.0)), uHash(i+vec2(1.0,1.0)), f.x), f.y); }
+    ` + shader.fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      if (uUltraSchool > 0.01) {
+        highp float zTrack = mod(uSchoolDist - uRoadWorld.z, 256.0);
+        highp vec2 rp = vec2(uRoadWorld.x + 16.0, zTrack + 32.0);
+        // Fine asphalt aggregate grain & subtle tire-track contrast
+        float fineGrain = uNoise(rp * vec2(11.0, 11.0)) * 0.65 + uNoise(rp * vec2(28.0, 28.0)) * 0.35;
+        float tirePol = exp(-min(25.0, 3.2 * pow(abs(abs(uRoadWorld.x) - 1.1) - 0.55, 2.0)));
+        // Subtle weathered asphalt hairline cracks (exact periodic over 256m wrap)
+        float crackField = abs(uNoise(rp * vec2(1.4, 1.0) + vec2(fineGrain * 0.35)) - 0.5);
+        float crack = (1.0 - smoothstep(0.004, 0.019, crackField)) * 0.24;
+        // Grounded curb dust shading along outer edges
+        float curbEdge = smoothstep(2.55, 3.45, abs(uRoadWorld.x));
+        // Scrolling dappled golden-hour palm/neem tree canopy shadows gliding across the road (Panel 1!)
+        float sway = sin(uSchoolTime * 1.15 + zTrack * 0.147262) * 0.22;
+        highp vec2 canopyP = vec2(uRoadWorld.x * 0.42 + sway + 8.0, zTrack * 0.15625 + 12.0);
+        float canopy = uNoise(canopyP) * 0.58 + uNoise(canopyP * 2.3 + vec2(3.1, 1.7)) * 0.42;
+        float dappleShadow = smoothstep(0.38, 0.72, canopy) * (0.55 + 0.45 * smoothstep(0.4, 3.1, abs(uRoadWorld.x)));
+        float sunPatch = smoothstep(0.28, 0.66, 1.0 - canopy);
+
+        vec3 richRoad = diffuseColor.rgb * (0.68 + fineGrain * 0.22 - crack - tirePol * 0.06);
+        // Apply cool blue-violet dappled tree shadows & warm golden sunlight pools
+        richRoad *= mix(vec3(1.04, 0.97, 0.88), vec3(0.46, 0.52, 0.64), dappleShadow * 0.66);
+        richRoad += vec3(0.055, 0.038, 0.012) * sunPatch;
+        richRoad = mix(richRoad, vec3(0.42, 0.37, 0.30), curbEdge * 0.28);
+        diffuseColor.rgb = mix(diffuseColor.rgb, richRoad, uUltraSchool);
+      }
+    `);
+  };
+}
 
 const textures = new Map();
 function texture(name, color = true, aniso = 4) {
@@ -62,6 +108,8 @@ export function streetSurfaces(scene, box, opts = {}) {
   }
   box(schoolGroup, 0x9b8e75, 0, -.12, STRIP_Z, 14, .3, STRIP_LEN);
   const road = strip('asphalt', 0, .02, 7.1, .14, 16, 1, 0xffffff);
+  const schoolDistUniform = { value: 0 }, schoolClockUniform = { value: 0 }, ultraUniform = { value: 0 };
+  attachUltraSchoolAsphalt(road, schoolDistUniform, schoolClockUniform, ultraUniform);
   strip('pavers', -4.4, .06, 1.65, .22, 3.3, 1, 0xffffff);
   strip('pavers', 4.4, .06, 1.65, .22, 3.3, 1, 0xffffff);
   const patches = texture('road-roughness', false, aniso);
@@ -97,8 +145,9 @@ export function streetSurfaces(scene, box, opts = {}) {
   const paversMat = new MeshStandardMaterial({ color: 0xd0cfc5, map: texture('pavers'), roughness: .9 });
   const collegeRoadMat = new MeshStandardMaterial({color:0x969b9c,map:road.map,roughness:.95,roughnessMap:null,bumpMap:lowEnd?null:road.map,bumpScale:.018});
   const roadDistance = {value:0}, stormClock = {value:0}, wetStrength = {value:0}, rainbowStrength = {value:0};
-  wetCollegeAsphalt(collegeRoadMat, roadDistance, stormClock, wetStrength, rainbowStrength);
+  wetCollegeAsphalt(collegeRoadMat, roadDistance, stormClock, wetStrength, rainbowStrength, ultraUniform);
   const soakedAsphalt = new Color(0x626f81);
+  const ultraSoakedAsphalt = new Color(0x3a4657);
   const paintMat = new MeshStandardMaterial({color:0xe8e7d8,roughness:.89,emissive:0x11120e,emissiveIntensity:.08});
   const turfSegs = lowEnd ? 18 : 36;
   const roadSegs = lowEnd ? 24 : 54;
@@ -435,14 +484,32 @@ export function streetSurfaces(scene, box, opts = {}) {
         pos.needsUpdate = true;
       }
     }
+    const isUltraQ = Boolean(scene.userData?.ultraQuality);
+    ultraUniform.value = isUltraQ ? 1 : 0;
+    schoolTreeUniforms.ultra.value = isUltraQ ? 1 : 0;
+    schoolTreeUniforms.time.value = branchState?.time || 0;
+    schoolDistUniform.value = distance || 0;
+    schoolClockUniform.value = branchState?.time || 0;
     road.color.copy(dry).lerp(wet, weather.rain);
-    road.roughness = 1 - .25 * weather.rain;
-    road.envMapIntensity = .35 + weather.rain * .25;
+    road.roughness = isUltraQ ? (0.86 - 0.24 * weather.rain) : (1 - .25 * weather.rain);
+    road.envMapIntensity = isUltraQ ? (0.55 + weather.rain * 0.35) : (.35 + weather.rain * .25);
     const wetAmt = Math.max(0, Math.min(1, wetStrength.value || 0));
-    collegeRoadMat.color.set(0x969b9c).lerp(wetAmt > 0 ? soakedAsphalt : wet, Math.max(weather.rain, wetAmt * 0.85));
+    const colWetMix = Math.max(weather.rain || 0, wetAmt * 0.88);
+    collegeRoadMat.color.set(0x969b9c).lerp(isUltraQ ? ultraSoakedAsphalt : (wetAmt > 0 ? soakedAsphalt : wet), isUltraQ ? Math.min(0.95, colWetMix * 1.05) : Math.max(weather.rain, wetAmt * 0.85));
     collegeRoadMat.roughness = 0.95 - 0.13 * Math.max(weather.rain, wetAmt);
     collegeRoadMat.envMapIntensity = 0.30;
-    scene.environmentIntensity = .52 - weather.night * .39;
+    // ULTRA-only wet darkened granite sidewalk sheen & subtle warm amber lantern spill when College rain starts!
+    if (isUltraQ && isCollege) {
+      paversMat.color.setHex(0xd0cfc5).lerp(ultraSoakedAsphalt, colWetMix * 0.46);
+      paversMat.roughness = 0.90 - colWetMix * 0.44;
+      paversMat.emissive.setHex(0xffb454);
+      paversMat.emissiveIntensity = colWetMix * 0.12;
+    } else if (paversMat.emissiveIntensity !== 0 || paversMat.roughness !== 0.9) {
+      paversMat.color.setHex(0xd0cfc5);
+      paversMat.roughness = 0.9;
+      paversMat.emissiveIntensity = 0;
+    }
+    scene.environmentIntensity = (isUltraQ ? 0.68 : 0.52) - weather.night * .39;
   };
 }
 
@@ -466,16 +533,41 @@ export function campusMaterial(color) {
 }
 
 const foliage = new Map();
+const schoolTreeUniforms = { time: { value: 0 }, ultra: { value: 0 } };
+const treePlane = new PlaneGeometry(1, 1, 6, 8);
 export function roadsideTree(parent, x, z, height, palm = false, angle = 0) {
-  const species = palm ? 'palm' : 'neem';
+  const species = typeof palm === 'string' ? palm : (palm ? 'palm' : 'neem');
   if (!foliage.has(species)) {
+    const isBoug = species === 'bougainvillea';
     const material = new MeshStandardMaterial({
-      map:texture(species), alphaTest:.45, side:DoubleSide, roughness:1,
-      color:0xf0edda
+      map:texture(species), alphaTest: isBoug ? .36 : .45, side:DoubleSide, roughness: isBoug ? .82 : 1,
+      color: isBoug ? 0xffffff : 0xf0edda
     });
+    if (isBoug) {
+      material.customProgramCacheKey = () => 'roadside-bougainvillea-ultra';
+      material.onBeforeCompile = shader => {
+        shader.uniforms.uTreeTime = schoolTreeUniforms.time;
+        shader.uniforms.uTreeUltra = schoolTreeUniforms.ultra;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nuniform float uTreeTime;\nuniform float uTreeUltra;')
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+            if (uTreeUltra > 0.5) {
+              float crown = smoothstep(0.15, 0.95, uv.y);
+              float ph = uTreeTime * 1.15 + position.x * 2.4 + uv.y * 3.1;
+              transformed.x += crown * (0.042 * sin(ph) + 0.016 * sin(ph * 1.9 + uv.x * 4.2));
+              transformed.z += crown * (0.026 * cos(ph * 0.85 + uv.x * 3.5));
+            }`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform float uTreeUltra;')
+          .replace('#include <map_fragment>', `#include <map_fragment>
+            if (uTreeUltra > 0.5) {
+              diffuseColor.rgb = min(vec3(1.0), diffuseColor.rgb * vec3(1.24, 1.16, 1.22) + vec3(0.03, 0.015, 0.025));
+            }`);
+      };
+    }
     foliage.set(species, material);
   }
-  const width = height * (palm ? .77 : 1.05);
+  const width = height * (species === 'palm' ? .77 : species === 'bougainvillea' ? 1.08 : 1.05);
   const tree = new Mesh(treePlane, foliage.get(species));
   tree.scale.set(width, height, 1);
   tree.position.set(x, height/2 + .12, z);
@@ -485,4 +577,3 @@ export function roadsideTree(parent, x, z, height, palm = false, angle = 0) {
   parent.add(tree);
   return tree;
 }
-const treePlane = new PlaneGeometry();

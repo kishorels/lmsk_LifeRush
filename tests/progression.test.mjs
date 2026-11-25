@@ -20,16 +20,17 @@ test('fresh profile locks all maps except School and all characters except Schoo
   assert.equal(parkOpen(p), false);
 
   assert.equal(isCharacterUnlocked(p, 'male'), true);
-  for (const id of ['female', 'college-male', 'college-woman', 'college-man', 'aged-elder']) {
+  for (const id of ['female', 'college-male', 'college-woman', 'college-man']) {
     assert.equal(isCharacterUnlocked(p, id), false, `${id} starts locked`);
   }
+  assert.equal(isCharacterUnlocked(p, 'aged-elder'), false, 'aged-elder is Final Run exclusive and not selectable');
+  assert.equal(buyCharacter(p, 'aged-elder', 50000).ok, false, 'aged-elder cannot be purchased for normal maps');
   assert.deepEqual(CHARACTER_COSTS, {
     male: 0,
     female: 10000,
     'college-male': 12000,
     'college-woman': 15000,
-    'college-man': 20000,
-    'aged-elder': 25000
+    'college-man': 20000
   });
 });
 
@@ -87,9 +88,9 @@ test('map unlocks require single-run distance milestone AND spending exact coins
   assert.equal(mapBestFor(p, 'itpark'), 10000);
 });
 
-test('characters unlock with exact coin spending (10k, 12k, 15k, 20k, 25k) and persist across normalizeProfile', () => {
+test('characters unlock with exact coin spending (10k, 12k, 15k, 20k) and persist across normalizeProfile', () => {
   const p = freshProfile();
-  let coins = 85000;
+  let coins = 60000;
 
   assert.equal(buyCharacter(p, 'female', 9999).ok, false);
   assert.equal(canBuyCharacter(p, 'female', 10000), true);
@@ -98,8 +99,7 @@ test('characters unlock with exact coin spending (10k, 12k, 15k, 20k, 25k) and p
     ['female', 10000],
     ['college-male', 12000],
     ['college-woman', 15000],
-    ['college-man', 20000],
-    ['aged-elder', 25000]
+    ['college-man', 20000]
   ]) {
     assert.equal(characterCost(id), cost);
     const res = buyCharacter(p, id, coins);

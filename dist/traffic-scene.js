@@ -1,5 +1,5 @@
 import {makeCoin,spinCoin} from './coin.js';
-import {buildBus,buildCollegeVehicle} from './bus-model.js';
+import {buildBus,buildUltraSchoolBus,buildCollegeVehicle} from './bus-model.js?v=3.10.22';
 import {buildPorscheGT3RS,buildBugattiChiron,buildRedShuttleCart,buildFreightSemiTruck,buildDucatiStreetfighter} from './itpark-models.js?v=3.8.0';
 import {buildWDP4DTrain,buildRailRampWagon} from './wdp4d-train.js?v=3.10.13';
 import {BoxGeometry,Group,Mesh,MeshStandardMaterial} from './vendor/three.module.js';
@@ -39,11 +39,11 @@ export function createTraffic(scene) {
   if(kind==='ducati'||kind==='scooty')return buildDucatiStreetfighter(false,true);
   return variantIdx%2?buildBugattiChiron(length,false):buildPorscheGT3RS(length,false);
  }
- function vehicle(length,roof,oncoming,map,collegeKind='car',variantIdx=0){
-  const g=map==='itpark'?parkVehicle(collegeKind,length,roof,variantIdx):map==='college'?buildCollegeVehicle(collegeKind,length,roof,oncoming):buildBus(length,roof,oncoming);
+ function vehicle(length,roof,oncoming,map,collegeKind='car',variantIdx=0,ultraSchool=false){
+  const g=map==='itpark'?parkVehicle(collegeKind,length,roof,variantIdx):map==='college'?buildCollegeVehicle(collegeKind,length,roof,oncoming):(ultraSchool?buildUltraSchoolBus(length,roof,oncoming):buildBus(length,roof,oncoming));
   scene.add(g);return g;
  }
- function vanModel(v,map,inCave=false) {
+ function vanModel(v,map,inCave=false,ultraSchool=false) {
   const len=v.front-v.rear;
   let g;
   if(inCave){
@@ -54,8 +54,14 @@ export function createTraffic(scene) {
    body.rotation.y=Math.PI;body.position.z=-len;
    g.add(body);g.userData.wheels=body.userData.wheels;
    scene.add(g);
+  }else if(ultraSchool){
+   g=new Group();g.userData.captureObstacle=true;
+   const body=buildUltraSchoolBus(len,v.roof,false);
+   body.rotation.y=Math.PI;body.position.z=-len;
+   g.add(body);g.userData.wheels=body.userData.wheels;
+   scene.add(g);
   }else{
-   g=vehicle(len,v.roof,false,map,'van');
+   g=vehicle(len,v.roof,false,map,'van',0,false);
   }
   const run=v.rear-v.ramp;
   g.userData.routeVanId=v.id;
@@ -77,15 +83,17 @@ export function createTraffic(scene) {
   const trafficFar=scene.userData?.trafficFar||295;
   const lowEnd=Boolean(scene.userData?.lowEnd);
   const isTouch=Boolean(scene.userData?.isTouch);
+  const ultraQuality=Boolean(scene.userData?.ultraQuality);
+  const ultraSchool=ultraQuality&&map==='school';
   for(const v of (map==='grandfather' ? [] : repeatedVans(s.distance,s.runSeed))) {
    if(v.ramp>s.distance+trafficFar||v.front<s.distance-15)continue;
    if((s.map==='finalrun'||s.isFinalRun)&&v.ramp>=finalRunGateFor(s.map)-85)continue;
    const vanInCave=onCave&&v.rear>=s.branchStart-4&&v.rear<s.branchEnd;
-   const vanKey=`${map}:${vanInCave}:${v.front-v.rear}:${v.roof}:${v.rear-v.ramp}`;
+   const vanKey=`${map}:${ultraSchool}:${vanInCave}:${v.front-v.rear}:${v.roof}:${v.rear-v.ramp}`;
    visible.add(v.id);
    if(parked.has(v.id)&&parked.get(v.id).userData.poolKey!==vanKey){releasePool(vanPool,parked.get(v.id));parked.delete(v.id);}
    if(!parked.has(v.id)){
-    const g=takePool(vanPool,vanKey,()=>{const m=vanModel(v,map,vanInCave);m.userData.poolKey=vanKey;return m;});
+    const g=takePool(vanPool,vanKey,()=>{const m=vanModel(v,map,vanInCave,ultraSchool);m.userData.poolKey=vanKey;return m;});
     g.userData.routeVanId=v.id;
     g.userData.inCave=vanInCave;
     parked.set(v.id,g);
@@ -96,6 +104,10 @@ export function createTraffic(scene) {
    const pShiftU=pSampleZ-v.rear;
    g.position.set(v.lane*2.2+curveRelX(pSampleZ,s)+pShiftU*Math.sin(pYaw),.09+curveRelY(pSampleZ,s),s.distance-v.rear+pShiftU*(Math.cos(pYaw)-1));
    g.rotation.y=pYaw;
+   const camP=scene.userData?.camPos;
+   const pLen=Math.max(4,v.front-v.rear);
+   const pClipsCam=Boolean(camP && Math.abs(camP.x-g.position.x)<1.58 && camP.y<(g.position.y+(v.roof||2.4)+0.55) && camP.z>(g.position.z-pLen-0.85) && camP.z<(g.position.z+0.85));
+   g.visible=!pClipsCam;
    g.userData.coins.forEach((c,i)=>{c.visible=!s.collected.includes(v.id+':'+i);spinCoin(c,s.time,i,v.roof+.6);});
   }
   for(const [id,g]of parked)if(!visible.has(id)){releasePool(vanPool,g);parked.delete(id);}
@@ -114,15 +126,15 @@ export function createTraffic(scene) {
     if(!parkVariants.has(o))parkVariants.set(o,Math.abs(Math.floor(o.z)+(o.lane||0))%3);
     vIdx=parkVariants.get(o);
    }
-   const movKey=`${map}:${Boolean(o.metro)}:${Boolean(o.roofRide)}:${o.collegeKind||'car'}:${o.length}:${o.roof}:${vIdx}`;
+   const movKey=`${map}:${ultraSchool}:${Boolean(o.metro)}:${Boolean(o.roofRide)}:${o.collegeKind||'car'}:${o.length}:${o.roof}:${vIdx}`;
    if(moving.has(o)&&moving.get(o).userData.poolKey!==movKey){releasePool(movingPool,moving.get(o));moving.delete(o);}
    if(!moving.has(o)){
     const model=takePool(movingPool,movKey,()=>{
      let m;
      if(o.metro) m=metroCar(o);
-     else if(o.roofRide){m=new Group();m.userData.captureObstacle=true;const v=map==='itpark'?buildFreightSemiTruck(o.length,o.roof,vIdx):map==='college'?buildCollegeVehicle('van',o.length,o.roof,false):buildBus(o.length,o.roof,false);v.rotation.y=Math.PI;v.position.z=-o.length;m.add(v);m.userData.wheels=v.userData.wheels;m.userData.coins=[];
+     else if(o.roofRide){m=new Group();m.userData.captureObstacle=true;const v=map==='itpark'?buildFreightSemiTruck(o.length,o.roof,vIdx):map==='college'?buildCollegeVehicle('van',o.length,o.roof,false):(ultraSchool?buildUltraSchoolBus(o.length,o.roof,false):buildBus(o.length,o.roof,false));v.rotation.y=Math.PI;v.position.z=-o.length;m.add(v);m.userData.wheels=v.userData.wheels;m.userData.coins=[];
       for(let i=0;i<4;i++){m.userData.coins.push(makeCoin(m,0,o.roof+.6,-4-i*4));}scene.add(m);
-     }else m=vehicle(o.length,o.roof||(isCollege?1.45:2.8),true,map,o.collegeKind||'car',vIdx);
+     }else m=vehicle(o.length,o.roof||(isCollege?1.45:2.8),true,map,o.collegeKind||'car',vIdx,ultraSchool);
      m.userData.poolKey=movKey;
      return m;
     });
@@ -130,10 +142,18 @@ export function createTraffic(scene) {
    }const g=moving.get(o);
    const mFront=visZ+(o.length||10);
    const mSampleZ=o.roofRide?Math.max(visZ,Math.min(mFront,s.distance)):visZ;
-   const mYaw=-Math.atan(curveSlopeAt(mSampleZ,s));
+   const mSlope=curveSlopeAt(mSampleZ,s);
+   const mYaw=-Math.atan(mSlope);
    const mShiftU=mSampleZ-visZ;
-   g.position.set(o.lane*2.2+curveRelX(mSampleZ,s)+mShiftU*Math.sin(mYaw),.09+curveRelY(mSampleZ,s),s.distance-visZ+mShiftU*(Math.cos(mYaw)-1));
+   const suspBounce=ultraQuality&&!o.metro&&!o.roofRide?Math.sin(s.time*14.5+(o.lane||0)*2.1+visZ*0.18)*0.026:0;
+   g.position.set(o.lane*2.2+curveRelX(mSampleZ,s)+mShiftU*Math.sin(mYaw),.09+curveRelY(mSampleZ,s)+suspBounce,s.distance-visZ+mShiftU*(Math.cos(mYaw)-1));
    g.rotation.y=mYaw;
+   g.rotation.z=ultraQuality&&!o.metro&&!o.roofRide?Math.max(-0.08,Math.min(0.08,mSlope*0.22)):0;
+   const camM=scene.userData?.camPos;
+   const mLen=o.length||10;
+   const mTop=g.position.y+(o.roof||(isCollege?1.45:2.8))+0.65;
+   const mClipsCam=Boolean(camM && Math.abs(camM.x-g.position.x)<1.62 && camM.y<mTop && camM.z>(g.position.z-mLen-0.95) && camM.z<(g.position.z+0.95));
+   g.visible=!mClipsCam;
    if(isTouch&&!lowEnd){
     const wantShadow=(visZ-s.distance<46)&&(mFront>s.distance-6);
     if(g.userData._castSh!==wantShadow){

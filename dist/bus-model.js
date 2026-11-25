@@ -163,6 +163,260 @@ export function buildBus(length=10,roof=2.8,oncoming=true){
  return g;
 }
 
+// ULTRA-only Sculpted Photorealistic Indian School Bus (curved automotive coachwork, sloped panoramic windshield,
+// protruding hood nose, twin chrome headlights, radiator grille, safety window bars, wing mirrors, arched roof & spinning alloy/steel wheels).
+// Keeps exact playable collision bounds and flat center roof height so ramps & roof-jumping physics remain 100% identical!
+let sideBusBannerMat = null;
+function schoolBusSideMat() {
+ if (sideBusBannerMat || typeof document === 'undefined') return sideBusBannerMat;
+ const c = document.createElement('canvas'); c.width = 512; c.height = 72;
+ const ctx = c.getContext('2d');
+ if (!ctx) return null;
+ ctx.fillStyle = '#0f2942'; ctx.fillRect(0, 0, 512, 72);
+ ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, 512, 8); ctx.fillRect(0, 64, 512, 8);
+ ctx.fillStyle = '#fde047'; ctx.font = '900 38px system-ui, sans-serif'; ctx.textAlign = 'center';
+ ctx.fillText('LMSK  SCHOOL  BUS', 256, 49, 480);
+ const map = new CanvasTexture(c); map.colorSpace = SRGBColorSpace;
+ sideBusBannerMat = new MeshStandardMaterial({ map, roughness: 0.34, metalness: 0.14 });
+ return sideBusBannerMat;
+}
+
+export function buildUltraSchoolBus(length = 10, roof = 2.8, oncoming = true) {
+ const g = new Group();
+ g.userData.captureObstacle = true;
+ g.userData.wheels = [];
+ const add = (c, x, y, z, w, h, d, geo = cube) => {
+  const m = new Mesh(geo, paint(c));
+  m.position.set(x, y, z);
+  m.scale.set(w, h, d);
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
+  return m;
+ };
+ const shell = (c, x, y, z, w, h, d, r = .12) => add(c, x, y, z, 1, 1, 1, rounded(w, h, d, r));
+ const bar = (c, a, b, rad = .024) => {
+  const p = new Vector3(...a), q = new Vector3(...b), dir = q.clone().sub(p);
+  const m = add(c, (p.x + q.x) / 2, (p.y + q.y) / 2, (p.z + q.z) / 2, rad, dir.length(), rad, lampGeo);
+  m.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), dir.normalize());
+  return m;
+ };
+
+ const yellow = 0xebb018, yellowDeep = 0xd69610, cream = 0xf4ecd8, dark = 0x16202a;
+ const navy = 0x102840, glass = 0x162f42, chrome = 0xdbe6ef, ledWhite = 0xf8fbff, ledAmber = 0xffa61e, ledRed = 0xff2e3b;
+ const plate = licensePlateMat();
+ const sign = destinationBoard();
+ const sideBanner = schoolBusSideMat();
+
+ // 1. Sculpted Tapered Automotive Coachwork Body scaled proportionally to `roof` (works cleanly for both 1.72m parked buses & 2.8m full school buses!)
+ const noseZ = 0.24;
+ const beltY = Math.max(0.88, roof * 0.45);
+ const hoodTopY = Math.max(0.82, beltY * 0.86);
+ const bodyLower = coachworkGeo(`ubusLow:${length}:${roof}`, [
+  [-length - 0.06, 0.34, beltY - 0.06, 0.86, 0.92],
+  [-length + 0.32, 0.28, beltY, 0.95, 0.99],
+  [-0.95, 0.28, beltY, 0.95, 0.99],
+  [-0.22, 0.30, beltY - 0.05, 0.93, 0.94],
+  [noseZ, 0.36, hoodTopY, 0.82, 0.83]
+ ]);
+ add(yellow, 0, 0, 0, 1, 1, 1, bodyLower);
+
+ // Sculpted upper cabin with real inward tumblehome taper & raked front windshield pillar!
+ const cabinGeo = coachworkGeo(`ubusCab:${length}:${roof}`, [
+  [-length - 0.02, beltY - 0.08, roof - 0.14, 0.92, 0.82],
+  [-length + 0.36, beltY - 0.02, roof - 0.06, 0.98, 0.86],
+  [-1.12, beltY - 0.02, roof - 0.06, 0.98, 0.86],
+  [-0.58, beltY - 0.04, roof - 0.10, 0.95, 0.82],
+  [-0.08, hoodTopY - 0.04, beltY + 0.02, 0.88, 0.85]
+ ]);
+ add(yellow, 0, 0, 0, 1, 1, 1, cabinGeo);
+
+ // Curved heat-reflective cream dome roof crown (smooth curved sides; walkable center deck sits cleanly at `roof`)
+ const roofCrown = coachworkGeo(`ubusRoof:${length}:${roof}`, [
+  [-length + 0.14, roof - 0.15, roof - 0.02, 0.83, 0.68],
+  [-length + 0.55, roof - 0.10, roof, 0.86, 0.72],
+  [-0.85, roof - 0.10, roof, 0.86, 0.72],
+  [-0.45, roof - 0.15, roof - 0.03, 0.82, 0.68]
+ ]);
+ add(cream, 0, 0, 0, 1, 1, 1, roofCrown);
+
+ // Sleek roof escape hatches & side grab rails (outside walkable center strip)
+ for (const side of [-1, 1]) {
+  add(chrome, side * 0.78, roof + 0.025, -length * 0.52, 0.04, 0.04, length - 1.7);
+ }
+ for (const hz of [-length * 0.30, -length * 0.70]) {
+  shell(cream, 0, roof + 0.02, hz, 0.74, 0.04, 0.78, 0.015);
+ }
+ if (!oncoming) add(cream, 0, roof - 0.015, -length * 0.5, 1.36, 0.05, length - 0.65);
+
+ // 2. Raked Panoramic Split Front Windshield, Rubber Gaskets, Center Pillar, Twin Wipers & Roof Brow Marker Lights
+ const wsBotY = beltY + 0.02;
+ const wsTopY = roof - 0.20;
+ const wsSpanY = Math.max(0.36, wsTopY - wsBotY);
+ const wsTilt = Math.atan2(0.46, wsSpanY + 0.14);
+ const wsLen = Math.hypot(0.44, wsSpanY);
+ const wsMidY = (wsBotY + wsTopY) * 0.5;
+ const wsMidZ = -0.09 - 0.23;
+ const wsFrame = shell(dark, 0, wsMidY, wsMidZ, 1.66, wsLen, 0.06, 0.025);
+ wsFrame.rotation.x = -wsTilt;
+ const wsGlass = shell(glass, 0, wsMidY, wsMidZ + 0.025, 1.54, Math.max(0.28, wsLen - 0.10), 0.04, 0.015);
+ wsGlass.rotation.x = -wsTilt;
+ const wsCenter = add(dark, 0, wsMidY, wsMidZ + 0.045, 0.05, Math.max(0.28, wsLen - 0.08), 0.025);
+ wsCenter.rotation.x = -wsTilt;
+ for (const wx of [-0.36, 0.36]) {
+  const wiper = add(dark, wx, wsBotY + wsSpanY * 0.25, wsMidZ + 0.16, 0.022, Math.min(0.46, wsLen * 0.45), 0.02);
+  wiper.rotation.x = -wsTilt;
+  wiper.rotation.z = -0.48;
+ }
+ // Illuminated route destination board & 5 glowing amber roof clearance lights
+ const browY = roof - 0.14, browZ = -0.50;
+ const browH = Math.min(0.20, Math.max(0.13, roof * 0.075));
+ shell(dark, 0, browY, browZ + 0.06, 1.16, browH, 0.08, 0.025);
+ if (sign) {
+  const face = add(dark, 0, browY, browZ + 0.106, 1.08, browH * 0.78, 0.008);
+  face.material = sign;
+ }
+ for (const mx of [-0.62, -0.31, 0, 0.31, 0.62]) {
+  add(ledAmber, mx, roof - 0.035, -0.60, 0.075, 0.04, 0.05);
+ }
+
+ // 3. Sculpted Front Radiator Grille, Chrome Slats, Heavy Curved Steel Bumper, Twin Circular Chrome Headlights & Fog Lamps
+ const grilleY = Math.min(0.76, hoodTopY * 0.72);
+ const grilleH = Math.min(0.40, Math.max(0.26, hoodTopY * 0.38));
+ shell(dark, 0, grilleY, noseZ + 0.01, 0.94, grilleH, 0.07, 0.025);
+ for (let i = 0; i < 4; i++) add(chrome, 0, grilleY - grilleH * 0.34 + i * (grilleH * 0.22), noseZ + 0.048, 0.86, 0.022, 0.02);
+ add(yellowDeep, 0, grilleY, noseZ + 0.058, 0.15, 0.15, 0.025, lampGeo).rotation.x = Math.PI / 2;
+ // Curved wraparound steel front bumper with rubber bumper guards
+ shell(dark, 0, 0.34, noseZ + 0.04, 1.88, 0.20, 0.24, 0.075);
+ add(chrome, 0, 0.35, noseZ + 0.155, 1.66, 0.065, 0.03);
+ if (plate) { const pf = add(cream, 0, 0.34, noseZ + 0.175, 0.44, 0.10, 0.014); pf.material = plate; }
+ // Twin recessed circular chrome headlight pods + amber turn signals + lower fog lights
+ for (const side of [-1, 1]) {
+  const hx = side * 0.67;
+  shell(dark, hx, grilleY + 0.02, noseZ - 0.01, 0.35, 0.24, 0.07, 0.03);
+  for (const dx of [-0.08, 0.08]) {
+   const bezel = add(chrome, hx + dx, grilleY + 0.03, noseZ + 0.03, 0.072, 0.032, 0.072, lampGeo);
+   bezel.rotation.x = Math.PI / 2;
+   const lens = add(ledWhite, hx + dx, grilleY + 0.03, noseZ + 0.045, 0.058, 0.02, 0.058, lampGeo);
+   lens.rotation.x = Math.PI / 2;
+  }
+  add(ledAmber, hx, grilleY - 0.11, noseZ + 0.04, 0.24, 0.045, 0.03);
+  add(ledAmber, side * 0.72, 0.34, noseZ + 0.16, 0.14, 0.065, 0.03);
+ }
+
+ // 4. Side Windows with Rubber Seals, Twin Horizontal Safety Guard Bars, School Livery Stripes, Door & Dual-Arm Wing Mirrors
+ const winBot = beltY + 0.06;
+ const winTop = roof - 0.22;
+ const winH = Math.max(0.36, winTop - winBot);
+ const winY = (winTop + winBot) * 0.5;
+ const stripeY = Math.max(0.74, beltY - 0.10);
+ const doorH = Math.max(1.02, roof - 0.48);
+ const doorY = 0.34 + doorH * 0.5;
+ for (const side of [-1, 1]) {
+  // Lower dark chassis rub-rail + Navy/White school livery belt stripe
+  add(dark, side * 0.96, 0.46, -length * 0.52, 0.035, 0.10, length - 0.85);
+  add(navy, side * 0.97, stripeY, -length * 0.52, 0.03, 0.16, length - 0.95);
+  add(cream, side * 0.978, stripeY + 0.08, -length * 0.52, 0.024, 0.035, length - 0.95);
+  if (sideBanner && length >= 7) {
+   const sb = add(navy, side * 0.988, stripeY, -length * 0.52, 0.012, 0.18, Math.min(4.6, length * 0.48));
+   sb.material = sideBanner;
+  }
+  // Passenger side windows with dark rubber frames, reflective glass & twin chrome horizontal safety bars!
+  for (let wz = -1.75; wz > -length + 0.85; wz -= 1.38) {
+   const wx = side * 0.925;
+   shell(dark, wx, winY, wz, 0.04, winH + 0.05, 1.18, 0.015);
+   add(glass, wx + side * 0.014, winY, wz, 0.025, Math.max(0.28, winH - 0.04), 1.08);
+   add(dark, wx + side * 0.024, winY, wz, 0.016, Math.max(0.28, winH - 0.04), 0.03);
+   // Iconic Indian school bus twin horizontal chrome safety bars!
+   add(chrome, wx + side * 0.028, winY - winH * 0.16, wz, 0.015, 0.02, 1.08);
+   add(chrome, wx + side * 0.028, winY + winH * 0.08, wz, 0.015, 0.02, 1.08);
+  }
+  // Recessed Front Folding Passenger Door (scales cleanly to `roof` — never pokes out!)
+  shell(dark, side * 0.96, doorY, -0.92, 0.04, doorH, 0.74, 0.02);
+  add(glass, side * 0.978, winY, -0.92, 0.02, Math.max(0.30, winH - 0.02), 0.60);
+  if (roof >= 2.2) add(glass, side * 0.978, beltY - 0.24, -0.92, 0.02, 0.44, 0.54);
+  add(chrome, side * 0.99, beltY, -0.92, 0.016, 0.032, 0.64);
+
+  // Extended Dual-Arm Chrome Wing Mirrors on curved brackets (clamped below roofline!)
+  const mirY = Math.min(roof - 0.26, winY + 0.04);
+  bar(chrome, [side * 0.90, mirY + 0.10, -0.44], [side * 1.12, mirY + 0.12, -0.20], 0.016);
+  bar(chrome, [side * 0.92, mirY - 0.12, -0.36], [side * 1.12, mirY - 0.10, -0.20], 0.016);
+  shell(dark, side * 1.13, mirY + 0.01, -0.18, 0.075, 0.28, 0.12, 0.024);
+ }
+
+ // 5. Detailed Sculpted Rear End (Recessed Rear Glass + Safety Bars, Emergency Door Seam, Stacked LED Taillights, Chrome Bumper, Exhaust)
+ const rearZ = -length - 0.04;
+ shell(dark, 0, winY, rearZ, 1.54, winH, 0.07, 0.028);
+ add(glass, 0, winY, rearZ - 0.025, 1.42, Math.max(0.28, winH - 0.08), 0.03);
+ add(chrome, 0, winY - winH * 0.14, rearZ - 0.042, 1.42, 0.02, 0.015);
+ add(chrome, 0, winY + winH * 0.12, rearZ - 0.042, 1.42, 0.02, 0.015);
+ // Center emergency exit door outline & chrome handle
+ const eDoorH = Math.max(0.95, roof - 0.62);
+ const eDoorY = 0.48 + eDoorH * 0.5;
+ add(dark, 0, eDoorY, rearZ - 0.01, 0.66, eDoorH, 0.02);
+ add(yellow, 0, eDoorY, rearZ - 0.016, 0.60, eDoorH - 0.06, 0.016);
+ add(chrome, 0.22, beltY - 0.06, rearZ - 0.035, 0.04, 0.13, 0.03);
+ // Rear curved bumper, license plate, stacked crimson/amber/white taillights & chrome exhaust pipe
+ shell(dark, 0, 0.34, rearZ - 0.04, 1.84, 0.18, 0.18, 0.06);
+ add(chrome, 0, 0.34, rearZ - 0.125, 1.58, 0.055, 0.025);
+ if (plate) { const pr = add(cream, 0, 0.56, rearZ - 0.03, 0.42, 0.095, 0.014); pr.material = plate; }
+ const tailY = Math.min(0.76, beltY - 0.14);
+ for (const side of [-1, 1]) {
+  const tx = side * 0.74;
+  shell(dark, tx, tailY, rearZ - 0.02, 0.21, 0.38, 0.06, 0.02);
+  add(ledRed, tx, tailY - 0.05, rearZ - 0.052, 0.15, 0.15, 0.025);
+  add(ledAmber, tx, tailY + 0.11, rearZ - 0.052, 0.15, 0.08, 0.025);
+  add(ledWhite, tx, tailY - 0.15, rearZ - 0.052, 0.13, 0.05, 0.025);
+  add(ledRed, side * 0.72, roof - 0.14, rearZ + 0.04, 0.11, 0.055, 0.05);
+ }
+ const exhaust = add(chrome, -0.58, 0.24, rearZ - 0.14, 0.055, 0.34, 0.055, lampGeo);
+ exhaust.rotation.x = Math.PI * 0.5;
+
+ // 6. Sculpted Wheel Arches, Mudflaps & Spinning Wheels (2 axles for normal buses, 3 axles for long 16-22m buses!)
+ const wheelZs = length >= 15 ? [-1.65, -length + 3.15, -length + 1.55] : [-1.55, -length + 1.55];
+ for (const side of [-1, 1]) {
+  for (const wz of wheelZs) {
+   // Thick rubber wheel-arch flare brow + recessed dark wheel well
+   const arch = add(dark, side * 0.96, 0.44, wz, 1.06, 1.06, 1.15, archGeo);
+   arch.rotation.y = Math.PI * 0.5;
+   add(dark, side * 0.88, 0.44, wz, 0.24, 0.88, 0.96);
+   // Mudflap behind rear axle(s)
+   if (wz < -length * 0.5) add(dark, side * 0.88, 0.24, wz - 0.50, 0.24, 0.30, 0.035);
+  }
+ }
+
+ batchBody(g, ['ultraBus', length, roof, oncoming].join(':'));
+
+ // Independent spinning wheel assemblies (treaded tires + concave steel rims + lug-nut hub spokes!)
+ for (const side of [-1, 1]) {
+  for (const wz of wheelZs) {
+   const w = add(dark, side * 0.88, 0.42, wz, 1.05, 1.12, 1.05, tyre);
+   w.rotation.z = Math.PI * 0.5;
+   const rim = add(chrome, side * 0.995, 0.42, wz, 1.08, 1.08, 1.08, hub);
+   rim.rotation.z = Math.PI * 0.5;
+   const spokes = new Group();
+   spokes.position.set(side * 1.02, 0.42, wz);
+   g.add(spokes);
+   g.userData.wheels.push(spokes);
+   if (!bodyBatches.has('ultraBusSpokes')) {
+    for (let i = 0; i < 6; i++) {
+     const a = i * Math.PI / 3;
+     const lug = new Mesh(cube, paint(dark));
+     lug.scale.set(0.022, 0.055, 0.048);
+     lug.position.set(0, Math.cos(a) * 0.16, Math.sin(a) * 0.16);
+     spokes.add(lug);
+    }
+    const centerCap = new Mesh(hub, paint(yellowDeep));
+    centerCap.rotation.z = Math.PI * 0.5;
+    centerCap.scale.set(0.45, 0.45, 0.45);
+    spokes.add(centerCap);
+   }
+   batchBody(spokes, 'ultraBusSpokes');
+   for (const c of spokes.children) c.castShadow = false;
+  }
+ }
+ return g;
+}
+
 export function buildCollegeVehicle(kind='car',length=4.5,roof=1.45,oncoming=true){
  const g=new Group();g.userData.captureObstacle=true;g.userData.wheels=[];
  const add=(c,x,y,z,w,h,d,geo=cube)=>{const m=new Mesh(geo,paint(c));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;g.add(m);return m;};

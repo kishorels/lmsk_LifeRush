@@ -1,24 +1,25 @@
 import {createMagnetCoins} from './magnet-coins.js?v=3.0.0';
 import {createPickupModels,makeCoin} from './pickup-models.js?v=3.8.0';
 import {createGuardEffect} from './guard-effect.js?v=3.4.8';
-import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.10.16';
+import {streetSurfaces,curveRelX,curveRelY,curveSlopeAt} from './street-materials.js?v=3.10.22';
 import {createSideTraffic,buildSideVehicle} from './side-vehicles.js?v=3.8.0';
 import {createCaptureStage} from './capture-stage.js?v=3.0.0';
-import {createSky} from './sky-scene.js?v=3.9.0';
-import {createCampus} from './campus-scene.js?v=3.8.0';
+import {createSky} from './sky-scene.js?v=3.10.22i';
+import {createCampus} from './campus-scene.js?v=3.10.22';
 import {createGrandfatherVillage,grandfatherObstacle} from './grandfather-scene.js?v=3.9.2';
-import {createVillageRoute} from './village-scene.js?v=3.9.2';
-import {createCollegeCampus} from './college-scene.js?v=3.8.0';
-import {createItParkCampus} from './itpark-scene.js?v=3.10.13';
+import {createVillageRoute} from './village-scene.js?v=3.10.22i';
+import {createCollegeCampus} from './college-scene.js?v=3.10.22';
+import {createItParkCampus} from './itpark-scene.js?v=3.10.22';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.8.0';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.8.0';
-import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.10.13';
-import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.10.13';
+import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.10.22b';
+import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.10.22l';
 import * as T from './vendor/three.module.js';
-import {createSchoolEntrance} from './school-scene.js?v=3.8.0';
+import {createSchoolEntrance} from './school-scene.js?v=3.10.22';
 import {createCaptureScene} from './capture-scene.js?v=3.0.0';
 import {loadChaserModel} from './chaser-model.js?v=3.8.0';
-import {loadRunnerModel} from './runner-model.js?v=3.9.2';
+import {loadRunnerModel} from './runner-model.js?v=3.10.22';
+import {createUltraEffects} from './ultra-effects.js?v=3.10.22f';
 import {PICKUP_TYPES,ROAD_EVENT_TYPES,height,JUMP_DURATION,ROLL_DURATION,FALL_DURATION,HIT_DURATION,isCapture,capturePose} from './engine.js?v=3.6.8';
 export function createRenderer(canvas, callbacks = {}){
  const isTouchDevice=typeof navigator!=='undefined'&&(navigator.maxTouchPoints>0||(typeof window!=='undefined'&&'ontouchstart' in window));
@@ -26,8 +27,17 @@ export function createRenderer(canvas, callbacks = {}){
  const cores=typeof navigator!=='undefined'?Number(navigator.hardwareConcurrency||0):0;
  let gfxPref=callbacks?.graphicsQuality||'auto';
  if(!callbacks?.graphicsQuality&&typeof localStorage!=='undefined'){
-   try{const saved=localStorage.getItem('runverse-gfx');if(['auto','low','med','high'].includes(saved))gfxPref=saved;}catch{}
+   try{const saved=localStorage.getItem('runverse-gfx');if(['auto','low','med','high','ultra'].includes(saved))gfxPref=saved;}catch{}
  }
+ const VALID_CAM_MODES=['classic','action','closeup','fpv'];
+ let cameraMode=VALID_CAM_MODES.includes(callbacks?.cameraAngle)?callbacks.cameraAngle:'classic';
+ if(!callbacks?.cameraAngle&&typeof localStorage!=='undefined'){
+   try{const savedCam=localStorage.getItem('runverse-camera');if(VALID_CAM_MODES.includes(savedCam))cameraMode=savedCam;}catch{}
+ }
+ let actionCamBlend=cameraMode==='action'?1:0;
+ let closeCamBlend=cameraMode==='closeup'?1:0;
+ let fpvCamBlend=cameraMode==='fpv'?1:0;
+ let fpvEyeY=1.56;
  // Probe mobile GPU before WebGLRenderer creation in AUTO mode so flagship GPUs get native 4x MSAA + ultra-sharp 2.25x DPR,
  // while budget/low-end GPUs disable MSAA to slash tile-memory bandwidth by 4x on Adreno 5xx/6xx & Mali-G5x!
  let probedGpuName='';
@@ -109,6 +119,8 @@ export function createRenderer(canvas, callbacks = {}){
  const camera=new T.PerspectiveCamera(57,1,.1,375);camera.position.set(0,1.52,3.65);camera.lookAt(0,.98,0);
  const ambient=new T.HemisphereLight(0xdaf0ff,0x628096,2.25);scene.add(ambient);
  const sun=new T.DirectionalLight(0xfff4d6,3.65);sun.position.set(-15,26,15);sun.castShadow=!initLow;
+ // ULTRA-only sculptural back-rim light (gives PUBG-style golden/cool rim highlights on runner & vehicles; 0 intensity on HIGH/MED/LOW/AUTO)
+ const ultraRimLight=new T.DirectionalLight(0xffd590,0);ultraRimLight.position.set(14,13,-24);scene.add(ultraRimLight);
 
  Object.assign(sun.shadow.camera,{left:-12,right:12,top:14,bottom:-18,near:4,far:52});
  sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun);sun.target.position.set(0,0,-13);scene.add(sun.target);
@@ -127,6 +139,7 @@ export function createRenderer(canvas, callbacks = {}){
  const runnerBlobShadow=new T.Mesh(new T.PlaneGeometry(1.15,1.45),new T.MeshBasicMaterial({map:blobTex,color:0x000000,transparent:true,opacity:0.85,depthWrite:false}));
  runnerBlobShadow.rotation.x=-Math.PI/2;runnerBlobShadow.position.set(0,0.125,0);runnerBlobShadow.visible=initLow;
  scene.add(runnerBlobShadow);
+ const ultraEffects=createUltraEffects(scene);
  const maxBuffer=gl?.getParameter(gl.MAX_RENDERBUFFER_SIZE)??Infinity;
  const maxViewport=gl?.getParameter(gl.MAX_VIEWPORT_DIMS);
  let lastWidth=0,lastHeight=0,lastRatio=0,baseFov=64;
@@ -135,6 +148,7 @@ export function createRenderer(canvas, callbacks = {}){
    if(activeTier==='ultra-low')return isTouchDevice?0.92:0.80;
    if(activeTier==='low')return isTouchDevice?1.05:0.90;
    if(activeTier==='med')return isTouchDevice?1.30:1.20;
+   if(activeTier==='ultra')return isTouchDevice?2.15:2.0;
    return isTouchDevice?(isFlagshipGpu||gfxPref==='high'?2.0:1.65):2.0;
  }
  function resize(){
@@ -161,21 +175,23 @@ export function createRenderer(canvas, callbacks = {}){
    activeTier=tier;
    if(customDpr>0)dynamicDprCap=customDpr;
    else dynamicDprCap=0;
+   const isUltra=(tier==='ultra');
    const ultra=(tier==='ultra-low'), low=ultra||(tier==='low'), med=(tier==='med');
+   scene.userData.ultraQuality=isUltra;
    scene.userData.ultraLow=ultra;
    scene.userData.lowEnd=low;
    scene.userData.maxAniso=low?1:med?2:4;
-   scene.userData.trafficFar=ultra?135:low?165:med?225:295;
-   obsFar=ultra?125:low?155:med?210:280;
-   coinFar=ultra?54:low?68:med?92:(isTouchDevice?110:175);
-   glintFar=low?0:med?20:(isTouchDevice?28:48);
-   coinBurstCount=ultra?1:low?2:med?3:5;
-   camFarDist=ultra?168:low?200:med?270:375;
+   scene.userData.trafficFar=isUltra?310:ultra?135:low?165:med?225:295;
+   obsFar=isUltra?310:ultra?125:low?155:med?210:280;
+   coinFar=isUltra?175:ultra?54:low?68:med?92:(isTouchDevice?110:175);
+   glintFar=isUltra?52:low?0:med?20:(isTouchDevice?28:48);
+   coinBurstCount=isUltra?6:ultra?1:low?2:med?3:5;
+   camFarDist=isUltra?395:ultra?168:low?200:med?270:375;
    resize();
    renderer.toneMapping=low?T.NoToneMapping:T.ACESFilmicToneMapping;
    renderer.toneMappingExposure=low?1.0:1.22;
-   renderer.shadowMap.type=(low||med||isTouchDevice)?T.BasicShadowMap:T.PCFShadowMap;
-   const shadowSize=Math.min(isTouchDevice?512:1024,maxBuffer);
+   renderer.shadowMap.type=isUltra?T.PCFSoftShadowMap:((low||med||isTouchDevice)?T.BasicShadowMap:T.PCFShadowMap);
+   const shadowSize=Math.min(isUltra?1024:(isTouchDevice?512:1024),maxBuffer);
    if(sun.shadow.mapSize.x!==shadowSize){
      sun.shadow.map?.dispose();
      sun.shadow.map=null;
@@ -184,6 +200,8 @@ export function createRenderer(canvas, callbacks = {}){
    renderer.shadowMap.enabled=!low;
    sun.castShadow=!low;
    runnerBlobShadow.visible=low;
+   ultraEffects.setEnabled(isUltra);
+   ultraRimLight.intensity=isUltra?1.45:0;
    if(scene.userData.envMap){scene.environment=(low||(isTouchDevice&&med))?null:scene.userData.envMap;}
    if(camera.far!==camFarDist){camera.far=camFarDist;camera.updateProjectionMatrix();}
  }
@@ -515,6 +533,8 @@ export function createRenderer(canvas, callbacks = {}){
 
  // Use the actual 3D Dark Gold & Crimson-Red coin model (makeCoin / mantis-flip-coin.glb) for collected-coin burst particles
  const particles=[];let particleCursor=0;for(let i=0;i<28;i++){const m=makeCoin(scene,0,0,0);m.scale.setScalar(.55);m.visible=false;particles.push({m,life:0,maxLife:.52,v:new T.Vector3(),angle:i*.55,spin:(i%2?1:-1)*(11+i%5*1.8),tilt:(i%3-1)*.16});}let trackCameraY=0,total=0,lastTime=0,burst=0,currentLookX=0,currentLookY=.98,currentLookZ=0,lastOnPodium=null;
+ // ULTRA smooth chase framing + universal 1.0s hit-only camera shake (zero running shake on all maps)
+ let uChaseBlend=0,hitShakeTimer=0,lastHitSeen=0,lastFallingSeen=false,lastShieldAbsorbSeen=false;
  const sizeObserver=new ResizeObserver(resize);
  try{sizeObserver.observe(canvas,{box:'device-pixel-content-box'});}
  catch{sizeObserver.observe(canvas);}
@@ -610,6 +630,9 @@ export function createRenderer(canvas, callbacks = {}){
  podium.position.set(0,.09,s.distance);
  podium.visible=onPodium;
  const fallRecoil = s.mode==='falling' ? Math.sin(Math.min(1,(1-s.fall/FALL_DURATION)/.38)*Math.PI)*.45 : 0;
+ const isUltraNow = activeTier === 'ultra';
+ scene.userData.camPos=camera.position;
+ s._ultraQuality = isUltraNow;
  runner.position.set(s.x*2.2,height(s)+(onPodium?.04:0),fallRecoil);
  if(runnerBlobShadow.visible){
    const liftH=Math.max(0,height(s)-s.floor);
@@ -618,6 +641,25 @@ export function createRenderer(canvas, callbacks = {}){
    runnerBlobShadow.scale.setScalar(bScale);
    runnerBlobShadow.material.opacity=Math.max(0.22,0.85-liftH*0.25);
  }const rawChar=String(character||'male');const selectedKey=rawChar==='aged-elder'?'aged-elder':rawChar.startsWith('college-')?rawChar:(rawChar.includes('female')||rawChar.includes('woman'))?'female':'male';const altKey=selectedKey==='aged-elder'?'male':selectedKey==='college-woman'?'female':(selectedKey.startsWith('college-')?'male':`college-${selectedKey}`);const isFemaleMesh=selectedKey.includes('female')||selectedKey.includes('woman'),isCollegeBody=selectedKey.startsWith('college-')||s.map==='college';if(!heroModels[selectedKey]?.model)heroModels[selectedKey]?.(s,selectedKey,frameDt);const modelKey=onPodium?selectedKey:(heroModels[selectedKey]?.model?selectedKey:heroModels[altKey]?.model?altKey:selectedKey);let selectedVisible=false;for(const [key,update] of Object.entries(heroModels))if(update(s,modelKey,frameDt))selectedVisible=key===modelKey;const selectedModel=heroModels[modelKey];body.visible=!selectedVisible&&!onPodium;if(body.visible){const inFront=s.mode==='ready'||s.mode==='select'||s.mode==='intro';const cycle=s.time?Math.sin(s.time*15):0;const tuck=s.jump?Math.sin(Math.PI*(1-s.jump/JUMP_DURATION)):0;body.position.y=s.slide?-.48:Math.abs(cycle)*.045;body.rotation.x=s.slide?-1.1:s.jump?-.15:inFront?0:.09;if(s.roll){const angle=-2*Math.PI*(1-s.roll/ROLL_DURATION);body.rotation.x=angle;body.position.y=.85*(1-Math.cos(angle));body.position.z=-.85*Math.sin(angle);}else{body.position.z=0;if(s.mode==='falling'||s.mode==='crashed'){const progress=1-s.fall/FALL_DURATION;body.rotation.x=-1.5*progress;body.position.y=.28*progress;}else if(s.hit){body.rotation.x=-.32*Math.sin(Math.PI*s.hit/HIT_DURATION);}}body.rotation.z=-(s.lane-s.x)*.22;body.rotation.y=inFront?Math.PI:(s.lane-s.x)*-.16;const torsoColor=isFemaleMesh?(isCollegeBody?0xd77bf2:0x1e293b):(isCollegeBody?0x2ec4b6:0xf8fafc);torso.material=mat(torsoColor);pony.visible=isFemaleMesh;cap.visible=!isFemaleMesh;legs.forEach(({leg,knee},i)=>{leg.rotation.x=s.slide?-1.2:s.jump?-.8*tuck:cycle*(i?1:-1)*.85;knee.rotation.x=s.slide?-.65:s.jump?-1.1*tuck:-Math.max(0,cycle*(i?1:-1))*.95;});arms.forEach((a,i)=>{const gestureWave=inFront&&s.styleAction>0&&i===1?Math.sin(s.styleAction*4)*1.1:0;a.rotation.x=s.slide?-1.6:s.jump?-1.6:gestureWave?-1.15*gestureWave:cycle*(i?-1:1)*.8-.25;a.rotation.z=s.jump?(i?-.35:.35):gestureWave?-.45*gestureWave:(i?-.1:.1);});}
+ if(isUltraNow){
+   if(s.map==='school'){ultraRimLight.color.setHex(0xffd282);ultraRimLight.intensity=1.75;ultraRimLight.position.set(16,12,-22);}
+   else if(s.map==='college'){ultraRimLight.color.setHex(0xffb860);ultraRimLight.intensity=1.35;ultraRimLight.position.set(-12,11,-20);}
+   else if(s.map==='itpark'&&s.activeBranch==='underpass'){ultraRimLight.color.setHex(0xffa94d);ultraRimLight.intensity=1.85;ultraRimLight.position.set(0,11,-16);}
+   else if(s.map==='itpark'&&s.activeBranch==='skybridge'){ultraRimLight.color.setHex(0x88d4ff);ultraRimLight.intensity=1.80;ultraRimLight.position.set(-14,15,-22);}
+   else if(s.map==='itpark'){ultraRimLight.color.setHex(0xc8ecff);ultraRimLight.intensity=1.55;ultraRimLight.position.set(14,14,-24);}
+   else if(s.map==='finalrun'||s.map==='grandfather'){
+     const fn=Math.max(0,Math.min(1,weather?.night||0));
+     ultraRimLight.color.setHex(fn>=0.45?0x9ec8ff:0xfff0cc);
+     ultraRimLight.intensity=fn>=0.45?1.72:1.65;
+     ultraRimLight.position.set(16,16,-24);
+   }
+   else{ultraRimLight.color.setHex(0xffe0b2);ultraRimLight.intensity=1.40;ultraRimLight.position.set(14,13,-24);}
+   const lSeq=selectedModel?.landingSeq||0;
+   const lImp=selectedModel?.lastLandingImpact||0;
+   ultraEffects.update(s,frameDt,camera,s.x*2.2,height(s),lSeq,lImp,weather);
+ }else if(uChaseBlend!==0){
+   uChaseBlend=0;
+ }
  updateGuard(s,selectedModel?.model);
  const ghostVisualRoot = selectedModel?.model || body;
  if (ghostVisualRoot) {
@@ -735,7 +777,13 @@ export function createRenderer(canvas, callbacks = {}){
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
  const inSelect=s.mode==='ready'||s.mode==='select'||s.mode==='intro';
- const targetFov=inSelect?baseFov:baseFov+Math.min(11,Math.max(0,(s.speed-30)/65)*11)+(s.nitro>0?7:s.turboBoost>0?6:0)+(s.feverTimer>0?4:0);
+ const camStepDt=Math.min(0.05,Math.max(0.008,dt||0.016));
+ const camLerp=1-Math.exp(-7*camStepDt);
+ const camLive=!inSelect&&!isCapture(s);
+ actionCamBlend+=((camLive&&cameraMode==='action'?1:0)-actionCamBlend)*camLerp;
+ closeCamBlend+=((camLive&&cameraMode==='closeup'?1:0)-closeCamBlend)*camLerp;
+ fpvCamBlend+=((camLive&&cameraMode==='fpv'?1:0)-fpvCamBlend)*camLerp;
+ const targetFov=inSelect?baseFov:baseFov+actionCamBlend*7.5+closeCamBlend*11.0+fpvCamBlend*15.0+Math.min(11,Math.max(0,(s.speed-30)/65)*11)+(s.nitro>0?7:s.turboBoost>0?6:0)+(s.feverTimer>0?4:0);
  if(Math.abs(targetFov-camera.fov)>.12){camera.fov+=(targetFov-camera.fov)*Math.min(1,(dt||.016)*6);camera.updateProjectionMatrix();}
  const collegeRun=!inSelect&&s.map==='college'&&!s.activeBranch;
  const branchCurved=!inSelect&&(s.activeBranch==='skybridge'||s.activeBranch==='underpass');
@@ -760,12 +808,59 @@ export function createRenderer(canvas, callbacks = {}){
  const laneFollowLook=(collegeRun?0.42:0.24)+portraitFactor*0.95;
  const safeCamCurveX=camCurveX*(1-portraitFactor*0.35);
  let targetCamX=s.mode==='intro'?.48:inSelect?0:safeCamCurveX+s.x*laneFollowCam;
- const targetCamY=inSelect?1.52:(collegeRun?4.25+camCurveY*.8:3.8+camCurveY*.75)+trackCameraY+portraitFactor*(curvedRun?0.22:0.1);
- const targetCamZ=inSelect?3.65:6.8+portraitFactor*(curvedRun?1.15:0.65);
+ let targetCamY=inSelect?1.52:(collegeRun?4.25+camCurveY*.8:3.8+camCurveY*.75)+trackCameraY+portraitFactor*(curvedRun?0.22:0.1);
+ let targetCamZ=inSelect?3.65:6.8+portraitFactor*(curvedRun?1.15:0.65);
  let targetLookX=inSelect?0:s.x*laneFollowLook+bendX*(1-portraitFactor*0.28);
- const targetLookY=inSelect?.98:(collegeRun?1.02:1.35)+trackCameraY+bendY;
- const targetLookZ=inSelect?0:collegeRun||elderRun?-7.5:s.map==='finalrun'?-9.5:-12;
- if(!inSelect&&!isCapture(s)){
+ let targetLookY=inSelect?.98:(collegeRun?1.02:1.35)+trackCameraY+bendY;
+ let targetLookZ=inSelect?0:collegeRun||elderRun?-7.5:s.map==='finalrun'?-9.5:-12;
+ // CAM 2: Low Cinematic Action Angle
+ if(actionCamBlend>0.001&&camLive){
+   targetCamY-=actionCamBlend*(collegeRun?1.02:0.88);
+   targetCamZ-=actionCamBlend*(1.72+portraitFactor*0.20);
+   targetLookY+=actionCamBlend*0.36;
+ }
+ // CAM 3: Tight Close-Up Over-The-Shoulder Runner View (slightly elevated for crystal-clear view of obstacles ahead!)
+ if(closeCamBlend>0.001&&camLive){
+   const rH=height(s);
+   const cX=s.x*2.2+safeCamCurveX*0.25;
+   const cY=2.72+rH*0.56+(curvedRun?camCurveY*0.45:0);
+   const cZ=3.05+portraitFactor*0.38;
+   const lX=s.x*2.2+bendX*0.85;
+   const lY=1.38+rH*0.42+bendY;
+   targetCamX+=(cX-targetCamX)*closeCamBlend;
+   targetCamY+=(cY-targetCamY)*closeCamBlend;
+   targetCamZ+=(cZ-targetCamZ)*closeCamBlend;
+   targetLookX+=(lX-targetLookX)*closeCamBlend;
+   targetLookY+=(lY-targetLookY)*closeCamBlend;
+ }
+ // CAM 4: First-Person Runner POV ("nama tha oodura mari" — eyes-level view, ducks on slide/roll, lifts on jump!)
+ if(fpvCamBlend>0.001&&camLive){
+   const wantEye=height(s)+(s.slide?0.68:s.roll?0.62:1.56);
+   fpvEyeY+=(wantEye-fpvEyeY)*(1-Math.exp(-16*camStepDt));
+   const fX=s.x*2.2;
+   const fY=fpvEyeY;
+   const fZ=-0.22;
+   const fLookX=s.x*2.2+bendX*1.15;
+   const fLookY=fY-0.14+bendY;
+   targetCamX+=(fX-targetCamX)*fpvCamBlend;
+   targetCamY+=(fY-targetCamY)*fpvCamBlend;
+   targetCamZ+=(fZ-targetCamZ)*fpvCamBlend;
+   targetLookX+=(fLookX-targetLookX)*fpvCamBlend;
+   targetLookY+=(fLookY-targetLookY)*fpvCamBlend;
+   targetLookZ+=(-18-targetLookZ)*fpvCamBlend;
+ }
+ runner.visible=!(fpvCamBlend>0.62&&camLive);
+ // ULTRA-only smooth non-shaking chase framing & speed pullback (zero running bob/rumble!)
+ if(isUltraNow&&!inSelect&&!isCapture(s)){
+   const uDt=Math.min(0.05,Math.max(0,dt||0.016));
+   if(s.time===0)uChaseBlend=0;
+   const wantChase=(s.mode==='running'&&s.firstHitAt!==null)?1:0;
+   uChaseBlend+=(wantChase-uChaseBlend)*(1-Math.exp(-4.5*uDt));
+   const speedPull=s.mode==='running'?Math.min(0.42,Math.max(0,(s.speed-34)/90)*0.28+((s.nitro||0)>0?0.26:0)):0;
+   targetCamZ=targetCamZ-uChaseBlend*0.46+speedPull;
+   targetCamY=targetCamY-uChaseBlend*0.14;
+ }
+ if(!inSelect&&!isCapture(s)&&fpvCamBlend<0.5){
    const halfWAtRunner=targetCamZ*Math.tan((camera.fov*Math.PI)/360)*camAspect;
    const tZ=targetCamZ/Math.max(1,targetCamZ-targetLookZ);
    const rayXAtRunner=targetCamX+(targetLookX-targetCamX)*tZ;
@@ -784,14 +879,27 @@ export function createRenderer(canvas, callbacks = {}){
  currentLookX+=(targetLookX-currentLookX)*camBlend;
  currentLookY+=(targetLookY-currentLookY)*camBlend;
  currentLookZ+=(targetLookZ-currentLookZ)*camBlend;
- if(s.mode==='falling'){
-   const shake=(s.fall/FALL_DURATION)*.35;
-   camera.position.x+=(Math.sin(s.time*65)*.7+Math.cos(s.time*85)*.3)*shake;
-   camera.position.y+=(Math.cos(s.time*70)*.7)*shake*.6;
- }else if(s.hit>0){
-   const shake=(s.hit/HIT_DURATION)*.22;
-   camera.position.x+=Math.sin(s.time*60)*shake;
-   camera.position.y+=Math.cos(s.time*75)*shake*.5;
+ // Universal 1.0-second damped hit-only camera shake across ALL maps; zero camera shake during normal running!
+ if(s.time===0||inSelect||isCapture(s)){
+   hitShakeTimer=0;lastHitSeen=0;lastFallingSeen=false;lastShieldAbsorbSeen=false;
+ }else{
+   const curHit=s.hit||0;
+   const curFalling=s.mode==='falling';
+   const curShield=Boolean(s.shieldAbsorbed);
+   if((curHit>0&&curHit>lastHitSeen+0.02)||(curFalling&&!lastFallingSeen)||(curShield&&!lastShieldAbsorbSeen)){
+     hitShakeTimer=1.0;
+   }
+   lastHitSeen=curHit;
+   lastFallingSeen=curFalling;
+   lastShieldAbsorbSeen=curShield;
+   if(hitShakeTimer>0&&s.mode!=='paused'){
+     const shakeDt=Math.min(0.05,Math.max(0,frameDt||dt||0.016));
+     const decay=hitShakeTimer*hitShakeTimer;
+     const shakeAmp=decay*(curFalling?0.34:0.24);
+     camera.position.x+=(Math.sin(s.time*58)*.72+Math.cos(s.time*83)*.28)*shakeAmp;
+     camera.position.y+=Math.cos(s.time*68)*shakeAmp*.55;
+     hitShakeTimer=Math.max(0,hitShakeTimer-shakeDt);
+   }
  }
  camera.lookAt(inSelect?camera.position.x*.37:currentLookX,currentLookY,currentLookZ);
  if(!inSelect&&!isCapture(s))camera.rotation.z+=yTurnBank+laneBank+curveBank;
@@ -930,12 +1038,17 @@ export function createRenderer(canvas, callbacks = {}){
  };
  renderFn.isMapWarm = (map = 'school') => stepsForMap(map).every(id => warmedSteps.has(id));
  renderFn.setGraphicsQuality = (pref = 'auto') => {
-   gfxPref = ['auto','low','med','high'].includes(pref) ? pref : 'auto';
+   gfxPref = ['auto','low','med','high','ultra'].includes(pref) ? pref : 'auto';
    perfFrames=0;perfTime=0;slowWindows=0;smoothWindows=0;
    const nextTier = gfxPref !== 'auto' ? gfxPref : (isUltraLowGpu ? 'ultra-low' : isLowHardware ? 'low' : isFlagshipGpu ? 'high' : isTouchDevice ? 'med' : 'high');
    applyQualityTier(nextTier, 0);
  };
  renderFn.getGraphicsTier = () => activeTier;
+ renderFn.isUltraActive = () => activeTier === 'ultra';
+ renderFn.setCameraAngle = (mode = 'classic') => {
+   cameraMode = VALID_CAM_MODES.includes(mode) ? mode : 'classic';
+ };
+ renderFn.getCameraAngle = () => cameraMode;
  renderFn.isAtPerformanceFloor = () => activeTier === 'ultra-low' && getDprCap() <= 0.67;
  // Release the previous level behind the loading screen. Resources still used by
  // common scenery or the next level remain live, including shared materials.

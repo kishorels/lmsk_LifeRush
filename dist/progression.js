@@ -61,8 +61,7 @@ export const CHARACTER_COSTS = {
   female: 10000,
   'college-male': 12000,
   'college-woman': 15000,
-  'college-man': 20000,
-  'aged-elder': 25000
+  'college-man': 20000
 };
 export const ALL_CHARACTER_IDS = Object.keys(CHARACTER_COSTS);
 

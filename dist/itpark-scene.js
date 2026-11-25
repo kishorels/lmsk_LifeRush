@@ -1072,13 +1072,14 @@ export function createItParkCampus(scene) {
         lastShimmerTick = shimmerBucket;
         const pulse = Math.sin(t * 2.4) * 0.5 + 0.5;
         const shimmer = Math.sin(t * 1.35) * 0.5 + 0.5;
+        const ultraGlassBoost = scene.userData?.ultraQuality ? 0.22 : 0;
         // Live animated skyline shimmer: glowing cyan guardrails, warm golden interior windows, & rooftop beacons
-        M.skyGlass.emissiveIntensity = 0.16 + shimmer * 0.08 + night * 0.45;
-        M.skyGlassBright.emissiveIntensity = 0.18 + pulse * 0.10 + night * 0.50;
-        M.cyanGlass.emissiveIntensity = 0.16 + pulse * 0.10 + night * 0.48;
-        M.smokedGlass.emissiveIntensity = 0.16 + shimmer * 0.08 + night * 0.50;
-        M.bauhausGlass.emissiveIntensity = 0.14 + shimmer * 0.08 + night * 0.42;
-        M.warmGlow.emissiveIntensity = 0.72 + shimmer * 0.24 + night * 0.55;
+        M.skyGlass.emissiveIntensity = 0.16 + ultraGlassBoost + shimmer * 0.08 + night * 0.45;
+        M.skyGlassBright.emissiveIntensity = 0.18 + ultraGlassBoost + pulse * 0.10 + night * 0.50;
+        M.cyanGlass.emissiveIntensity = 0.16 + ultraGlassBoost + pulse * 0.10 + night * 0.48;
+        M.smokedGlass.emissiveIntensity = 0.16 + ultraGlassBoost + shimmer * 0.08 + night * 0.50;
+        M.bauhausGlass.emissiveIntensity = 0.14 + ultraGlassBoost + shimmer * 0.08 + night * 0.42;
+        M.warmGlow.emissiveIntensity = 0.72 + ultraGlassBoost * 1.4 + shimmer * 0.24 + night * 0.55;
         M.lampGlow.emissiveIntensity = 0.68 + pulse * 0.18 + night * 0.85;
         M.cyanRailLed.emissiveIntensity = 1.15 + pulse * 0.48 + night * 0.85;
         M.redBeacon.emissiveIntensity = 0.6 + (Math.sin(t * 4.5) > 0 ? 1.4 : 0.1);

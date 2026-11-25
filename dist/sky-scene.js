@@ -158,6 +158,7 @@ export function createSky(scene,sun,ambient){
   const isCollegeRunning=isCollege&&s?.mode!=='ready'&&s?.mode!=='select';
   const isParkRunning=isPark&&s?.mode!=='ready'&&s?.mode!=='select';
 
+  const isUltraQ = Boolean(scene.userData?.ultraQuality);
   const collegeRainActive=isCollege&&(isCollegeRunning||s?.previewRain)&&weather.rain>.02;
   const parkRainActive=isPark&&isParkRunning&&!inTunnel&&weather.rain>0.05;
   const rainActive=collegeRainActive||parkRainActive;
@@ -200,14 +201,40 @@ export function createSky(scene,sun,ambient){
   if(s.map==='finalrun' && night<.45 && weather.rain<.35){
     baseTop.set('#858ce3');baseHor.set('#ffdfbf');
   }
+  // ULTRA-only golden-hour School (Panel 1), dynamic sunny-to-rainy College (Panel 2), stormy rainy-night Sky Bridge & Fiery Sunset / Moonlit Night Final Run; untouched on HIGH/MED/LOW/AUTO!
+  const onUltraBridge = isUltraQ && isPark && s?.activeBranch === 'skybridge';
+  const onUltraFinal = isUltraQ && (s?.map === 'finalrun' || s?.map === 'grandfather');
+  const colRainMix = isCollege ? Math.max(0, Math.min(1, Math.max(weather.rain || 0, (weather.wet || 0) * 0.72))) : 0;
+  if(isUltraQ && s?.map==='school' && night<.45 && weather.rain<.35){
+    baseTop.set('#2c72b8');
+    baseHor.set('#f5ddb0');
+  }else if(isUltraQ && isCollege){
+    baseTop.set('#1f6fc2').lerp(destination.set('#273a50'), colRainMix);
+    baseHor.set('#dde6dc').lerp(destination.set('#586f86'), colRainMix);
+  }else if(onUltraBridge){
+    baseTop.set('#050914');
+    baseHor.set('#142033');
+  }else if(onUltraFinal){
+    const fn = Math.max(0, Math.min(1, night));
+    baseTop.set('#0b5ed4').lerp(destination.set('#050a1a'), fn);
+    baseHor.set('#8fd0ff').lerp(destination.set('#0c182c'), fn);
+  }
   top.copy(baseTop);
   horizon.copy(baseHor);
   if(isPark && flashFlicker){
-    horizon.lerp(flashHorCol, 0.88);
+    horizon.lerp(flashHorCol, onUltraBridge ? 0.55 : 0.88);
   }
 
   if(scene.background)scene.background.copy(horizon);
-  if(scene.fog)scene.fog.color.copy(horizon);
+  if(scene.fog){
+    if(isUltraQ && isPark && inTunnel){
+      scene.fog.color.set('#1f1812');
+    }else if(onUltraBridge){
+      scene.fog.color.set('#121c2c');
+    }else{
+      scene.fog.color.copy(horizon);
+    }
+  }
 
   // Dome gradient vertex colors update only on gradual weather shifts (avoids costly vertex buffer re-upload during flash)
   const colDirty=Math.abs(baseHor.r-lastDomeR)+Math.abs(baseHor.g-lastDomeG)+Math.abs(baseHor.b-lastDomeB)+Math.abs(baseTop.r-lastTopR)+Math.abs(baseTop.g-lastTopG)+Math.abs(baseTop.b-lastTopB)>.008;
@@ -224,34 +251,55 @@ export function createSky(scene,sun,ambient){
    }
    colAttr.needsUpdate=true;
   }
-  const lowSun=isPark?0.12:Math.max(0,1-Math.abs(phase-.15)*7);
+  const isNight=!isPark&&night>=.45;
+  const lowSun=isPark?0.12:(isUltraQ && s?.map==='school' ? 0.85 : Math.max(0,1-Math.abs(phase-.15)*7));
   const sunFactor=isPark ? (1 - stormDark * 0.85) : (weather.sun??(1-weather.rain));
   sun.color.copy(white).lerp(warm,lowSun).lerp(moonlight,effNight);
-  sun.intensity=isPark ? (flashFlicker ? 4.2 : Math.max(0.35, 3.35 - stormDark * 2.85)) : Math.max(0.8,3.35-night*1.95-(1-sunFactor)*1.95);
+  if(isUltraQ && s?.map==='school' && !isNight) sun.color.set('#ffd28c');
+  else if(isUltraQ && isCollege) sun.color.set('#ffe6bd').lerp(destination.set('#b8d0e8'), colRainMix);
+  else if(onUltraBridge) sun.color.set('#9bc4f0');
+  else if(onUltraFinal) sun.color.set('#fff2d6').lerp(destination.set('#9ec6ff'), Math.max(0, Math.min(1, night)));
+  sun.intensity=isPark ? (onUltraBridge ? (flashFlicker ? 3.4 : 1.18) : (flashFlicker ? 4.2 : Math.max(0.35, 3.35 - stormDark * 2.85))) : (onUltraFinal ? (3.75 - night * 2.25) : isUltraQ && s?.map==='school' ? 3.85 : isUltraQ && isCollege ? (3.45 - colRainMix * 2.0) : Math.max(0.8,3.35-night*1.95-(1-sunFactor)*1.95));
   const ultraLowGfx = Boolean(scene.userData?.ultraLow);
   const lowEndGfx = Boolean(scene.userData?.lowEnd);
-  ambient.intensity=(isPark ? (flashFlicker ? 3.6 : Math.max(0.65, 1.85 - stormDark * 1.15)) : (1.82-night*.88+weather.rain*.22+(isCollege&&sunFactor>.5?.2:0))) + (lowEndGfx ? 0.34 : 0);
-  const isNight=!isPark&&night>=.45;
-  const sunActive=isPark ? (stormDark < 0.85) : (!isNight&&(weather.rain<.65||(weather.sun||0)>.35));
+  ambient.intensity=(isPark ? (onUltraBridge ? (flashFlicker ? 2.6 : 0.96) : (flashFlicker ? 3.6 : Math.max(0.65, 1.85 - stormDark * 1.15))) : (onUltraFinal ? (1.88 - night * 0.80) : isUltraQ && isCollege ? (1.85 - colRainMix * 0.45) : isUltraQ && s?.map==='school' ? 1.72 : (1.82-night*.88+weather.rain*.22+(isCollege&&sunFactor>.5?.2:0)))) + (lowEndGfx ? 0.34 : 0);
+  const sunActive=onUltraBridge ? false : (isPark ? (stormDark < 0.85) : (!isNight&&(weather.rain<.65||(weather.sun||0)>.35)));
   disc.visible=sunActive;halo.visible=sunActive;
   if(disc.visible){
-    disc.position.set(isPark?54:(64-phase*128),isPark?48:(46+Math.sin(phase*Math.PI*2)*20),-220);
-    halo.position.copy(disc.position);
-    sun.position.set(disc.position.x*.28,18+9*(1-lowSun),-32);
+    if(isUltraQ && s?.map==='school'){
+      disc.position.set(44, 28, -210);
+      halo.position.copy(disc.position);
+      sun.position.set(16, 15, -24);
+    }else if(onUltraFinal){
+      disc.position.set(42, 54, -215);
+      halo.position.copy(disc.position);
+      sun.position.set(18, 22, -26);
+    }else{
+      disc.position.set(isPark?54:(64-phase*128),isPark?48:(46+Math.sin(phase*Math.PI*2)*20),-220);
+      halo.position.copy(disc.position);
+      sun.position.set(disc.position.x*.28,18+9*(1-lowSun),-32);
+    }
   }else{
     disc.position.set(0,-500,-220);halo.position.set(0,-500,-220);
   }
   if(scene.fog){
     const fogFarMax = ultraLowGfx ? 160 : lowEndGfx ? 192 : 325;
-    const baseNear = isPark ? (flashFlicker ? 160 : 120 - stormDark * 40) : (150-50*weather.rain);
-    const baseFar = isPark ? (flashFlicker ? 380 : 270 - stormDark * 70) : (325-85*weather.rain);
+    const baseNear = isPark ? (isUltraQ && inTunnel ? 26 : onUltraBridge ? 58 : flashFlicker ? 160 : 120 - stormDark * 40) : (onUltraFinal ? (148 - night * 18) : isUltraQ && isCollege ? (115 - colRainMix * 73) : isUltraQ && s?.map==='school' ? 68 : (150-50*weather.rain));
+    const baseFar = isPark ? (isUltraQ && inTunnel ? 142 : onUltraBridge ? 235 : flashFlicker ? 380 : 270 - stormDark * 70) : (onUltraFinal ? (365 - night * 25) : isUltraQ && isCollege ? (305 - colRainMix * 110) : isUltraQ && s?.map==='school' ? 255 : (325-85*weather.rain));
     scene.fog.near = ultraLowGfx ? Math.min(baseNear, 68) : lowEndGfx ? Math.min(baseNear, 86) : baseNear;
     scene.fog.far = lowEndGfx ? Math.min(baseFar, fogFarMax) : baseFar;
   }
   moon.visible=isNight;
   if(moon.visible){
-    moon.position.set(58-phase*90,54,-210);
-    moon.material.color.set('#e5edff').multiplyScalar(.65+night*.35);
+    if(onUltraFinal){
+      moon.position.set(-26, 44, -210);
+      moon.scale.setScalar(1.48);
+      moon.material.color.set('#f0f6ff');
+    }else{
+      moon.position.set(58-phase*90,54,-210);
+      moon.scale.setScalar(1.0);
+      moon.material.color.set('#e5edff').multiplyScalar(.65+night*.35);
+    }
   }else{
     moon.position.set(0,-500,-210);
   }
