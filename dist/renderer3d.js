@@ -89,7 +89,7 @@ export function createRenderer(canvas, callbacks = {}){
  const gpuClass=isTouchDevice?classifyGpu(gpuName):{ultra:false,budget:false,flagship:true};
  const isUltraLowGpu=gpuClass.ultra, isBudgetGpu=gpuClass.budget, isFlagshipGpu=gpuClass.flagship;
  const isLowHardware=isTouchDevice&&(isBudgetGpu||(memGb>0&&memGb<=4)||(cores>0&&cores<=6));
- let activeTier=gfxPref!=='auto'?gfxPref:(isUltraLowGpu?'ultra-low':isLowHardware?'low':isFlagshipGpu?'high':isTouchDevice?'med':'high');
+ let activeTier=gfxPref!=='auto'?gfxPref:(isUltraLowGpu?'ultra-low':isLowHardware?'low':isFlagshipGpu?'ultra':isTouchDevice?'med':'ultra');
  let dynamicDprCap=0;
  let obsFar=280,coinFar=175,glintFar=48,coinBurstCount=5,camFarDist=375;
  // Local Three.js image and GLTF loads share this manager, including secondary textures.
@@ -176,6 +176,9 @@ export function createRenderer(canvas, callbacks = {}){
    if(customDpr>0)dynamicDprCap=customDpr;
    else dynamicDprCap=0;
    const isUltra=(tier==='ultra');
+   if(typeof document!=='undefined'&&document.body){
+     document.body.classList.toggle('gfx-ultra',isUltra);
+   }
    const ultra=(tier==='ultra-low'), low=ultra||(tier==='low'), med=(tier==='med');
    scene.userData.ultraQuality=isUltra;
    scene.userData.ultraLow=ultra;
@@ -550,10 +553,12 @@ export function createRenderer(canvas, callbacks = {}){
      if(avgDt>0.024){
        smoothWindows=0;
        slowWindows++;
-       const dropNeeded=(activeTier==='high'&&isFlagshipGpu)?3:2;
+       const dropNeeded=((activeTier==='ultra'||activeTier==='high')&&isFlagshipGpu)?3:2;
        if(slowWindows>=dropNeeded){
          slowWindows=0;
-         if(activeTier==='high'){
+         if(activeTier==='ultra'){
+           applyQualityTier('high');
+         }else if(activeTier==='high'){
            const curCap=getDprCap();
            if(isTouchDevice&&curCap>1.75)applyQualityTier('high',1.70);
            else applyQualityTier('med');
@@ -577,8 +582,9 @@ export function createRenderer(canvas, callbacks = {}){
            applyQualityTier('med');
          }else if(activeTier==='med'&&!isLowHardware){
            applyQualityTier('high');
-         }else if(activeTier==='high'&&isFlagshipGpu&&dynamicDprCap>0&&dynamicDprCap<2.0){
-           applyQualityTier('high',0);
+         }else if(activeTier==='high'&&isFlagshipGpu){
+           if(dynamicDprCap>0&&dynamicDprCap<2.0)applyQualityTier('high',0);
+           else applyQualityTier('ultra');
          }
        }
      }else{
@@ -1040,7 +1046,7 @@ export function createRenderer(canvas, callbacks = {}){
  renderFn.setGraphicsQuality = (pref = 'auto') => {
    gfxPref = ['auto','low','med','high','ultra'].includes(pref) ? pref : 'auto';
    perfFrames=0;perfTime=0;slowWindows=0;smoothWindows=0;
-   const nextTier = gfxPref !== 'auto' ? gfxPref : (isUltraLowGpu ? 'ultra-low' : isLowHardware ? 'low' : isFlagshipGpu ? 'high' : isTouchDevice ? 'med' : 'high');
+   const nextTier = gfxPref !== 'auto' ? gfxPref : (isUltraLowGpu ? 'ultra-low' : isLowHardware ? 'low' : isFlagshipGpu ? 'ultra' : isTouchDevice ? 'med' : 'ultra');
    applyQualityTier(nextTier, 0);
  };
  renderFn.getGraphicsTier = () => activeTier;
