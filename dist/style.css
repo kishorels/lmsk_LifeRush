@@ -2943,20 +2943,26 @@ body.gfx-ultra #game-container:not(.mode-splash):not(.mode-select)::after{conten
   animation: feverFlame 1.1s ease-in-out infinite alternate;
 }
 .fever-meter-label {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.75px;
   color: #fde68a;
   white-space: nowrap;
-  min-width: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  line-height: 1;
 }
 .fever-meter-track {
   position: relative;
-  width: 78px;
-  height: 7px;
+  width: 82px;
+  height: 8px;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.65);
   overflow: hidden;
   display: block;
 }
@@ -2965,12 +2971,14 @@ body.gfx-ultra #game-container:not(.mode-splash):not(.mode-select)::after{conten
   display: block;
   height: 100%;
   width: 0%;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
   background: linear-gradient(90deg, #ea580c 0%, #f97316 32%, #facc15 68%, #fef08a 100%);
   background-size: 200% 100%;
   box-shadow: 0 0 10px rgba(250, 204, 21, 0.75);
   transition: width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: feverFlow 1.6s linear infinite;
+  animation: feverFlow 1.4s linear infinite;
 }
 .fever-meter-fill::after {
   content: '';
