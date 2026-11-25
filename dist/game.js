@@ -2,9 +2,15 @@ import {playVillageMemory} from './village-memory-player.js';
 import {GRANDFATHER_GATE,reachedMemory} from './grandfather-route.js?v=3.9.2';
 import {createPowerControls, POWER_ICONS} from './power-controls.js?v=3.10.14';
 import {createTutorialGuide} from './tutorial-guide.js?v=3.10.14';
-import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.20';
-import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.9.1';
-import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.20';
+import {equipPowers,availablePowers,usePower} from './engine.js?v=3.10.22r';
+import {createSound,playUiClick,playEnterSound,playLaunchClick} from './sound.js?v=3.10.22r';
+import {CAPTURE_GESTURE_START,SWEEP_SECONDS,NITRO_MAX_HITS,FEVER_DURATION,FEVER_CHARGE_MAX,fresh,action,step,height,isCapture,reviveRun,MAX_REVIVES_PER_RUN,SCHOOL_GATE,FINALRUN_GATE,finalRunGateFor} from './engine.js?v=3.10.22r';
+import {
+  LOGIN_STREAK_REWARDS,
+  normalizeMissionState, canClaimDailyLogin, claimDailyLogin,
+  recordRunForMissions, claimMissionReward, canClaimAllMissionsBonus,
+  claimAllMissionsBonus, countPendingRewards
+} from './missions.js?v=3.10.22s';
 import {createAdManager,requiredAdsForRevive,formatCooldown} from './ads.js?v=3.10.19';
 import {createFramePacer} from './frame-pacing.js';
 import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
@@ -12,7 +18,7 @@ import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 let rendererModulePromise = null;
 function loadRendererModule() {
   if (!rendererModulePromise) {
-    rendererModulePromise = import('./renderer3d.js?v=3.10.22o');
+    rendererModulePromise = import('./renderer3d.js?v=3.10.22r');
   }
   return rendererModulePromise;
 }
@@ -49,12 +55,16 @@ const IC_CHAR = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14"
 const IC_EXIT = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 const IC_RUSH = '<svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 6 6-6 6"/><path d="m13 6 6 6-6 6"/></svg>';
 let canvas=$('world');
-let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastCoins2xSec = -1, lastGhostSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastLmskMask = -1, lastFeverOn = false, closeCallHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false;
+let lastHudDist = -1, lastHudCoins = -1, lastHudBest = -1, lastMagSec = -1, lastShield = null, lastNitroSec = -1, lastShoesSec = -1, lastCoins2xSec = -1, lastGhostSec = -1, lastComboVal = 1, lastSpeedMode = 0, lastNearMissShown = 0, lastEventBannerShown = 0, lastMilestoneShown = 0, lastLmskMask = -1, lastFeverOn = false, lastFeverPct = -1, lastFeverSec = -1, closeCallHideTimer = 0, milestoneHideTimer = 0, lastCountdown = -1, lastShowCharBlur = null, lastShowCharErr = null, menuNeedsFrame = true, warmedFirstFrame = false, lastUnlockUiKey = '', lastRenderStatus = 'loading', loadingThrottleAccum = 0, carouselSwapTimer = 0, preloaderStarted = false;
 const nameModalEl = $('name-modal');
 const shopModalEl = $('shop-modal');
 const privacyModalEl = $('privacy-modal');
 const speedLinesEl = $('speed-lines');
 const closeCallEl = $('close-call-pop');
+const milestoneBannerEl = $('milestone-banner');
+const feverMeterEl = $('fever-meter');
+const feverMeterLabelEl = $('fever-meter-label');
+const feverMeterFillEl = $('fever-meter-fill');
 // Remove controls from a cached older HTML shell as well.
 document.querySelectorAll('#btn-swag,.btn-swag-action,.select-guide-text').forEach(element=>element.remove());
 let assetsReady = false;
@@ -390,6 +400,101 @@ if ($('btn-camera')) {
     cycleCameraAngle(true);
   };
 }
+
+let dailyState = normalizeMissionState(null);
+try {
+  dailyState = normalizeMissionState(JSON.parse(localStorage.getItem('runverse-missions-v1')));
+} catch {}
+function saveDailyState() {
+  try { localStorage.setItem('runverse-missions-v1', JSON.stringify(dailyState)); } catch {}
+}
+function syncDailyNotifBadge() {
+  const badge = $('daily-notif-badge');
+  if (!badge) return;
+  const pending = countPendingRewards(dailyState);
+  badge.hidden = pending <= 0;
+  badge.textContent = String(pending);
+}
+function renderDailyModal() {
+  syncDailyNotifBadge();
+  if ($('daily-wallet-line')) $('daily-wallet-line').textContent = `${totalCoins.toLocaleString()} Coins`;
+  const streakGrid = $('daily-streak-grid');
+  if (streakGrid) {
+    const canLogin = canClaimDailyLogin(dailyState);
+    const todayIdx = Math.max(0, Math.min(6, (dailyState.streakDay || 1) - 1));
+    streakGrid.innerHTML = LOGIN_STREAK_REWARDS.map((rew, i) => {
+      const done = i < todayIdx || (i === todayIdx && !canLogin);
+      const isToday = i === todayIdx && canLogin;
+      return `<div class="streak-cell ${done ? 'is-done' : ''} ${isToday ? 'is-today' : ''}"><span>D${i + 1}</span><b>+${rew}</b></div>`;
+    }).join('');
+    const loginBtn = $('btn-claim-login');
+    if (loginBtn) {
+      loginBtn.hidden = !canLogin;
+      if (canLogin) loginBtn.textContent = `CLAIM DAY ${todayIdx + 1} LOGIN · +${LOGIN_STREAK_REWARDS[todayIdx]} COINS`;
+    }
+  }
+  const mList = $('daily-missions-list');
+  if (mList) {
+    mList.innerHTML = dailyState.missions.map(m => {
+      const pct = Math.min(100, Math.round((m.progress / Math.max(1, m.target)) * 100));
+      const ready = !m.claimed && m.progress >= m.target;
+      const btnText = m.claimed ? 'CLAIMED' : ready ? `CLAIM +${m.reward}` : `+${m.reward}`;
+      return `<div class="mission-row"><div class="mission-meta"><strong>${m.title}</strong><div class="mission-bar"><i style="width:${pct}%"></i></div><small>${m.progress.toLocaleString()} / ${m.target.toLocaleString()}</small></div><button type="button" class="mission-claim-btn" data-claim-mission="${m.id}" ${ready ? '' : 'disabled'}>${btnText}</button></div>`;
+    }).join('');
+    mList.querySelectorAll('[data-claim-mission]').forEach(btn => {
+      btn.onclick = () => {
+        const res = claimMissionReward(dailyState, btn.dataset.claimMission);
+        if (!res.ok) return;
+        totalCoins += res.reward;
+        saveDailyState();
+        save(true);
+        effects.play('upgrade');
+        updateUnlockUI();
+        updateCarouselUI();
+        renderDailyModal();
+      };
+    });
+  }
+  const bonusBtn = $('btn-claim-all-bonus');
+  if (bonusBtn) bonusBtn.hidden = !canClaimAllMissionsBonus(dailyState);
+}
+if ($('btn-daily-hub')) {
+  $('btn-daily-hub').onclick = () => {
+    playUiClick();
+    renderDailyModal();
+    $('daily-modal')?.showModal?.();
+  };
+}
+if ($('btn-close-daily')) {
+  $('btn-close-daily').onclick = () => $('daily-modal')?.close?.();
+}
+if ($('btn-claim-login')) {
+  $('btn-claim-login').onclick = () => {
+    const res = claimDailyLogin(dailyState);
+    if (!res.ok) return;
+    totalCoins += res.reward;
+    saveDailyState();
+    save(true);
+    effects.play('upgrade');
+    updateUnlockUI();
+    updateCarouselUI();
+    renderDailyModal();
+  };
+}
+if ($('btn-claim-all-bonus')) {
+  $('btn-claim-all-bonus').onclick = () => {
+    const res = claimAllMissionsBonus(dailyState);
+    if (!res.ok) return;
+    totalCoins += res.reward;
+    saveDailyState();
+    save(true);
+    effects.play('upgrade');
+    updateUnlockUI();
+    updateCarouselUI();
+    renderDailyModal();
+  };
+}
+syncDailyNotifBadge();
 
 async function ensureRenderer(targetCharKey = equippedCharId) {
   if (rendererStarted || draw) return;
@@ -1318,6 +1423,28 @@ function showCloseCallBanner(text, isNitro = false) {
   closeCallHideTimer = setTimeout(() => { if (closeCallEl) closeCallEl.hidden = true; }, 740);
 }
 
+function showMilestoneBanner(title, subtitle) {
+  if (!milestoneBannerEl) return;
+  milestoneBannerEl.innerHTML = `<strong>${title}</strong><span>${subtitle}</span>`;
+  milestoneBannerEl.hidden = false;
+  milestoneBannerEl.style.animation = 'none';
+  void milestoneBannerEl.offsetWidth;
+  milestoneBannerEl.style.animation = '';
+  clearTimeout(milestoneHideTimer);
+  milestoneHideTimer = setTimeout(() => { if (milestoneBannerEl) milestoneBannerEl.hidden = true; }, 2150);
+}
+
+function resetFeverMilestoneHud() {
+  lastFeverOn = false;
+  lastFeverPct = -1;
+  lastFeverSec = -1;
+  lastMilestoneShown = 0;
+  if ($('fever-veil')) $('fever-veil').hidden = true;
+  if (feverMeterEl) { feverMeterEl.hidden = true; feverMeterEl.classList.remove('is-active', 'is-hot', 'is-bump'); }
+  if (milestoneBannerEl) milestoneBannerEl.hidden = true;
+  clearTimeout(milestoneHideTimer);
+}
+
 async function shareReportCard(runDist, runCoins, grade, closeCalls) {
   const cv = document.createElement('canvas');
   cv.width = 720; cv.height = 960;
@@ -1513,8 +1640,7 @@ function activateFinalRunStage(targetStage) {
   lastNearMissShown = 0;
   lastEventBannerShown = 0;
   lastLmskMask = -1;
-  lastFeverOn = false;
-  if ($('fever-veil')) $('fever-veil').hidden = true;
+  resetFeverMilestoneHud();
   runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
   if ($('btn-revive')) $('btn-revive').hidden = true;
   if ($('btn-share-score')) $('btn-share-score').hidden = true;
@@ -1592,7 +1718,7 @@ function turnScreenOffAfterFinalCollegeStage() {
   if ($('toast')) $('toast').hidden = true;
   if (closeCallEl) closeCallEl.hidden = true;
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
-  if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
+  resetFeverMilestoneHud();
 
   for (const id of ['college-intro-video', 'itrun-intro-video', 'grandfather-intro-video']) {
     const v = $(id);
@@ -1650,7 +1776,7 @@ function playStageTransitionCutscene({ videoId, videoSrc, fallbackDuration, targ
   if ($('toast')) $('toast').hidden = true;
   if (closeCallEl) closeCallEl.hidden = true;
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
-  if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
+  resetFeverMilestoneHud();
 
   const chosen = lastFinalRunChosenPowers.length ? lastFinalRunChosenPowers : defaultChosenPowers();
 
@@ -2079,8 +2205,7 @@ function beginRun(chosen){
     lastNearMissShown = 0;
     lastEventBannerShown = 0;
     lastLmskMask = -1;
-    lastFeverOn = false;
-    if ($('fever-veil')) $('fever-veil').hidden = true;
+    resetFeverMilestoneHud();
     runReported = { dist: 0, coins: 0, nearMiss: 0, bonus: 0 };
     crashReviveAdsWatched = 0;
     runCoinsDoubled = false;
@@ -2188,6 +2313,16 @@ function crash(completed=false){
   if (['school', 'college', 'itpark'].includes(s.map)) {
     recordMapRunDistance(profile, s.map, Math.floor(s.distance));
   }
+  recordRunForMissions(dailyState, {
+    coins: Math.floor(s.coins || 0),
+    distance: Math.floor(s.distance || 0),
+    nearmiss: Math.floor(s.nearMissCount || 0),
+    jumps: Math.floor(s.jumpsOver || 0),
+    fevers: Math.floor(s.feverCount || 0),
+    runs: 1
+  });
+  saveDailyState();
+  syncDailyNotifBadge();
   const previousBest = best;
   const runDist = Math.floor(s.distance);
   const deltaDist = Math.max(0, runDist - runReported.dist);
@@ -2201,7 +2336,7 @@ function crash(completed=false){
   updateUnlockUI();
   recordRunMissions(deltaDist, deltaCoins + deltaBonus, deltaNear);
   if (speedLinesEl) { speedLinesEl.hidden = true; speedLinesEl.classList.remove('is-nitro'); lastSpeedMode = 0; }
-  if ($('fever-veil')) { $('fever-veil').hidden = true; lastFeverOn = false; }
+  resetFeverMilestoneHud();
   if (!(s.map === 'grandfather' && completed)) effects.play(completed?'bell':'over');
   setScreenMode('gameover');
   const isCol = s.map === 'college' || selectedMap === 'college';
@@ -2712,7 +2847,15 @@ function tick(t) {
     lastNearMissShown = s.nearMissEvent.id;
     const ev = s.nearMissEvent;
     effects.play('nearMiss');
-    showCloseCallBanner(`${ev.label} +${ev.bonus} Coins · x${ev.combo}`, ev.label.includes('NITRO'));
+    const comboTag = ev.maxCombo ? 'MAX x5!' : `x${ev.combo}`;
+    showCloseCallBanner(`${ev.label} +${ev.bonus} Coins · ${comboTag}`, ev.label.includes('NITRO') || ev.maxCombo);
+  }
+  if (s.milestoneEvent && s.milestoneEvent.id !== lastMilestoneShown) {
+    lastMilestoneShown = s.milestoneEvent.id;
+    const mv = s.milestoneEvent;
+    effects.play('milestone');
+    showMilestoneBanner(mv.label, `+${mv.coins} COINS · +20% FEVER`);
+    $('toast').textContent = `${mv.label} +${mv.coins} Bonus Coins!`;
   }
   if (s.lastRoadSound) {
     effects.play(s.lastRoadSound);
@@ -2877,7 +3020,8 @@ function tick(t) {
   if (comboPill && curCombo !== lastComboVal) {
     lastComboVal = curCombo;
     comboPill.hidden = curCombo <= 1;
-    if (curCombo > 1 && $('combo-val')) $('combo-val').textContent = 'x' + curCombo;
+    comboPill.classList.toggle('is-max', curCombo >= 5);
+    if (curCombo > 1 && $('combo-val')) $('combo-val').textContent = curCombo >= 5 ? 'x5 MAX' : ('x' + curCombo);
   }
   const speedMode = s.mode !== 'running' ? 0 : (s.nitro > 0 || s.turboBoost > 0 || s.feverTimer > 0) ? 2 : s.speed >= 42 ? 1 : 0;
   if (speedLinesEl && speedMode !== lastSpeedMode) {
@@ -2889,6 +3033,31 @@ function tick(t) {
   if (feverOn !== lastFeverOn) {
     lastFeverOn = feverOn;
     if ($('fever-veil')) $('fever-veil').hidden = !feverOn;
+  }
+  if (feverMeterEl) {
+    const showFever = s.mode === 'running' && s.map !== 'grandfather';
+    feverMeterEl.hidden = !showFever;
+    if (showFever) {
+      feverMeterEl.classList.toggle('is-active', feverOn);
+      const pct = feverOn
+        ? Math.max(0, Math.min(100, Math.round((s.feverTimer / FEVER_DURATION) * 100)))
+        : Math.max(0, Math.min(100, Math.round(((s.feverCharge || 0) / FEVER_CHARGE_MAX) * 100)));
+      feverMeterEl.classList.toggle('is-hot', !feverOn && pct >= 75);
+      const sec = feverOn ? Math.ceil(s.feverTimer) : 0;
+      if (pct !== lastFeverPct) {
+        if (!feverOn && lastFeverPct >= 0 && pct - lastFeverPct >= 10) {
+          feverMeterEl.classList.remove('is-bump');
+          void feverMeterEl.offsetWidth;
+          feverMeterEl.classList.add('is-bump');
+        }
+        lastFeverPct = pct;
+        if (feverMeterFillEl) feverMeterFillEl.style.width = pct + '%';
+      }
+      if (sec !== lastFeverSec || (feverOn && feverMeterLabelEl && !feverMeterLabelEl.textContent.startsWith('FEVER '))) {
+        lastFeverSec = sec;
+        if (feverMeterLabelEl) feverMeterLabelEl.textContent = feverOn ? `FEVER ${sec}s` : 'FEVER';
+      }
+    }
   }
   const curMask = s.lmskMask || 0;
   if (curMask !== lastLmskMask) {

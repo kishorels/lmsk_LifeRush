@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10283e">
   <title>LMSK LIFE RUSH - School 3D Endless Runner</title>
-  <link rel="stylesheet" href="style.css?v=3.10.22k">
+  <link rel="stylesheet" href="style.css?v=3.10.22p">
 </head>
 <body>
 <header>
@@ -47,6 +47,7 @@
     <div id="speed-lines" class="speed-lines" hidden aria-hidden="true"></div>
     <div id="fever-veil" class="fever-veil" hidden aria-hidden="true"></div>
     <div id="close-call-pop" class="close-call-pop" hidden aria-live="polite"></div>
+    <div id="milestone-banner" class="milestone-banner" hidden aria-live="polite"></div>
 
     <!-- SINGLE-MAP LAZY LAUNCH LOADING OVERLAY -->
     <div id="run-loading-veil" class="run-loading-veil" hidden aria-live="polite">
@@ -77,6 +78,11 @@
         <div class="counters-row-1">
           <span class="coins" aria-label="Gold coins"><img class="pickup-icon gold-icon" src="assets/icons/coin.svg" alt=""> <b id="coins">0</b></span>
           <span id="combo-pill" class="power-pill combo" hidden><svg class="ui-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M13.5.77s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.61 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg> <b id="combo-val">x2</b></span>
+        </div>
+        <div id="fever-meter" class="fever-meter" hidden aria-label="Fever Rush meter">
+          <svg class="fever-meter-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M13.5.77s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.61 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg>
+          <span id="fever-meter-label" class="fever-meter-label">FEVER</span>
+          <span class="fever-meter-track" aria-hidden="true"><span id="fever-meter-fill" class="fever-meter-fill"></span></span>
         </div>
         <div class="counters-row-2">
           <span id="magnet-pill" class="power-pill magnet" hidden><img class="pickup-icon magnet-icon" src="assets/icons/magnet.svg" alt="Magnet"> <b id="magnet-timer">12s</b></span>
@@ -200,6 +206,11 @@
           <small id="hub-coin-bank"><img class="ui-coin-ic" width="14" height="14" src="assets/icons/coin.svg" alt=""> 0 Coins</small>
           <small id="player-progress">1/4 Maps · 0/4 Powers</small>
         </div>
+        <button type="button" id="btn-daily-hub" class="hub-daily-btn" aria-label="Daily missions and rewards">
+          <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+          <span>DAILY</span>
+          <b id="daily-notif-badge" class="daily-notif-badge" hidden>1</b>
+        </button>
         <button type="button" id="btn-quick-settings" class="hub-gear-btn" aria-label="Settings"><svg class="ui-icon" viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 15.6 12 3.6 3.6 0 0 1 12 15.6z"/></svg></button>
       </div>
 
@@ -540,6 +551,23 @@
     <div id="toast" class="toast" hidden aria-hidden="true"></div>
 
     <!-- Power Picker & In-Run Power Trigger -->
+    <dialog id="daily-modal" class="daily-modal" aria-labelledby="daily-modal-title">
+      <div class="daily-modal-head">
+        <div>
+          <h2 id="daily-modal-title">DAILY MISSIONS &amp; STREAK</h2>
+          <small id="daily-wallet-line">0 Coins</small>
+        </div>
+        <button type="button" id="btn-close-daily" class="daily-close-btn" aria-label="Close">X</button>
+      </div>
+      <div id="daily-panel-missions" class="daily-panel">
+        <div class="daily-section-title">7-DAY LOGIN STREAK</div>
+        <div id="daily-streak-grid" class="streak-grid"></div>
+        <button type="button" id="btn-claim-login" class="daily-claim-main" hidden>CLAIM DAILY LOGIN</button>
+        <div class="daily-section-title">TODAY'S MISSIONS</div>
+        <div id="daily-missions-list" class="missions-list"></div>
+        <button type="button" id="btn-claim-all-bonus" class="daily-claim-bonus" hidden>CLAIM ALL-3 BONUS · +1,000 COINS</button>
+      </div>
+    </dialog>
     <dialog id="power-picker" aria-labelledby="power-title">
       <h2 id="power-title">Choose your 2 powers</h2>
       <p id="power-hint">These 2 stay as your default for every run. Change them anytime in Settings.</p>
@@ -579,6 +607,6 @@
   <span>Every run is a fresh start. <b>Make it yours.</b></span>
 </div>
 
-<script type="module" src="boot.js?v=3.10.22o"></script>
+<script type="module" src="boot.js?v=3.10.22t"></script>
 </body>
 </html>

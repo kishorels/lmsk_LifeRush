@@ -722,7 +722,7 @@ export function createSound() {
  }
 
  function play(name, cause, character = 'male') {
-  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',nitro:'powerups',shoes:'powerups',nearMiss:'coins',upgrade:'coins',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement',tap:'movement',oh_no:'damage',thunder:'ambience'})[name]||'movement';
+  currentCategory=({coin:'coins',roofCoin:'coins',magnet:'powerups',shield:'powerups',nitro:'powerups',shoes:'powerups',nearMiss:'coins',milestone:'coins',fever:'powerups',upgrade:'coins',jump:'movement',slide:'movement',lane:'movement',hit:'damage',over:'damage',laugh:'villain',swag:'villain',horn:'ambience',bell:'ambience',start:'movement',tap:'movement',oh_no:'damage',thunder:'ambience'})[name]||'movement';
   if (name === 'jump') tone(240, 730, 0.19, 0.09, 'triangle');
   else if (name === 'slide') tone(410, 65, 0.20, 0.08, 'sawtooth');
   else if (name === 'roofCoin') {
@@ -814,6 +814,12 @@ export function createSound() {
   }
   else if (name === 'fever') {
    for (let i = 0; i < 4; i++) tone(440 + i * 165, 660 + i * 220, 0.14, 0.11, 'triangle', i * 0.07);
+  }
+  else if (name === 'milestone') {
+   tone(523.25, 523.25, 0.11, 0.10, 'triangle', 0);
+   tone(659.25, 659.25, 0.11, 0.10, 'triangle', 0.08);
+   tone(783.99, 783.99, 0.13, 0.10, 'triangle', 0.16);
+   tone(1046.5, 1046.5, 0.24, 0.12, 'sine', 0.24);
   }
   else if (name === 'book') {
    tone(620, 980, 0.12, 0.09, 'triangle');

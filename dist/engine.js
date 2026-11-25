@@ -1,11 +1,21 @@
 import {repeatedVans,trafficPattern,sideVehicleX,newRunSeed,entryVan,entryCoins,segmentBase,routeSegment} from './traffic-rules.js';
 import {NITRO_MAX_HITS, pickupTypes as PICKUP_TYPES, powerById, powerDuration, runPickup, unlockedPowersForProfile} from './progression.js';
-import {ROAD_EVENT_TYPES,updateRoadEvents,triggerRoadEvent,forkPlanAt,branchElevationAt,branchOffsetXAt,roadHillY,LMSK_LETTERS} from './road-events.js';
+import {ROAD_EVENT_TYPES,updateRoadEvents,triggerRoadEvent,pushEventBanner,forkPlanAt,branchElevationAt,branchOffsetXAt,roadHillY,LMSK_LETTERS} from './road-events.js';
 import {populateGrandfatherPath,memoryPace,GRANDFATHER_GATE} from './grandfather-route.js?v=3.9.2';
 export {NITRO_MAX_HITS, trafficPattern, PICKUP_TYPES, ROAD_EVENT_TYPES, LMSK_LETTERS, powerById, forkPlanAt, branchElevationAt, branchOffsetXAt, roadHillY};
 export const JUMP_DURATION = .76, SLIDE_DURATION = .85, ROLL_DURATION = .62;
 export const HIT_DURATION = .65, FALL_DURATION = .9, CAPTURE_DURATION = 3.95, INJURED_DURATION = 10;
 export const MAGNET_RADIUS = 18, CAPTURE_GESTURE_START = 2.55;
+export const FEVER_DURATION = 8, FEVER_CHARGE_MAX = 100;
+export const DISTANCE_MILESTONES = Object.freeze([
+  { distance: 500, coins: 50, label: '500m MILESTONE!' },
+  { distance: 1000, coins: 100, label: '1,000m MILESTONE!' },
+  { distance: 2000, coins: 200, label: '2,000m SPEED MILESTONE!' },
+  { distance: 3500, coins: 300, label: '3,500m PRO RUNNER!' },
+  { distance: 5000, coins: 500, label: '5,000m ELITE MILESTONE!' },
+  { distance: 8000, coins: 750, label: '8,000m HYPER RUNNER!' },
+  { distance: 10000, coins: 1000, label: '10,000m LEGEND!' },
+]);
 const DOUBLE_SWIPE = .32;
 const OPENING_CHASE = 3, HIT_CHASE = 5;
 export const SCHOOL_GATE = 11, FINALRUN_GATE = 10000, FINALRUN_COLLEGE_GATE = 5000, FINALRUN_ITPARK_GATE = 5000;
@@ -33,7 +43,8 @@ export function fresh(seed=newRunSeed()) {
     magnet: 0, shield: false, nitro: 0, nitroHits: 0, nitroOverloaded: false, shoes: 0, powerUpgrades: {},
     magnetDuration: 12, nitroDuration: 4.5, shoesDuration: 9,
     combo: 1, comboTimer: 0, nearMissCount: 0, nearMissEvent: null, nearMissId: 0, jumpsOver: 0, revivedOnce: false, reviveCount: 0,
-    turboBoost: 0, launchBoost: 0, feverTimer: 0, lmskMask: 0,
+    turboBoost: 0, launchBoost: 0, feverTimer: 0, feverCharge: 0, feverCount: 0, lmskMask: 0,
+    nextMilestoneDist: 500, milestoneEvent: null, milestoneId: 0,
     activeBranch: null, branchElevation: 0, branchOffsetX: 0, branchCoinMult: 1, branchStart: 0, branchEnd: 0,
     activeForkIndex: -1, forkWarnedIndex: -1, eventBanner: null, eventBannerId: 0, lastRoadSound: null, mysteryCount: 0,
     nextTurboPad: 140, nextJumpPad: 195, nextMysteryCrate: 175, nextLetterAt: 105,
@@ -133,11 +144,53 @@ function collectMagnetCoins(s) {
   }
 }
 
+export function coinGain(s) {
+  return (s.doubleCoins > 0 ? 2 : 1) * (s.feverTimer > 0 ? 2 : 1) * (s.branchCoinMult || 1);
+}
+
+export function addFeverCharge(s, amount) {
+  if (!s || amount <= 0 || s.map === 'grandfather' || s.feverTimer > 0) return false;
+  s.feverCharge = clamp((s.feverCharge || 0) + amount, 0, FEVER_CHARGE_MAX);
+  if (s.feverCharge >= FEVER_CHARGE_MAX) {
+    s.feverCharge = 0;
+    s.feverTimer = FEVER_DURATION;
+    s.feverCount = (s.feverCount || 0) + 1;
+    s.lastRoadSound = 'fever';
+    pushEventBanner(s, `FEVER RUSH! 2X COINS · ${FEVER_DURATION}s`, 'fever');
+    return true;
+  }
+  return false;
+}
+
+export function checkDistanceMilestones(s, prevDist) {
+  if (!s || s.map === 'grandfather') return null;
+  let target = s.nextMilestoneDist || 500;
+  let hit = null;
+  while (s.distance >= target) {
+    const preset = DISTANCE_MILESTONES.find(m => m.distance === target);
+    const coins = preset ? preset.coins : 1000;
+    const label = preset ? preset.label : `${target.toLocaleString()}m LEGEND!`;
+    if (prevDist < target) {
+      s.coins += coins;
+      s.milestoneId = (s.milestoneId || 0) + 1;
+      s.milestoneEvent = { id: s.milestoneId, distance: target, coins, label };
+      hit = s.milestoneEvent;
+      addFeverCharge(s, 20);
+    }
+    const nextPreset = DISTANCE_MILESTONES.find(m => m.distance > target);
+    target = nextPreset ? nextPreset.distance : (target < 10000 ? 10000 : target + 5000);
+  }
+  s.nextMilestoneDist = target;
+  return hit;
+}
+
 function advanceCoinFlights(s,dt) {
   for(const flight of s.coinFlights)flight.elapsed+=dt;
   s.coinFlights=s.coinFlights.filter(flight=>{
     if(flight.elapsed<flight.duration)return true;
-    s.coins += (s.doubleCoins > 0 ? 2 : 1) * (s.branchCoinMult || 1);return false;
+    s.coins += coinGain(s);
+    addFeverCharge(s, 2);
+    return false;
   });
 }
 
@@ -217,13 +270,13 @@ function updateElevation(s, dt) {
     for(let n=0;n<4;n++) {
       const z=van.rear+2+n*4,id=van.id+':'+n;
       if(Math.abs(s.distance-z)<.9 && Math.abs(s.x-van.lane)<.34 && height(s)>=van.roof-.12 && height(s)<van.roof+1.2 && !s.collected.includes(id)) {
-        s.collected.push(id);s.coins += s.doubleCoins > 0 ? 2 : 1;
+        s.collected.push(id);s.coins += coinGain(s);addFeverCharge(s, 2);
       }
     }
   }
   for(const bus of s.items){if(!bus.roofRide||!bus.started)continue;
    for(let i=0;i<4;i++){const id=bus.id+':'+i,z=bus.z+4+i*4;
-    if(!s.collected.includes(id)&&Math.abs(s.distance-z)<1.2&&Math.abs(s.x-bus.lane)<.34&&height(s)>=bus.roof-.12&&height(s)<bus.roof+1.1){s.collected.push(id);s.coins += s.doubleCoins > 0 ? 2 : 1;}
+    if(!s.collected.includes(id)&&Math.abs(s.distance-z)<1.2&&Math.abs(s.x-bus.lane)<.34&&height(s)>=bus.roof-.12&&height(s)<bus.roof+1.1){s.collected.push(id);s.coins += coinGain(s);addFeverCharge(s, 2);}
    }
   }
   s.entryCoins.forEach((distance,index) => {
@@ -232,7 +285,8 @@ function updateElevation(s, dt) {
     const elevation = height(s);
     if (elevation < s.entryVan.roof-.12 || elevation > s.entryVan.roof+.84) return;
     s.roofCoins |= 1<<index;
-    s.coins += s.doubleCoins > 0 ? 2 : 1;
+    s.coins += coinGain(s);
+    addFeverCharge(s, 2);
   });
 }
 
@@ -351,6 +405,9 @@ function takeHit(s, type) {
   s.jumpBuffer=0;
   s.cause = type;
   s.damage++;
+  s.combo = 1;
+  s.comboTimer = 0;
+  s.feverCharge = Math.max(0, (s.feverCharge || 0) - 25);
   const airborne = height(s);
   s.jump = s.slide = s.roll = s.floor = s.fallSpeed = 0;
   s.drop = airborne > 0 ? { start: airborne, duration: .16, remaining: .16, jumpRemaining: .24 } : null;
@@ -380,7 +437,8 @@ function awardNearMiss(s, kind) {
   s.nearMissCount = (s.nearMissCount || 0) + 1;
   s.combo = Math.min(5, (s.comboTimer > 0 ? (s.combo || 1) : 1) + 1);
   s.comboTimer = 4.5;
-  const bonus = 5 * s.combo;
+  const maxComboBonus = s.combo === 5 ? 15 : 0;
+  const bonus = 5 * s.combo + maxComboBonus;
   s.coins += bonus;
   s.nearMissId = (s.nearMissId || 0) + 1;
   const nitroHits = s.nitroHits || 0;
@@ -390,7 +448,8 @@ function awardNearMiss(s, kind) {
     : kind === 'clean-jump' ? 'CLEAN JUMP!'
     : kind === 'clean-slide' ? 'SLICK SLIDE!'
     : 'NEAR MISS!';
-  s.nearMissEvent = { id: s.nearMissId, label, bonus, combo: s.combo };
+  s.nearMissEvent = { id: s.nearMissId, label, bonus, combo: s.combo, maxCombo: s.combo === 5 };
+  addFeverCharge(s, 15);
 }
 
 function handleNitroHit(s, type) {
@@ -656,14 +715,19 @@ export function step(s, dt, random = Math.random) {
   else s.speed = 96 + (d - 10000) * 0.02;
   if (s.nitro > 0) s.speed = Math.max(s.speed * 1.45, 56);
   if (s.turboBoost > 0) s.speed = Math.max(s.speed + 13, 46);
+  if (s.feverTimer > 0) s.speed *= 1.15;
   s.speed *= trafficRate;
   if (s.map === 'grandfather') {
     s.speed = memoryPace(d, s.speed);
     if (d >= GRANDFATHER_GATE - 12) s.lane = 0;
   }
+  const prevDist = s.distance;
   s.distance += s.speed * dt;
   const villageFinale = s.map === 'grandfather';
-  if (!villageFinale) updateRoadEvents(s, dt, vanSurface);
+  if (!villageFinale) {
+    updateRoadEvents(s, dt, vanSurface);
+    checkDistanceMilestones(s, prevDist);
+  }
   s.x += (s.lane - s.x) * (1-Math.exp(-18*dt));
   s.chaserX += (s.x - s.chaserX) * (1-Math.exp(-5*dt));
   s.slide = Math.max(0, s.slide - dt);
@@ -677,6 +741,8 @@ export function step(s, dt, random = Math.random) {
   if (s.comboTimer > 0) {
     s.comboTimer = Math.max(0, s.comboTimer - dt);
     if (s.comboTimer === 0) s.combo = 1;
+  } else if (s.feverTimer <= 0 && s.feverCharge > 0) {
+    s.feverCharge = Math.max(0, s.feverCharge - 1.2 * dt);
   }
   let spawnedFar = false;
   if (villageFinale) populateGrandfatherPath(s);
@@ -920,7 +986,7 @@ export function step(s, dt, random = Math.random) {
     if (obstacle.done || obstacle.z > s.distance + 1.1) continue;
     obstacle.done = true;
     if (obstacle.type === 'coin') {
-      if (Math.abs(s.x - obstacle.lane) < .65) s.coins += (s.doubleCoins > 0 ? 2 : 1) * (s.branchCoinMult || 1);
+      if (Math.abs(s.x - obstacle.lane) < .65) { s.coins += coinGain(s); addFeverCharge(s, 2); }
     } else if (ROAD_EVENT_TYPES.has(obstacle.type)) {
       triggerRoadEvent(s, obstacle, JUMP_DURATION);
     } else if (obstacle.type === 'magnet') {

@@ -2651,6 +2651,45 @@ body.gfx-ultra #game-container:not(.mode-splash):not(.mode-select)::after{conten
 .video-skip-btn:hover{background:rgba(15,28,54,.88);border-color:rgba(255,255,255,.68)}
 .video-skip-btn:active{transform:scale(.95)}
 .cam-toggle-btn.is-action{background:linear-gradient(135deg,rgba(255,159,28,.28),rgba(255,69,0,.28));border-color:rgba(254,240,138,.65);color:#fef08a}
+.hub-daily-btn{position:relative;display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:1px solid rgba(250,204,21,.55);background:linear-gradient(135deg,rgba(15,28,54,.85),rgba(30,58,95,.85));color:#fef08a;font-size:11px;font-weight:800;letter-spacing:.08em;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.32)}
+.daily-notif-badge{position:absolute;top:-5px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;border:1.5px solid #091326}
+.daily-modal{width:min(92vw,420px);max-height:84vh;overflow-y:auto;border:1px solid rgba(148,163,184,.32);border-radius:20px;background:rgba(9,18,34,.96);color:#f8fafc;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.62)}
+.daily-modal::backdrop{background:rgba(4,9,20,.72);backdrop-filter:blur(4px)}
+.daily-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.daily-modal-head h2{margin:0;font-size:15px;letter-spacing:.06em;color:#fef08a}
+.daily-modal-head small{color:#94a3b8;font-size:12px;font-weight:700}
+.daily-close-btn{width:32px;height:32px;border-radius:50%;border:1px solid rgba(148,163,184,.35);background:rgba(30,41,59,.8);color:#fff;font-weight:800;cursor:pointer}
+.daily-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.daily-tab{padding:9px 8px;border-radius:12px;border:1px solid rgba(148,163,184,.25);background:rgba(15,23,42,.8);color:#cbd5e1;font-size:11px;font-weight:800;letter-spacing:.06em;cursor:pointer}
+.daily-tab.active{background:linear-gradient(135deg,#0ea5e9,#2563eb);color:#fff;border-color:rgba(186,230,253,.6)}
+.daily-section-title{font-size:11px;font-weight:800;letter-spacing:.09em;color:#7dd3fc;margin:10px 0 8px}
+.streak-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:10px}
+.streak-cell{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px;border-radius:10px;border:1px solid rgba(148,163,184,.2);background:rgba(15,23,42,.75);font-size:10px;color:#cbd5e1}
+.streak-cell b{font-size:11px;color:#facc15}
+.streak-cell.is-today{border-color:#facc15;background:rgba(250,204,21,.16);box-shadow:0 0 12px rgba(250,204,21,.25)}
+.streak-cell.is-done{border-color:rgba(34,197,94,.55);background:rgba(22,163,74,.18);color:#86efac}
+.daily-claim-main,.daily-claim-bonus{width:100%;padding:10px 12px;border-radius:12px;border:0;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-size:12px;font-weight:900;letter-spacing:.07em;cursor:pointer;margin-bottom:10px}
+.missions-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.mission-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.78)}
+.mission-meta{flex:1;min-width:0}
+.mission-meta strong{display:block;font-size:12px;color:#f8fafc;margin-bottom:4px}
+.mission-bar{height:6px;border-radius:999px;background:rgba(51,65,85,.8);overflow:hidden;margin-bottom:3px}
+.mission-bar i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#facc15)}
+.mission-meta small{font-size:10px;color:#94a3b8;font-weight:700}
+.mission-claim-btn{padding:7px 11px;border-radius:10px;border:0;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.mission-claim-btn[disabled]{background:rgba(51,65,85,.7);color:#94a3b8;cursor:default}
+.board-skin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.board-skin-card{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:14px;border:1px solid rgba(148,163,184,.24);background:rgba(15,23,42,.82);text-align:left}
+.board-skin-card.is-equipped{border-color:#38bdf8;box-shadow:0 0 14px rgba(56,189,248,.28)}
+.board-swatch{height:22px;border-radius:8px;border:1px solid rgba(255,255,255,.22)}
+.board-skin-card strong{font-size:12px;color:#f8fafc}
+.board-skin-card small{font-size:10px;color:#94a3b8;line-height:1.25}
+.board-skin-btn{margin-top:auto;padding:7px 8px;border-radius:9px;border:0;background:linear-gradient(135deg,#0284c7,#2563eb);color:#fff;font-size:11px;font-weight:800;cursor:pointer}
+.board-skin-btn.is-equipped{background:rgba(34,197,94,.22);color:#86efac;border:1px solid rgba(34,197,94,.5)}
+.hoverboard-hud-btn{position:absolute;left:16px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:16;width:62px;height:62px;border-radius:50%;border:2px solid rgba(56,189,248,.78);background:radial-gradient(circle at 30% 30%,rgba(14,165,233,.48),rgba(9,18,36,.88));color:#e0f2fe;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9px;font-weight:900;letter-spacing:.08em;cursor:pointer;box-shadow:0 0 18px rgba(14,165,233,.36);transition:transform .12s ease,opacity .15s ease}
+.hoverboard-hud-btn:active{transform:scale(.93)}
+.hoverboard-hud-btn.is-active{border-color:#facc15;background:radial-gradient(circle at 30% 30%,rgba(250,204,21,.48),rgba(24,18,8,.88));color:#fef08a;box-shadow:0 0 22px rgba(250,204,21,.55)}
+.hoverboard-hud-btn.is-cooldown{opacity:.52;border-color:rgba(148,163,184,.4)}
 
 /* FINAL ONE MAP INTRO CUTSCENE & REALISTIC 3D 3-2-1-START COUNTDOWN */
 .finalrun-intro-overlay {
@@ -2874,6 +2913,177 @@ body.gfx-ultra #game-container:not(.mode-splash):not(.mode-select)::after{conten
 }
 
 /* Grandfather's peaceful homecoming stage: hide coin counter pill */
-#game.grandfather-round .coins {
+#game.grandfather-round .coins,
+#game.grandfather-round .fever-meter {
   display: none !important;
+}
+
+/* Fever Rush HUD Gauge (Animated Energy Bar) */
+.fever-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(10, 18, 36, 0.84), rgba(22, 32, 56, 0.78));
+  border: 1.5px solid rgba(251, 191, 36, 0.42);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  width: fit-content;
+  margin-top: 3px;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.fever-meter.is-bump {
+  animation: feverBump 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.fever-meter-icon {
+  color: #fb923c;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(251, 146, 60, 0.75));
+  animation: feverFlame 1.1s ease-in-out infinite alternate;
+}
+.fever-meter-label {
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.75px;
+  color: #fde68a;
+  white-space: nowrap;
+  min-width: 34px;
+}
+.fever-meter-track {
+  position: relative;
+  width: 78px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  display: block;
+}
+.fever-meter-fill {
+  position: relative;
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ea580c 0%, #f97316 32%, #facc15 68%, #fef08a 100%);
+  background-size: 200% 100%;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.75);
+  transition: width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: feverFlow 1.6s linear infinite;
+}
+.fever-meter-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.65) 50%, transparent 80%);
+  transform: translateX(-120%);
+  animation: feverSheen 1.8s ease-in-out infinite;
+}
+.fever-meter.is-hot {
+  border-color: rgba(250, 204, 21, 0.85);
+  box-shadow: 0 0 14px rgba(251, 146, 60, 0.55), 0 3px 12px rgba(0, 0, 0, 0.4);
+}
+.fever-meter.is-hot .fever-meter-icon {
+  color: #facc15;
+  animation-duration: 0.55s;
+}
+.fever-meter.is-hot .fever-meter-fill {
+  animation-duration: 0.85s;
+}
+.fever-meter.is-active {
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.96), rgba(245, 158, 11, 0.96), rgba(250, 204, 21, 0.96));
+  border-color: #ffffff;
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.85), 0 0 36px rgba(249, 115, 22, 0.45);
+  animation: feverMeterPulse 0.48s ease-in-out infinite alternate;
+}
+.fever-meter.is-active .fever-meter-icon {
+  color: #ffffff;
+  filter: drop-shadow(0 0 6px #ffffff);
+  animation-duration: 0.38s;
+}
+.fever-meter.is-active .fever-meter-label {
+  color: #1c1002;
+}
+.fever-meter.is-active .fever-meter-track {
+  background: rgba(28, 16, 2, 0.30);
+}
+.fever-meter.is-active .fever-meter-fill {
+  background: linear-gradient(90deg, #ffffff 0%, #fef08a 50%, #ffffff 100%);
+  background-size: 200% 100%;
+  transition: width 0.1s linear;
+  animation-duration: 0.6s;
+}
+@keyframes feverFlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@keyframes feverSheen {
+  0%, 35% { transform: translateX(-120%); }
+  100% { transform: translateX(180%); }
+}
+@keyframes feverFlame {
+  0% { transform: scale(0.92) rotate(-4deg); opacity: 0.85; }
+  100% { transform: scale(1.14) rotate(5deg); opacity: 1; }
+}
+@keyframes feverBump {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+@keyframes feverMeterPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.055); }
+}
+
+/* Max Combo x5 glow */
+.counters .power-pill.combo.is-max {
+  background: linear-gradient(135deg, #f59e0b, #facc15);
+  color: #1c1002;
+  border-color: #ffffff;
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.75);
+}
+
+/* Distance Milestone Celebratory Banner */
+.milestone-banner {
+  position: absolute;
+  top: 15.5%;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 88%;
+  z-index: 29;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(180, 83, 9, 0.94));
+  border: 1.5px solid #fde047;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), 0 0 18px rgba(250, 204, 21, 0.35);
+  text-align: center;
+  animation: milestonePop 2.1s cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+}
+.milestone-banner strong {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.9px;
+  color: #fef08a;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.milestone-banner span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: #ffffff;
+}
+@keyframes milestonePop {
+  0% { opacity: 0; transform: translateY(-16px) scale(0.86); }
+  12% { opacity: 1; transform: translateY(0) scale(1.04); }
+  20% { opacity: 1; transform: translateY(0) scale(1); }
+  82% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-14px) scale(0.96); }
 }
