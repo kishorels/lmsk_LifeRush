@@ -111,6 +111,11 @@ export function createCampus(scene) {
   return merged;
  }
  const templates=[0,1,2,3,4,5].map(build);
+ function plantFloweringTree(tpl, kind) {
+  const side = kind % 2 === 0 ? -1 : 1;
+  roadsideTree(tpl, side * 12.2, 11.0 - (kind % 3) * 3.5, 6.1, 'bougainvillea', side * 0.18);
+  return tpl;
+ }
  let ultraTemplates=null;
  const slots=Array.from({length:CAMPUS_SLOTS},(_,slot)=>{const root=new Group();scene.add(root);return{slot,root,kind:-1,ultra:false};});
  const cache=Array.from({length:CAMPUS_SLOTS},()=>new Map());
