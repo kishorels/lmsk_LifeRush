@@ -13,10 +13,10 @@ import {createItParkCampus} from './itpark-scene.js?v=3.10.22';
 import {buildDucatiStreetfighter,buildHumanoidRobot} from './itpark-models.js?v=3.8.0';
 import {buildLaptopDesk,buildServerRack,buildCableBarrier,buildGlassOfficePod,buildDocumentBoxes,buildWifiRouterTower,buildOfficeChair,buildMeetingTable,buildTurnstileGate,buildCodeHologram} from './itpark-obstacles.js?v=3.8.0';
 import {createRoadEventsScene,buildRoadEventMesh} from './itpark-events-scene.js?v=3.10.22b';
-import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.10.22l';
+import {createTraffic,prewarmTrafficTemplates} from './traffic-scene.js?v=3.10.23';
 import * as T from './vendor/three.module.js';
 import {createSchoolEntrance} from './school-scene.js?v=3.10.22';
-import {createCaptureScene} from './capture-scene.js?v=3.0.0';
+import {createCaptureScene} from './capture-scene.js?v=3.10.23';
 import {loadChaserModel} from './chaser-model.js?v=3.8.0';
 import {loadRunnerModel} from './runner-model.js?v=3.10.22';
 import {createUltraEffects} from './ultra-effects.js?v=3.10.22f';
@@ -780,6 +780,8 @@ export function createRenderer(canvas, callbacks = {}){
     itemPoolMap.set(o,g);
    }
    if(g.userData.key!==key){obstacle(g,o,s.map,blockKind);g.userData.key=key;g.userData._obsShadow=undefined;}
+   const isFpvView=fpvCamBlend>0.5&&!onPodium&&!isCapture(s);
+   if(isFpvView&&o.type==='coin'&&z<3.5){g.visible=false;continue;}
    g.visible=true;const cx=curveRelX(o.z,s),cy=curveRelY(o.z,s);const isFloat=PICKUP_TYPES.has(o.type);
    if(isTouchDevice&&!scene.userData.lowEnd&&!isFloat){
     const wantSh=z>-4&&z<42;
@@ -788,7 +790,10 @@ export function createRenderer(canvas, callbacks = {}){
      g.traverse(n=>{if(n.isMesh&&n.userData._origCast===undefined)n.userData._origCast=n.castShadow;if(n.isMesh&&n.userData._origCast)n.castShadow=wantSh;});
     }
    }
-   g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy+(o.lift||0),-z);
+   const fpvCoinDrop=(isFpvView&&o.type==='coin')?-0.34:0;
+   g.position.set(o.lane*2.2+cx,(isFloat?Math.sin(s.time*3+o.z)*.10:0)+cy+(o.lift||0)+fpvCoinDrop,-z);
+   if(o.type==='coin')g.scale.setScalar(isFpvView?0.68:1);
+   else if(g.scale.x!==1)g.scale.setScalar(1);
    g.rotation.y=isFloat?0:-Math.atan(curveSlopeAt(o.z,s));
    if(isFloat){
     pk.animate(g,o.type,s.time,o.z);
@@ -808,7 +813,7 @@ export function createRenderer(canvas, callbacks = {}){
   for(const [,grp] of itemPoolMap){grp.visible=false;freePool.push(grp);}
   itemPoolMap.clear();
  }
- const count=s.coins;if(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0)){burst=(s.nitro>0||s.turboBoost>0)?.07:.14;const emitCount=count>total?coinBurstCount:Math.min(3,coinBurstCount);for(let k=0;k<emitCount;k++){const p=particles[particleCursor];particleCursor=(particleCursor+1)%particles.length;const side=(particleCursor%2?1:-1),lat=side*(.08+Math.random()*.12)+(Math.random()-.5)*.05;p.maxLife=.50+k*.055+Math.random()*.08;p.life=p.maxLife;p.m.visible=true;p.angle=Math.random()*Math.PI*2;p.m.rotation.set(-.18,p.angle,p.tilt);p.m.position.set(s.x*2.2+lat,height(s)+.10+k*.03+Math.random()*.05,.08+k*.16+Math.random()*.06);p.v.set(lat*2.2+(Math.random()-.5)*.40,1.65+k*.20+Math.random()*.55,5.5+k*.95+Math.random()*1.8);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0;if(p.life>0){p.v.y-=dt*2.1;p.m.position.addScaledVector(p.v,dt);const minFootY=height(s)+.08,maxArcY=height(s)+.64;if(p.m.position.y<minFootY)p.m.position.y=minFootY;else if(p.m.position.y>maxArcY)p.m.position.y=maxArcY;p.angle+=dt*p.spin;p.m.rotation.set(-.18,p.angle,p.tilt);const lifeRatio=Math.max(0,Math.min(1,p.life/(p.maxLife||.52)));p.m.scale.setScalar(.56*Math.pow(lifeRatio,.80));p.m.userData.glints?.forEach((glint,gi)=>glint.scale.setScalar(.012+.075*Math.pow(Math.max(0,Math.sin(p.angle*2+gi*2)),10)));}}if(s.time===0)for(const p of particles)p.m.visible=false;
+ const count=s.coins;if(fpvCamBlend<0.5&&(count>total||((s.nitro>0||s.turboBoost>0||s.feverTimer>0)&&s.mode==='running'&&burst<=0))){burst=(s.nitro>0||s.turboBoost>0)?.07:.14;const emitCount=count>total?coinBurstCount:Math.min(3,coinBurstCount);for(let k=0;k<emitCount;k++){const p=particles[particleCursor];particleCursor=(particleCursor+1)%particles.length;const side=(particleCursor%2?1:-1),lat=side*(.08+Math.random()*.12)+(Math.random()-.5)*.05;p.maxLife=.50+k*.055+Math.random()*.08;p.life=p.maxLife;p.m.visible=true;p.angle=Math.random()*Math.PI*2;p.m.rotation.set(-.18,p.angle,p.tilt);p.m.position.set(s.x*2.2+lat,height(s)+.10+k*.03+Math.random()*.05,.08+k*.16+Math.random()*.06);p.v.set(lat*2.2+(Math.random()-.5)*.40,1.65+k*.20+Math.random()*.55,5.5+k*.95+Math.random()*1.8);}}total=count;if(s.mode==='running')for(const p of particles){p.life-=dt;p.m.visible=p.life>0&&fpvCamBlend<0.5;if(p.life>0){p.v.y-=dt*2.1;p.m.position.addScaledVector(p.v,dt);const minFootY=height(s)+.08,maxArcY=height(s)+.64;if(p.m.position.y<minFootY)p.m.position.y=minFootY;else if(p.m.position.y>maxArcY)p.m.position.y=maxArcY;p.angle+=dt*p.spin;p.m.rotation.set(-.18,p.angle,p.tilt);const lifeRatio=Math.max(0,Math.min(1,p.life/(p.maxLife||.52)));p.m.scale.setScalar(.56*Math.pow(lifeRatio,.80));p.m.userData.glints?.forEach((glint,gi)=>glint.scale.setScalar(.012+.075*Math.pow(Math.max(0,Math.sin(p.angle*2+gi*2)),10)));}}if(s.time===0)for(const p of particles)p.m.visible=false;
  burst=Math.max(0,burst-dt);if(s.time===0)trackCameraY=0;
  trackCameraY+=(s.floor*.7-trackCameraY)*(1-Math.exp(-7*dt));
  const inSelect=s.mode==='ready'||s.mode==='select'||s.mode==='intro';
@@ -868,9 +873,9 @@ export function createRenderer(canvas, callbacks = {}){
    targetLookX+=(lX-targetLookX)*closeCamBlend;
    targetLookY+=(lY-targetLookY)*closeCamBlend;
  }
- // CAM 4: First-Person Runner POV ("nama tha oodura mari" — eyes-level view, ducks on slide/roll, lifts on jump!)
+ // CAM 4: First-Person Runner POV ("nama tha oodura mari" — elevated eyes-level view so coins never block oncoming obstacles!)
  if(fpvCamBlend>0.001&&camLive){
-   const wantEye=height(s)+(s.slide?0.68:s.roll?0.62:1.56);
+   const wantEye=height(s)+(s.slide?0.74:s.roll?0.66:1.72);
    fpvEyeY+=(wantEye-fpvEyeY)*(1-Math.exp(-16*camStepDt));
    const fX=s.x*2.2;
    const fY=fpvEyeY;

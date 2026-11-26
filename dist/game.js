@@ -18,7 +18,7 @@ import {createLiteRenderer} from './renderer-lite.js?v=3.9.2';
 let rendererModulePromise = null;
 function loadRendererModule() {
   if (!rendererModulePromise) {
-    rendererModulePromise = import('./renderer3d.js?v=3.10.22u');
+    rendererModulePromise = import('./renderer3d.js?v=3.10.23');
   }
   return rendererModulePromise;
 }
@@ -358,8 +358,8 @@ const CAM_HINTS = {
   closeup: 'Close · Tight over-the-shoulder action view',
   fpv: 'FPV · First-person runner view (you are running!)'
 };
-const CAM_LABELS = { classic: 'CAM 1', action: 'CAM 2', closeup: 'CAM 3', fpv: 'CAM 4' };
-const CAM_TOASTS = { classic: 'Camera: Classic (CAM 1)', action: 'Camera: Low Action (CAM 2)', closeup: 'Camera: Close-Up (CAM 3)', fpv: 'Camera: First Person (CAM 4)' };
+const CAM_LABELS = { classic: 'CAM 1/4', action: 'CAM 2/4', closeup: 'CAM 3/4', fpv: 'CAM 4/4' };
+const CAM_TOASTS = { classic: 'Camera 1/4: Classic', action: 'Camera 2/4: Low Action', closeup: 'Camera 3/4: Close-Up', fpv: 'Camera 4/4: First Person' };
 function syncCameraUI() {
   document.querySelectorAll('[data-cam]').forEach(btn => {
     const active = btn.dataset.cam === cameraAngle;
@@ -372,7 +372,7 @@ function syncCameraUI() {
     hudCam.classList.toggle('is-action', cameraAngle !== 'classic');
     hudCam.setAttribute('aria-pressed', String(cameraAngle !== 'classic'));
   }
-  if ($('hud-cam-label')) $('hud-cam-label').textContent = CAM_LABELS[cameraAngle] || 'CAM 1';
+  if ($('hud-cam-label')) $('hud-cam-label').textContent = CAM_LABELS[cameraAngle] || 'CAM 1/4';
 }
 function setCameraAngleMode(next, showNotice = false) {
   cameraAngle = CAMERA_MODES.includes(next) ? next : 'classic';

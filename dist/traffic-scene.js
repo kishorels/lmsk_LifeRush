@@ -1,6 +1,6 @@
 import {makeCoin,spinCoin} from './coin.js';
 import {buildBus,buildUltraSchoolBus,buildCollegeVehicle} from './bus-model.js?v=3.10.22';
-import {buildPorscheGT3RS,buildBugattiChiron,buildRedShuttleCart,buildFreightSemiTruck,buildDucatiStreetfighter} from './itpark-models.js?v=3.8.0';
+import {buildPorscheGT3RS,buildBugattiChiron,buildRedShuttleCart,buildFreightSemiTruck,buildDucatiStreetfighter} from './itpark-models.js?v=3.10.23';
 import {buildWDP4DTrain,buildRailRampWagon} from './wdp4d-train.js?v=3.10.13';
 import {BoxGeometry,Group,Mesh,MeshStandardMaterial} from './vendor/three.module.js';
 import {repeatedVans} from './traffic-rules.js';

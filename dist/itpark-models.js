@@ -541,21 +541,24 @@ export function buildRedShuttleCart(length = 20, roof = 1.72) {
     addPart(g, MAT.ledAmber(), sx * 1.15, 0.26, 0.02, 0.10, 0.10, 0.04, sphere);
   }
 
-  // Front Curved Red Cab + Yellow Lower Nose + Tinted Windshield + Curved-Stalk Mirrors (at z = -length!)
+  // Sleek Modern Electric IT Park Shuttle Front Cab (sculpted dark-metallic bumper + full-width LED bar + swept glass!)
   const fz = -length;
-  addShell(g, red, 0, 0.68, fz + 0.45, 1.84, 0.72, 0.85, 0.14);
-  addPart(g, yellow, 0, 0.34, fz + 0.22, 1.86, 0.32, 0.45);
-  const ws = addPart(g, glass, 0, 1.24, fz + 0.46, 1.62, 0.56, 0.08);
-  ws.rotation.x = 0.18;
+  addShell(g, red, 0, 0.76, fz + 0.50, 1.86, 0.68, 0.92, 0.16);
+  addShell(g, dark, 0, 0.34, fz + 0.28, 1.88, 0.28, 0.52, 0.08);
+  addPart(g, chrome, 0, 0.48, fz + 0.01, 1.52, 0.05, 0.05);
+  // Full-width glowing white-cyan electric shuttle LED light bar
+  addPart(g, MAT.ledWhite(), 0, 0.60, fz - 0.01, 1.48, 0.06, 0.04);
+  const ws = addPart(g, glass, 0, 1.24, fz + 0.48, 1.66, 0.58, 0.08);
+  ws.rotation.x = 0.24;
   // Steering wheel inside front cab
   const sw = addPart(g, dark, -0.35, 1.05, fz + 1.05, 0.26, 0.05, 0.26, cyl12);
   sw.rotation.x = Math.PI / 2 - 0.3;
   for (const side of [-1, 1]) {
-    addPart(g, red, side * 0.86, 1.26, fz + 0.55, 0.14, 0.68, 0.22);
-    // Iconic red curved mirror arms projecting from upper cab front!
-    addBar(g, red, [side * 0.86, 1.54, fz + 0.32], [side * 1.04, 1.56, fz - 0.12], 0.032);
-    addPart(g, dark, side * 1.06, 1.44, fz - 0.14, 0.12, 0.22, 0.10);
-    addPart(g, MAT.ledWhite(), side * 0.62, 0.54, fz - 0.01, 0.20, 0.12, 0.05);
+    addPart(g, dark, side * 0.86, 1.26, fz + 0.55, 0.12, 0.68, 0.20);
+    // Sleek dark-metallic aero mirror stalks
+    addBar(g, dark, [side * 0.86, 1.52, fz + 0.34], [side * 1.04, 1.54, fz - 0.08], 0.028);
+    addPart(g, dark, side * 1.06, 1.44, fz - 0.10, 0.11, 0.20, 0.09);
+    addPart(g, MAT.ledWhite(), side * 0.66, 0.58, fz - 0.02, 0.22, 0.10, 0.05);
   }
 
   // Open-Air Rows of Plush White Bench Seats on Red Bases + Silver Tubular Armrests + Sculpted Red Roof Pillars!
